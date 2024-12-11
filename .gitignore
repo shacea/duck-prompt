@@ -1,0 +1,6 @@
+/.cursorignore
+/bak
+/build
+/dist
+/DuckPrompt.spec
+/__pycache__
