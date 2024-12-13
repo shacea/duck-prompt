@@ -1,12 +1,10 @@
 import os
 import json
 from termcolor import colored
+import shutil
+from datetime import datetime
 
 def save_state(state: dict, filename: str) -> bool:
-    """
-    상태를 JSON 형식으로 파일에 저장합니다.
-    filename은 'resources/status/' 아래의 파일명(확장자 없음)으로 가정합니다.
-    """
     try:
         os.makedirs("resources/status", exist_ok=True)
         file_path = os.path.join("resources", "status", filename + ".json")
@@ -19,10 +17,6 @@ def save_state(state: dict, filename: str) -> bool:
         return False
 
 def load_state(filename: str) -> dict:
-    """
-    상태를 파일에서 JSON 형식으로 로드합니다.
-    filename은 'resources/status/' 아래의 파일명(확장자 없음)으로 가정합니다.
-    """
     try:
         file_path = os.path.join("resources", "status", filename + ".json")
         if not os.path.exists(file_path):
@@ -37,9 +31,6 @@ def load_state(filename: str) -> dict:
         return {}
 
 def import_state_from_file(path: str) -> dict:
-    """
-    외부 파일(아무 경로)에서 상태를 JSON으로 로드합니다.
-    """
     try:
         if not os.path.exists(path):
             print(colored(f"No state file found at {path}", "yellow"))
@@ -53,9 +44,6 @@ def import_state_from_file(path: str) -> dict:
         return {}
 
 def export_state_to_file(state: dict, path: str) -> bool:
-    """
-    상태를 외부 경로에 JSON으로 내보냅니다.
-    """
     try:
         dir_path = os.path.dirname(path)
         if dir_path:
@@ -66,4 +54,68 @@ def export_state_to_file(state: dict, path: str) -> bool:
         return True
     except Exception as e:
         print(colored(f"Error exporting state: {str(e)}", "red"))
+        return False
+
+def list_states() -> list:
+    """
+    resources/status 폴더 내의 모든 json 파일 목록을 반환
+    """
+    states_dir = "resources/status"
+    if not os.path.exists(states_dir):
+        return []
+    files = os.listdir(states_dir)
+    return [f for f in files if f.lower().endswith(".json")]
+
+def delete_state(filename: str) -> bool:
+    """
+    filename은 확장자 제외한 상태 파일명
+    """
+    file_path = os.path.join("resources", "status", filename + ".json")
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(colored(f"Deleted state: {file_path}", "green"))
+        return True
+    else:
+        print(colored(f"State not found: {file_path}", "red"))
+        return False
+
+def backup_all_states(backup_path: str) -> bool:
+    """
+    모든 상태 파일을 backup_path (zip)로 백업
+    backup_path 예: ~/backup_states.zip
+    """
+    try:
+        states_dir = "resources/status"
+        if not os.path.isdir(states_dir):
+            print(colored("No states directory to backup.", "yellow"))
+            return False
+        base_dir = os.path.dirname(backup_path)
+        if base_dir:
+            os.makedirs(base_dir, exist_ok=True)
+        shutil.make_archive(backup_path.replace(".zip",""), 'zip', states_dir)
+        print(colored(f"All states backed up to {backup_path}", "green"))
+        return True
+    except Exception as e:
+        print(colored(f"Error backing up states: {str(e)}", "red"))
+        return False
+
+def restore_states_from_backup(backup_path: str) -> bool:
+    """
+    백업 파일(zip)을 풀어서 resources/status에 복원
+    """
+    try:
+        if not os.path.exists(backup_path):
+            print(colored(f"No backup file found: {backup_path}", "red"))
+            return False
+        states_dir = "resources/status"
+        # 일단 기존 상태 삭제 또는 백업?
+        # 여기서는 간단히 모두 삭제 후 복원
+        if os.path.exists(states_dir):
+            shutil.rmtree(states_dir)
+        os.makedirs(states_dir, exist_ok=True)
+        shutil.unpack_archive(backup_path, states_dir)
+        print(colored(f"States restored from {backup_path}", "green"))
+        return True
+    except Exception as e:
+        print(colored(f"Error restoring states: {str(e)}", "red"))
         return False

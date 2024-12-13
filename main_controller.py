@@ -7,6 +7,10 @@ from config import config
 import parse_xml_string
 from template_manager import list_templates, load_template, save_template
 from utils import calculate_char_count, calculate_token_count
+from state_manager import (
+    save_state, load_state, import_state_from_file, export_state_to_file,
+    list_states, delete_state, backup_all_states, restore_states_from_backup
+)
 
 class MainController:
     def __init__(self, main_window):
@@ -29,45 +33,9 @@ class MainController:
             self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
             self.mw.tree_view.expandAll()
 
-    def load_file_preview(self, index):
-        if self.mw.mode == "Meta Prompt Builder":
-            return
-        src_index = self.mw.checkable_proxy.mapToSource(index)
-        if self.mw.dir_model.isDir(src_index):
-            return
-        file_path = self.mw.dir_model.filePath(src_index)
-
-        if not self.mw.dir_model.is_file_allowed(file_path, self.mw.current_project_folder):
-            self.mw.prompt_output_tab.setText("This file is excluded by the current filter settings.")
-            return
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            self.mw.prompt_output_tab.setText(content)
-            self.mw.status_bar.showMessage(f"File loaded: {file_path}")
-            self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
-        except Exception as e:
-            self.mw.prompt_output_tab.setText("Error occurred while reading the file...")
-            self.mw.status_bar.showMessage(f"Error: {str(e)}")
-
-    # 필터 관련 기능 제거
-    # def set_allowed_extensions(self):
-    #     ...
-    # def set_excluded_dirs(self):
-    #     ...
-    # def apply_filters(self):
-    #     ...
-
-    def refresh_tree(self):
-        if self.mw.current_project_folder:
-            idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
-            self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
-
     def generate_prompt(self):
         if self.mw.mode == "Meta Prompt Builder":
             return
-
         checked_files = self.mw.checkable_proxy.get_checked_files()
 
         file_contents = []
@@ -111,16 +79,12 @@ class MainController:
         self.mw.last_generated_prompt = final_prompt
         self.mw.prompt_output_tab.setText(final_prompt)
         length = len(final_prompt)
-
-        # 토큰/문자수 계산
         self.update_counts_for_text(final_prompt)
-
         self.mw.update_selected_files_panel()
         self.mw.status_bar.showMessage(f"Prompt generated! Length: {format(length, ',')} chars")
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
 
     def update_counts_for_text(self, text):
-        """주어진 텍스트에 대해 문자수와 토큰수를 업데이트한다."""
         char_count = calculate_char_count(text)
         token_count = 0
         if self.mw.auto_token_calc_check.isChecked():
@@ -152,8 +116,6 @@ class MainController:
                 combined_content += content
             except:
                 pass
-
-        # 파일 선택 변화 시 토큰/문자수 업데이트
         self.update_counts_for_text(combined_content)
         self.mw.update_selected_files_panel()
 
@@ -277,7 +239,7 @@ class MainController:
             try:
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"Renamed '{old_name}' to '{new_name}'")
-                self.refresh_tree()
+                self.mw.controller.refresh_tree()
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"Error renaming: {str(e)}")
 
@@ -301,107 +263,178 @@ class MainController:
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"Error deleting: {str(e)}")
 
+    def refresh_tree(self):
+        if self.mw.current_project_folder:
+            idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
+            self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
+
     def load_templates_list(self):
+        # 현재 mode_combo에서 선택한 모드에 따라 다르게 로드
         self.mw.template_tree.clear()
-        system_item = QTreeWidgetItem(["System Templates"])
-        user_item = QTreeWidgetItem(["User Templates"])
-        self.mw.template_tree.addTopLevelItem(system_item)
-        self.mw.template_tree.addTopLevelItem(user_item)
+        current_mode = self.mw.resource_mode_combo.currentText()
 
-        system_templates = list_templates("resources/prompts/system")
-        user_templates = list_templates("resources/prompts/user")
+        if current_mode == "Prompts":
+            system_item = QTreeWidgetItem(["System Templates"])
+            user_item = QTreeWidgetItem(["User Templates"])
+            self.mw.template_tree.addTopLevelItem(system_item)
+            self.mw.template_tree.addTopLevelItem(user_item)
 
-        for st in system_templates:
-            QTreeWidgetItem(system_item, [st])
-        for ut in user_templates:
-            QTreeWidgetItem(user_item, [ut])
+            system_templates = list_templates("resources/prompts/system")
+            user_templates = list_templates("resources/prompts/user")
 
-        system_item.setExpanded(True)
-        user_item.setExpanded(True)
+            for st in system_templates:
+                QTreeWidgetItem(system_item, [st])
+            for ut in user_templates:
+                QTreeWidgetItem(user_item, [ut])
 
-    def load_selected_template(self):
+            system_item.setExpanded(True)
+            user_item.setExpanded(True)
+
+        elif current_mode == "States":
+            states_item = QTreeWidgetItem(["States"])
+            self.mw.template_tree.addTopLevelItem(states_item)
+            states_list = list_states()
+            for st in states_list:
+                QTreeWidgetItem(states_item, [st])
+            states_item.setExpanded(True)
+
+        self.update_buttons_label()
+
+    def load_selected_item(self):
+        # Prompts면 템플릿 로드, States면 상태 로드
+        current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", "Please select a template file.")
+            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
             return
 
-        parent_text = item.parent().text(0)
         filename = item.text(0)
-        if parent_text == "System Templates":
-            file_path = os.path.join("resources", "prompts", "system", filename)
-            content = load_template(file_path)
-            self.mw.system_tab.setText(content)
-            self.mw.status_bar.showMessage(f"Loaded system template: {filename}")
-        elif parent_text == "User Templates":
-            file_path = os.path.join("resources", "prompts", "user", filename)
-            content = load_template(file_path)
-            self.mw.user_tab.setText(content)
-            self.mw.status_bar.showMessage(f"Loaded user template: {filename}")
+        if current_mode == "Prompts":
+            parent_text = item.parent().text(0)
+            if parent_text == "System Templates":
+                file_path = os.path.join("resources", "prompts", "system", filename)
+                content = load_template(file_path)
+                self.mw.system_tab.setText(content)
+                self.mw.status_bar.showMessage(f"Loaded system template: {filename}")
+            elif parent_text == "User Templates":
+                file_path = os.path.join("resources", "prompts", "user", filename)
+                content = load_template(file_path)
+                self.mw.user_tab.setText(content)
+                self.mw.status_bar.showMessage(f"Loaded user template: {filename}")
 
-    def save_current_as_template(self):
-        template_type = self.mw.template_type_combo.currentText()
-        if template_type == "System":
-            content = self.mw.system_tab.toPlainText()
-            target_dir = "resources/prompts/system"
-        else:
-            content = self.mw.user_tab.toPlainText()
-            target_dir = "resources/prompts/user"
+        elif current_mode == "States":
+            # 확장자 .json 제거
+            fname_no_ext = os.path.splitext(filename)[0]
+            s = load_state(fname_no_ext)
+            if s:
+                self.mw.set_current_state(s)
+                self.mw.status_bar.showMessage(f"Loaded state: {filename}")
+            else:
+                QMessageBox.information(self.mw, "Info", "Failed to load state.")
 
-        fname, ok = QInputDialog.getText(self.mw, "Save Template", "Enter template file name (without extension):")
-        if not ok or not fname.strip():
-            return
-        fname = fname.strip() + ".md"
-        file_path = os.path.join(target_dir, fname)
-        save_template(file_path, content)
-        self.mw.status_bar.showMessage(f"Template saved: {file_path}")
-        self.load_templates_list()
+    def save_current_as_item(self):
+        current_mode = self.mw.resource_mode_combo.currentText()
+        if current_mode == "Prompts":
+            template_type = self.mw.template_type_combo.currentText()
+            if template_type == "System":
+                content = self.mw.system_tab.toPlainText()
+                target_dir = "resources/prompts/system"
+            else:
+                content = self.mw.user_tab.toPlainText()
+                target_dir = "resources/prompts/user"
 
-    def delete_selected_template(self):
-        item = self.mw.template_tree.currentItem()
-        if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", "Please select a template file.")
-            return
-
-        parent_text = item.parent().text(0)
-        filename = item.text(0)
-        if parent_text == "System Templates":
-            file_path = os.path.join("resources", "prompts", "system", filename)
-        elif parent_text == "User Templates":
-            file_path = os.path.join("resources", "prompts", "user", filename)
-        else:
-            QMessageBox.information(self.mw, "Info", "Invalid template selection.")
-            return
-
-        reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            from template_manager import delete_template
-            delete_template(file_path)
-            self.mw.status_bar.showMessage(f"Deleted template: {filename}")
+            fname, ok = QInputDialog.getText(self.mw, "Save Template", "Enter template file name (without extension):")
+            if not ok or not fname.strip():
+                return
+            fname = fname.strip() + ".md"
+            file_path = os.path.join(target_dir, fname)
+            save_template(file_path, content)
+            self.mw.status_bar.showMessage(f"Template saved: {file_path}")
             self.load_templates_list()
 
-    def update_current_template(self):
+        elif current_mode == "States":
+            state = self.mw.get_current_state()
+            fname, ok = QInputDialog.getText(self.mw, "Save State", "Enter state file name (without extension):")
+            if not ok or not fname.strip():
+                return
+            fname = fname.strip()
+            if save_state(state, fname):
+                self.mw.status_bar.showMessage(f"State saved: {fname}.json")
+                self.load_templates_list()
+            else:
+                self.mw.status_bar.showMessage("Error saving state")
+
+    def delete_selected_item(self):
+        current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", "Please select a template file.")
+            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
             return
 
-        parent_text = item.parent().text(0)
+        filename = item.text(0)
+        if current_mode == "Prompts":
+            parent_text = item.parent().text(0)
+            if parent_text == "System Templates":
+                file_path = os.path.join("resources", "prompts", "system", filename)
+            elif parent_text == "User Templates":
+                file_path = os.path.join("resources", "prompts", "user", filename)
+            else:
+                QMessageBox.information(self.mw, "Info", "Invalid template selection.")
+                return
+
+            reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                from template_manager import delete_template
+                delete_template(file_path)
+                self.mw.status_bar.showMessage(f"Deleted template: {filename}")
+                self.load_templates_list()
+
+        elif current_mode == "States":
+            # 상태 파일 삭제
+            fname_no_ext = os.path.splitext(filename)[0]
+            reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                if delete_state(fname_no_ext):
+                    self.mw.status_bar.showMessage(f"Deleted state: {filename}")
+                    self.load_templates_list()
+                else:
+                    self.mw.status_bar.showMessage("Error deleting state")
+
+    def update_current_item(self):
+        # Prompts나 States 모두 현재 편집중인 내용을 선택된 파일에 덮어쓰기
+        current_mode = self.mw.resource_mode_combo.currentText()
+        item = self.mw.template_tree.currentItem()
+        if not item or not item.parent():
+            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
+            return
+
         filename = item.text(0)
 
-        if parent_text == "System Templates":
-            target_dir = "resources/prompts/system"
-            content = self.mw.system_tab.toPlainText()
-        elif parent_text == "User Templates":
-            target_dir = "resources/prompts/user"
-            content = self.mw.user_tab.toPlainText()
-        else:
-            QMessageBox.information(self.mw, "Info", "Invalid template selection.")
-            return
+        if current_mode == "Prompts":
+            parent_text = item.parent().text(0)
+            if parent_text == "System Templates":
+                target_dir = "resources/prompts/system"
+                content = self.mw.system_tab.toPlainText()
+            elif parent_text == "User Templates":
+                target_dir = "resources/prompts/user"
+                content = self.mw.user_tab.toPlainText()
+            else:
+                QMessageBox.information(self.mw, "Info", "Invalid template selection.")
+                return
 
-        file_path = os.path.join(target_dir, filename)
-        save_template(file_path, content)
-        self.mw.status_bar.showMessage(f"Template updated: {filename}")
+            file_path = os.path.join(target_dir, filename)
+            save_template(file_path, content)
+            self.mw.status_bar.showMessage(f"Template updated: {filename}")
+
+        elif current_mode == "States":
+            fname_no_ext = os.path.splitext(filename)[0]
+            state = self.mw.get_current_state()
+            if save_state(state, fname_no_ext):
+                self.mw.status_bar.showMessage(f"State updated: {filename}")
+            else:
+                self.mw.status_bar.showMessage("Error updating state")
 
     def generate_meta_prompt(self):
         if self.mw.mode != "Meta Prompt Builder":
@@ -414,3 +447,79 @@ class MainController:
         self.update_counts_for_text(final_output)
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         self.mw.status_bar.showMessage("META Prompt generated!")
+
+    def save_state_to_default(self):
+        state = self.mw.get_current_state()
+        if save_state(state, "default"):
+            self.mw.status_bar.showMessage("State saved successfully!")
+        else:
+            self.mw.status_bar.showMessage("Error saving state")
+
+    def load_state_from_default(self):
+        state = load_state("default")
+        if state:
+            self.mw.set_current_state(state)
+            self.mw.status_bar.showMessage("State loaded successfully!")
+        else:
+            self.mw.status_bar.showMessage("No state loaded or empty state")
+
+    def export_state_to_file(self):
+        path, _ = QFileDialog.getSaveFileName(self.mw, "Export State", os.path.expanduser("~"), "JSON Files (*.json)")
+        if path:
+            state = self.mw.get_current_state()
+            if export_state_to_file(state, path):
+                self.mw.status_bar.showMessage("State exported successfully!")
+            else:
+                self.mw.status_bar.showMessage("Error exporting state")
+
+    def import_state_from_file(self):
+        path, _ = QFileDialog.getOpenFileName(self.mw, "Import State", os.path.expanduser("~"), "JSON Files (*.json)")
+        if path:
+            state = import_state_from_file(path)
+            if state:
+                self.mw.set_current_state(state)
+                self.mw.status_bar.showMessage("State imported successfully!")
+            else:
+                self.mw.status_bar.showMessage("Error importing state or empty state")
+
+    def update_buttons_label(self):
+        # Prompts/States 모드에 따라 버튼 라벨 변경
+        current_mode = self.mw.resource_mode_combo.currentText()
+        if current_mode == "Prompts":
+            self.mw.load_selected_template_btn.setText("Load Selected Prompt")
+            self.mw.save_as_template_btn.setText("Save Current as Prompt")
+            self.mw.delete_template_btn.setText("Delete Selected Prompt")
+            self.mw.update_template_btn.setText("Update Current Prompt")
+            self.mw.backup_button.setText("Backup All States (Disabled)")
+            self.mw.backup_button.setEnabled(False)
+            self.mw.restore_button.setText("Restore from Backup (Disabled)")
+            self.mw.restore_button.setEnabled(False)
+        else:
+            self.mw.load_selected_template_btn.setText("Load Selected State")
+            self.mw.save_as_template_btn.setText("Save Current as State")
+            self.mw.delete_template_btn.setText("Delete Selected State")
+            self.mw.update_template_btn.setText("Update Current State")
+            self.mw.backup_button.setText("Backup All States")
+            self.mw.backup_button.setEnabled(True)
+            self.mw.restore_button.setText("Restore States from Backup")
+            self.mw.restore_button.setEnabled(True)
+
+    def on_mode_changed(self):
+        self.load_templates_list()
+
+    def backup_all_states_action(self):
+        path, _ = QFileDialog.getSaveFileName(self.mw, "Backup All States", os.path.expanduser("~"), "Zip Files (*.zip)")
+        if path:
+            if backup_all_states(path):
+                self.mw.status_bar.showMessage("All states backed up successfully!")
+            else:
+                self.mw.status_bar.showMessage("Error backing up states")
+
+    def restore_states_from_backup_action(self):
+        path, _ = QFileDialog.getOpenFileName(self.mw, "Restore States from Backup", os.path.expanduser("~"), "Zip Files (*.zip)")
+        if path:
+            if restore_states_from_backup(path):
+                self.mw.status_bar.showMessage("States restored successfully!")
+                self.load_templates_list()
+            else:
+                self.mw.status_bar.showMessage("Error restoring states")

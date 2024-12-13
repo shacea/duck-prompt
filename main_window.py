@@ -14,15 +14,7 @@ from config import config
 from file_explorer import FilteredFileSystemModel, CheckableProxyModel
 from main_controller import MainController
 from custom_text_edit import CustomTextEdit
-from tab_manager import is_tab_deletable  # 탭 삭제 가능 여부 판단 함수
-
-def load_meta_prompt():
-    meta_prompt_path = os.path.join("resources", "Meta_Prompt.md")
-    try:
-        with open(meta_prompt_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except:
-        return "<Meta Prompt Not Found>"
+from tab_manager import is_tab_deletable
 
 from PyQt5.QtWidgets import QTabBar
 
@@ -32,26 +24,23 @@ class CustomTabBar(QTabBar):
         self.main_window = main_window
         self.setTabsClosable(False)
         self.setMovable(True)
-        self.addTab("+")  # 플러스 탭 추가
+        self.addTab("+")
 
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             pos = event.pos()
             index = self.tabAt(pos)
-            # 탭 텍스트가 "+"라면 새 탭 추가
             if index >= 0 and self.tabText(index) == "+":
                 self.main_window.add_new_custom_tab()
                 return
         super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
-        # 가운데 버튼으로 탭 삭제 처리
         if event.button() == Qt.MiddleButton:
             pos = event.pos()
             index = self.tabAt(pos)
             if index >= 0:
                 tab_text = self.tabText(index)
-                # 탭 삭제 가능 여부 판단
                 if is_tab_deletable(tab_text):
                     self.parent().removeTab(index)
                 else:
@@ -59,7 +48,6 @@ class CustomTabBar(QTabBar):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
-        # 더블클릭 시 탭 이름 변경 (삭제 가능 탭만)
         if event.button() == Qt.LeftButton:
             pos = event.pos()
             index = self.tabAt(pos)
@@ -70,7 +58,6 @@ class CustomTabBar(QTabBar):
                     if ok and new_name.strip():
                         self.setTabText(index, new_name.strip())
         super().mouseDoubleClickEvent(event)
-
 
 class ClickableFileWidget(QWidget):
     def __init__(self, file_path, size, controller):
@@ -93,7 +80,6 @@ class ClickableFileWidget(QWidget):
         if event.button() == Qt.LeftButton:
             self.controller.toggle_file_check(self.file_path)
         super().mousePressEvent(event)
-
 
 class MainWindow(QMainWindow):
     def __init__(self, mode="Code Enhancer Prompt Builder"):
@@ -123,6 +109,18 @@ class MainWindow(QMainWindow):
         mode_menu.addAction(switch_to_code_action)
         mode_menu.addAction(switch_to_meta_action)
 
+        # 상태 관련 메뉴
+        state_menu = menubar.addMenu("State")
+        save_state_action = QAction("Save State (default)", self)
+        load_state_action = QAction("Load State (default)", self)
+        export_state_action = QAction("Export State", self)
+        import_state_action = QAction("Import State", self)
+
+        state_menu.addAction(save_state_action)
+        state_menu.addAction(load_state_action)
+        state_menu.addAction(export_state_action)
+        state_menu.addAction(import_state_action)
+
         self.reset_state()
 
         central_widget = QWidget()
@@ -151,18 +149,24 @@ class MainWindow(QMainWindow):
         self.tree_view.customContextMenuRequested.connect(self.on_tree_view_context_menu)
         self.tree_view.selectionModel().selectionChanged.connect(self.on_selection_changed_handler)
 
-        # Template Manager 탭을 사이드바 형태로 만들기 위해 별도 위젯으로 구성
         self.template_manager_tab = QWidget()
         tm_layout = QVBoxLayout(self.template_manager_tab)
         tm_layout.setContentsMargins(5,5,5,5)
         tm_layout.setSpacing(5)
-        tm_label = QLabel("Select a prompt below to load or save:")
+
+        # Prompts/States 선택 콤보박스
+        self.resource_mode_combo = QComboBox()
+        self.resource_mode_combo.addItem("Prompts")
+        self.resource_mode_combo.addItem("States")
+        tm_layout.addWidget(QLabel("Choose Resource Type:"))
+        tm_layout.addWidget(self.resource_mode_combo)
+
+        tm_label = QLabel("Select a resource below to load or save:")
         tm_layout.addWidget(tm_label)
         self.template_tree = QTreeWidget()
         self.template_tree.setHeaderHidden(True)
         tm_layout.addWidget(self.template_tree)
 
-        # 버튼과 콤보박스 초기화
         self.load_selected_template_btn = QPushButton("Load Selected Prompt")
         self.save_as_template_btn = QPushButton("Save Current as Prompt")
         self.template_type_combo = QComboBox()
@@ -171,30 +175,35 @@ class MainWindow(QMainWindow):
         self.delete_template_btn = QPushButton("Delete Selected Prompt")
         self.update_template_btn = QPushButton("Update Current Prompt")
 
-        # 버튼들을 3단으로 재배치
-        tm_bottom_layout = QVBoxLayout()  # 수직 레이아웃으로 변경
+        # 백업/복구 버튼 (States 전용)
+        self.backup_button = QPushButton("Backup All States")
+        self.restore_button = QPushButton("Restore States from Backup")
+
+        tm_bottom_layout = QVBoxLayout()
         
-        # 첫 번째 줄: Load Selected Template
         first_row = QHBoxLayout()
         first_row.addWidget(self.load_selected_template_btn)
         tm_bottom_layout.addLayout(first_row)
         
-        # 두 번째 줄: Save as + combo box + Save Current as Template
         second_row = QHBoxLayout()
         second_row.addWidget(QLabel("Save as:"))
         second_row.addWidget(self.template_type_combo)
         second_row.addWidget(self.save_as_template_btn)
         tm_bottom_layout.addLayout(second_row)
         
-        # 세 번째 줄: Delete Selected Template + Update Current Template
         third_row = QHBoxLayout()
         third_row.addWidget(self.delete_template_btn)
         third_row.addWidget(self.update_template_btn)
         tm_bottom_layout.addLayout(third_row)
-        
+
+        # 백업/복구 행
+        fourth_row = QHBoxLayout()
+        fourth_row.addWidget(self.backup_button)
+        fourth_row.addWidget(self.restore_button)
+        tm_bottom_layout.addLayout(fourth_row)
+
         tm_layout.addLayout(tm_bottom_layout)
 
-        # 빌드 탭
         self.build_tabs = QTabWidget()
         custom_tab_bar = CustomTabBar(self.build_tabs, self)
         self.build_tabs.setTabBar(custom_tab_bar)
@@ -214,7 +223,6 @@ class MainWindow(QMainWindow):
 
         self.prompt_output_tab = CustomTextEdit()
         self.prompt_output_tab.setReadOnly(False)
-        # 가독성 좋은 폰트와 여백 조정
         self.prompt_output_tab.setFont(QFont("Consolas", 10))
         self.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }")
         if self.mode == "Meta Prompt Builder":
@@ -255,7 +263,6 @@ class MainWindow(QMainWindow):
         sf_main_layout.addWidget(self.selected_files_toolbtn)
         sf_main_layout.addWidget(self.selected_files_container)
 
-        # 상단에 프로젝트 폴더 선택 버튼 크게 배치
         self.select_project_btn_large = QPushButton("Select Project Folder")
         self.select_project_btn_large.setFixedHeight(40)
         font = self.select_project_btn_large.font()
@@ -263,7 +270,6 @@ class MainWindow(QMainWindow):
         font.setBold(True)
         self.select_project_btn_large.setFont(font)
 
-        # 왼쪽 사이드바: Template Manager 위, File Explorer 아래 (Meta 모드에서는 File Explorer 없음)
         left_side_widget = QWidget()
         left_side_layout = QVBoxLayout(left_side_widget)
         left_side_layout.setContentsMargins(0,0,0,0)
@@ -274,7 +280,6 @@ class MainWindow(QMainWindow):
         if self.mode != "Meta Prompt Builder":
             left_side_layout.addWidget(self.tree_view)
 
-        # 수직으로 Template Manager와 파일 탐색기 배치 후, 우측에 빌드 탭
         top_splitter = QSplitter(Qt.Horizontal)
         top_splitter.addWidget(left_side_widget)
         top_splitter.addWidget(self.build_tabs)
@@ -289,7 +294,6 @@ class MainWindow(QMainWindow):
         ribbon.setIconSize(QSize(32,32))
         self.addToolBar(Qt.TopToolBarArea, ribbon)
 
-        # 버튼 재배치: "Run XML Parser"를 "Copy to Clipboard" 오른쪽으로 이동
         if self.mode != "Meta Prompt Builder":
             self.generate_tree_action = QAction(QIcon(), "Generate Tree", self)
             self.run_xml_parser_action = QAction(QIcon(), "Run XML Parser", self)
@@ -301,7 +305,6 @@ class MainWindow(QMainWindow):
             ribbon.addAction(self.generate_action)
             ribbon.addSeparator()
             ribbon.addAction(self.copy_action)
-            # "Copy to Clipboard" 오른쪽에 Run XML Parser
             ribbon.addAction(self.run_xml_parser_action)
         else:
             self.generate_action = QAction(QIcon(), "Generate META Prompt", self)
@@ -310,8 +313,6 @@ class MainWindow(QMainWindow):
             ribbon.addSeparator()
             ribbon.addAction(self.copy_action)
 
-        # 필터 기능 제거로 인한 하단 위젯 삭제
-        # char/token count와 status_bar만 하단에 남김
         self.char_count_label = QLabel("Chars: 0")
         self.token_count_label = QLabel("Calculated Total Token: N/A")
 
@@ -340,13 +341,12 @@ class MainWindow(QMainWindow):
 
         self.controller = MainController(self)
 
-        # 프로젝트 폴더 선택 버튼 연결
         if self.mode != "Meta Prompt Builder":
             self.select_project_btn_large.clicked.connect(self.controller.select_project_folder)
             self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
             self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
         else:
-            self.select_project_btn_large.setDisabled(True)  # Meta 모드에서는 폴더 선택 불필요
+            self.select_project_btn_large.setDisabled(True)
 
         if self.mode == "Meta Prompt Builder":
             self.generate_action.triggered.connect(self.controller.generate_meta_prompt)
@@ -356,10 +356,16 @@ class MainWindow(QMainWindow):
         self.copy_action.triggered.connect(self.controller.copy_to_clipboard)
         self.selected_files_toolbtn.clicked.connect(self.toggle_selected_files)
 
-        self.load_selected_template_btn.clicked.connect(self.controller.load_selected_template)
-        self.save_as_template_btn.clicked.connect(self.controller.save_current_as_template)
-        self.delete_template_btn.clicked.connect(self.controller.delete_selected_template)
-        self.update_template_btn.clicked.connect(self.controller.update_current_template)
+        self.load_selected_template_btn.clicked.connect(self.controller.load_selected_item)
+        self.save_as_template_btn.clicked.connect(self.controller.save_current_as_item)
+        self.delete_template_btn.clicked.connect(self.controller.delete_selected_item)
+        self.update_template_btn.clicked.connect(self.controller.update_current_item)
+
+        # 백업/복구 액션
+        self.backup_button.clicked.connect(self.controller.backup_all_states_action)
+        self.restore_button.clicked.connect(self.controller.restore_states_from_backup_action)
+
+        self.resource_mode_combo.currentIndexChanged.connect(self.controller.on_mode_changed)
 
         shortcut = QAction(self)
         shortcut.setShortcut(QKeySequence("Ctrl+Return"))
@@ -382,13 +388,11 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"초기화 중 오류 발생: {e}")
 
-        if self.mode == "Meta Prompt Builder":
-            # File Tree, XML Input 탭 제거
-            # 이미 추가되지 않았거나 제거함
-            pass
+        save_state_action.triggered.connect(self.controller.save_state_to_default)
+        load_state_action.triggered.connect(self.controller.load_state_from_default)
+        export_state_action.triggered.connect(self.controller.export_state_to_file)
+        import_state_action.triggered.connect(self.controller.import_state_from_file)
 
-        # 시작 시 Template Manager UI에 포커스
-        # Template Manager는 이제 사이드바 형태이므로 탭 전환 대신 포커스만 유지
         self.status_bar.showMessage("Ready")
 
     def reset_state(self):
@@ -446,10 +450,56 @@ class MainWindow(QMainWindow):
 
     def add_new_custom_tab(self):
         new_tab = CustomTextEdit()
-        plus_index = self.build_tabs.count() - 1  # '+' 탭 위치는 항상 마지막
+        plus_index = self.build_tabs.count() - 1
         self.build_tabs.insertTab(plus_index, new_tab, "New Tab")
         self.build_tabs.setCurrentWidget(new_tab)
         self.status_bar.showMessage("새 탭이 추가되었습니다: New Tab")
 
     def on_selection_changed_handler(self, selected, deselected):
         self.controller.on_selection_changed(selected, deselected)
+
+    def get_current_state(self) -> dict:
+        checked_paths = self.checkable_proxy.get_all_checked_paths()
+        state = {
+            "mode": self.mode,
+            "project_folder": self.current_project_folder,
+            "system_prompt": self.system_tab.toPlainText(),
+            "user_prompt": self.user_tab.toPlainText(),
+            "last_generated_prompt": self.last_generated_prompt,
+            "checked_files": checked_paths
+        }
+        return state
+
+    def set_current_state(self, state: dict):
+        self.reset_state()
+        self.mode = state.get("mode", self.mode)
+        project_folder = state.get("project_folder", None)
+        if project_folder and os.path.isdir(project_folder):
+            self.current_project_folder = project_folder
+            idx = self.dir_model.setRootPathFiltered(project_folder)
+            self.tree_view.setRootIndex(self.checkable_proxy.mapFromSource(idx))
+            self.status_bar.showMessage(f"Project Folder: {project_folder}")
+
+        self.system_tab.setText(state.get("system_prompt", ""))
+        self.user_tab.setText(state.get("user_prompt", ""))
+        self.last_generated_prompt = state.get("last_generated_prompt", "")
+
+        self.uncheck_all_files()
+        for fpath in state.get("checked_files", []):
+            self.controller.toggle_file_check(fpath)
+
+        self.update_selected_files_panel()
+
+    def uncheck_all_files(self):
+        def recurse_uncheck(index):
+            row_count = self.dir_model.rowCount(index)
+            for i in range(row_count):
+                child_index = self.dir_model.index(i, 0, index)
+                if child_index.isValid():
+                    proxy_index = self.checkable_proxy.mapToSource(child_index)
+                    self.checkable_proxy.setData(proxy_index, Qt.Unchecked, Qt.CheckStateRole)
+                    if self.dir_model.isDir(child_index):
+                        recurse_uncheck(child_index)
+
+        root_index = self.dir_model.index(self.dir_model.rootPath())
+        recurse_uncheck(root_index)
