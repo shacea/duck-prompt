@@ -3,6 +3,7 @@ import os
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 from main_window import MainWindow
+from utils import init_utils
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -10,6 +11,7 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 if __name__ == '__main__':
+    init_utils()  # 인코딩 모델 미리 로딩 시작
     app = QApplication(sys.argv)
     icon_path = resource_path("resources/rubber_duck.ico")
     app_icon = QIcon(icon_path)

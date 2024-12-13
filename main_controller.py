@@ -124,7 +124,7 @@ class MainController:
         char_count = calculate_char_count(text)
         token_count = 0
         if self.mw.auto_token_calc_check.isChecked():
-            token_count = calculate_token_count(text, model_name="gpt-4")
+            token_count = calculate_token_count(text)
         self.mw.char_count_label.setText(f"Chars: {format(char_count, ',')}")
         if self.mw.auto_token_calc_check.isChecked():
             self.mw.token_count_label.setText(f"Calculated Total Token: {format(token_count, ',')}")
