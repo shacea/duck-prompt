@@ -1,4 +1,3 @@
-
 --------------------------------------------  
 **[최종 PRD: PyQt5 기반 LLM 프롬프트 생성 도구 - 업데이트 버전]**  
 --------------------------------------------
@@ -52,12 +51,11 @@
 
 ## 8. 파일 구조(업데이트)
 - **app.py**
-- **main_window.py** (UI, XML_Prompt.md 로드 경로 수정)
+- **main_window.py**
 - **main_controller.py**
 - **file_explorer.py**
 - **prompt_manager.py**
 - **template_manager.py**
 - **config.py**
 - **parse_xml_string.py**
-- **resources/XML_Prompt.md** (XML 가이드 파일)
-            
+- **resources/XML_Prompt.md**

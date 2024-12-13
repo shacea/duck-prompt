@@ -1,4 +1,3 @@
-
 import os
 from PyQt5.QtWidgets import QMessageBox
 from utils import get_resource_path

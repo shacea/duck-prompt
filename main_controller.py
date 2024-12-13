@@ -1,19 +1,22 @@
-
 import os
-from PyQt5.QtCore import Qt, QItemSelection
+from typing import Optional, List, Dict, Any
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTreeWidgetItem
 from prompt_manager import generate_final_prompt
 from config import config
 import parse_xml_string
-import glob
 from template_manager import list_templates, load_template, save_template
+from utils import calculate_char_count, calculate_token_count
 
 class MainController:
     def __init__(self, main_window):
         self.mw = main_window
-        self.tree_generated = False  # File Tree 생성 여부 상태 추가
+        self.tree_generated = False
 
     def select_project_folder(self):
+        if self.mw.mode == "Meta Prompt Builder":
+            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 프로젝트 폴더 선택이 필요 없습니다.")
+            return
         folder = QFileDialog.getExistingDirectory(self.mw, "Select Project Folder", os.path.expanduser("~"))
         if folder:
             self.mw.reset_state()
@@ -27,6 +30,8 @@ class MainController:
             self.mw.tree_view.expandAll()
 
     def load_file_preview(self, index):
+        if self.mw.mode == "Meta Prompt Builder":
+            return
         src_index = self.mw.checkable_proxy.mapToSource(index)
         if self.mw.dir_model.isDir(src_index):
             return
@@ -43,37 +48,16 @@ class MainController:
             self.mw.status_bar.showMessage(f"File loaded: {file_path}")
             self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         except Exception as e:
-            self.mw.prompt_output_tab.setText("Error occurred while reading the file...😢")
+            self.mw.prompt_output_tab.setText("Error occurred while reading the file...")
             self.mw.status_bar.showMessage(f"Error: {str(e)}")
 
-    def set_allowed_extensions(self):
-        ext_str, ok = QInputDialog.getText(self.mw, "Set Allowed Extensions", "Enter extensions separated by commas (.py, .md, etc.):")
-        if ok:
-            exts = [e.strip().lower() for e in ext_str.split(',') if e.strip()]
-            config.allowed_extensions = set(exts)
-            self.refresh_tree()
-            self.mw.extensions_edit.setText(",".join(config.allowed_extensions))
-
-    def set_excluded_dirs(self):
-        dir_str, ok = QInputDialog.getText(self.mw, "Set Excluded Directories", "Enter directory names separated by commas (.git, wandb, etc.):")
-        if ok:
-            dirs = [d.strip() for d in dir_str.split(',') if d.strip()]
-            config.excluded_dirs = set(dirs)
-            self.refresh_tree()
-            self.mw.excluded_dirs_edit.setText(",".join(config.excluded_dirs))
-
-    def apply_filters(self):
-        exts_str = self.mw.extensions_edit.text()
-        dirs_str = self.mw.excluded_dirs_edit.text()
-
-        exts = {e.strip().lower() for e in exts_str.split(',') if e.strip()}
-        dirs = {d.strip() for d in dirs_str.split(',') if d.strip()}
-
-        config.allowed_extensions = exts
-        config.excluded_dirs = dirs
-
-        self.refresh_tree()
-        self.mw.status_bar.showMessage("Filters applied!")
+    # 필터 관련 기능 제거
+    # def set_allowed_extensions(self):
+    #     ...
+    # def set_excluded_dirs(self):
+    #     ...
+    # def apply_filters(self):
+    #     ...
 
     def refresh_tree(self):
         if self.mw.current_project_folder:
@@ -81,6 +65,9 @@ class MainController:
             self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
 
     def generate_prompt(self):
+        if self.mw.mode == "Meta Prompt Builder":
+            return
+
         checked_files = self.mw.checkable_proxy.get_checked_files()
 
         file_contents = []
@@ -124,9 +111,25 @@ class MainController:
         self.mw.last_generated_prompt = final_prompt
         self.mw.prompt_output_tab.setText(final_prompt)
         length = len(final_prompt)
+
+        # 토큰/문자수 계산
+        self.update_counts_for_text(final_prompt)
+
+        self.mw.update_selected_files_panel()
         self.mw.status_bar.showMessage(f"Prompt generated! Length: {format(length, ',')} chars")
-        self.update_selected_files_panel()
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
+
+    def update_counts_for_text(self, text):
+        """주어진 텍스트에 대해 문자수와 토큰수를 업데이트한다."""
+        char_count = calculate_char_count(text)
+        token_count = 0
+        if self.mw.auto_token_calc_check.isChecked():
+            token_count = calculate_token_count(text, model_name="gpt-4")
+        self.mw.char_count_label.setText(f"Chars: {format(char_count, ',')}")
+        if self.mw.auto_token_calc_check.isChecked():
+            self.mw.token_count_label.setText(f"Calculated Total Token: {format(token_count, ',')}")
+        else:
+            self.mw.token_count_label.setText("토큰 계산: 비활성화")
 
     def copy_to_clipboard(self):
         if self.mw.last_generated_prompt:
@@ -139,14 +142,20 @@ class MainController:
     def on_data_changed(self, topLeft, bottomRight, roles):
         checked_files = self.mw.checkable_proxy.get_checked_files()
         self.mw.selected_files_data = []
+        combined_content = ""
         for fpath in checked_files:
             try:
                 size = os.path.getsize(fpath)
+                with open(fpath, 'r', encoding='utf-8') as fp:
+                    content = fp.read()
+                self.mw.selected_files_data.append((fpath, size))
+                combined_content += content
             except:
-                size = 0
-            self.mw.selected_files_data.append((fpath, size))
-        self.update_selected_files_panel()
-        self.mw.update_char_count()
+                pass
+
+        # 파일 선택 변화 시 토큰/문자수 업데이트
+        self.update_counts_for_text(combined_content)
+        self.mw.update_selected_files_panel()
 
     def on_selection_changed(self, selected, deselected):
         for index in selected.indexes():
@@ -158,6 +167,9 @@ class MainController:
         self.mw.update_selected_files_panel()
 
     def generate_directory_tree_structure(self):
+        if self.mw.mode == "Meta Prompt Builder":
+            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 디렉토리 트리 기능이 필요 없습니다.")
+            return
         import os
         if not self.mw.current_project_folder or not os.path.isdir(self.mw.current_project_folder):
             QMessageBox.information(self.mw, "Info", "No project folder selected.")
@@ -195,17 +207,17 @@ class MainController:
                 else:
                     files.append(entry)
             for d in dirs:
-                lines.append(f"{indent_str}📁 {d}/")
+                lines.append(f"{indent_str} 📁 {d}/")
                 lines.extend(print_tree(tree[d], os.path.join(parent_path, d), indent+1))
             for f in files:
                 size = 0
                 if os.path.isfile(os.path.join(parent_path, f)):
                     size = os.path.getsize(os.path.join(parent_path, f))
-                lines.append(f"{indent_str}📄 {f} ({size:,} bytes)")
+                lines.append(f"{indent_str} 📄 {f} ({size:,} bytes)")
             return lines
 
         tree = build_tree(all_checked_paths)
-        root_lines = [f"📁 {os.path.basename(self.mw.current_project_folder)}/"]
+        root_lines = [f" 📁 {os.path.basename(self.mw.current_project_folder)}/"]
         for k in sorted(tree.keys()):
             full_path = os.path.join(self.mw.current_project_folder, k)
             if os.path.isdir(full_path):
@@ -224,6 +236,9 @@ class MainController:
         self.tree_generated = True
 
     def run_xml_parser(self):
+        if self.mw.mode == "Meta Prompt Builder":
+            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 XML 파서 기능이 필요 없습니다.")
+            return
         xml_str = self.mw.xml_input_tab.toPlainText()
         if not xml_str.strip():
             self.mw.status_bar.showMessage("XML 내용이 비어있습니다.")
@@ -238,6 +253,8 @@ class MainController:
         self.mw.status_bar.showMessage("XML 파싱이 완료되었습니다!")
 
     def toggle_file_check(self, file_path):
+        if self.mw.mode == "Meta Prompt Builder":
+            return
         src_index = self.mw.dir_model.index(file_path)
         if src_index.isValid():
             proxy_index = self.mw.checkable_proxy.mapFromSource(src_index)
@@ -247,6 +264,8 @@ class MainController:
                 self.mw.checkable_proxy.setData(proxy_index, new_state, Qt.CheckStateRole)
 
     def rename_item(self, file_path):
+        if self.mw.mode == "Meta Prompt Builder":
+            return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "File or directory does not exist.")
             return
@@ -263,6 +282,8 @@ class MainController:
                 QMessageBox.warning(self.mw, "Error", f"Error renaming: {str(e)}")
 
     def delete_item(self, file_path):
+        if self.mw.mode == "Meta Prompt Builder":
+            return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "File or directory does not exist.")
             return
@@ -379,6 +400,17 @@ class MainController:
             return
 
         file_path = os.path.join(target_dir, filename)
-        from template_manager import save_template
         save_template(file_path, content)
         self.mw.status_bar.showMessage(f"Template updated: {filename}")
+
+    def generate_meta_prompt(self):
+        if self.mw.mode != "Meta Prompt Builder":
+            return
+        system_text = self.mw.system_tab.toPlainText()
+        user_text = self.mw.user_tab.toPlainText()
+        final_output = system_text.replace("{{user-input}}", user_text)
+        self.mw.prompt_output_tab.setText(final_output)
+        self.mw.last_generated_prompt = final_output
+        self.update_counts_for_text(final_output)
+        self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
+        self.mw.status_bar.showMessage("META Prompt generated!")

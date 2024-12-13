@@ -1,4 +1,3 @@
-
 import os
 from datetime import datetime
 
@@ -46,7 +45,6 @@ def generate_final_prompt(system_text, user_text, dev_text, file_contents, root_
     for path, content in file_contents:
         final_prompt_parts.append(f"\n--- {os.path.basename(path)} ---\n{content}\n")
 
-    # add_tree가 True일 때만 디렉토리 구조 추가
     if add_tree and root_dir and os.path.isdir(root_dir):
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         final_prompt_parts.extend([
@@ -68,4 +66,3 @@ def generate_final_prompt(system_text, user_text, dev_text, file_contents, root_
         final_prompt_parts.append("=" * 80)
 
     return "\n".join(final_prompt_parts)
-            

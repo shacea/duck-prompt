@@ -1,12 +1,7 @@
-# ------------------- parse_xml_string.py -------------------
 import os
 import xml.etree.ElementTree as ET
 
 def apply_changes_from_xml(xml_string: str, project_directory: str):
-    """
-    주어진 XML 문자열을 파싱하여 <changed_files> 안의 <file> 노드를 확인,
-    file_operation, file_path, file_code에 따라 파일을 생성/업데이트/삭제한다.
-    """
     root = ET.fromstring(xml_string.strip())
 
     changed_files_node = root.find('changed_files')

@@ -9,27 +9,22 @@ class CustomTextEdit(QTextEdit):
     def insertFromMimeData(self, source):
         """Override insertFromMimeData to handle pasted text with custom formatting"""
         if source.hasHtml():
-            # Create a new text format with black color
             fmt = QTextCharFormat()
             fmt.setForeground(QColor(Qt.black))
-            
-            # Get cursor and save its position
+
             cursor = self.textCursor()
             pos = cursor.position()
-            
-            # Insert the HTML content
+
+            # HTML 내용 삽입
             cursor.insertHtml(source.html())
-            
-            # Select the newly inserted text
+
+            # 붙여넣기 이후 커서를 강제로 끝으로 이동하던 로직 제거
+            # 대신 선택한 텍스트에 색 적용 후 원래 커서 위치 복원
             cursor.setPosition(pos)
-            cursor.movePosition(cursor.End, cursor.KeepAnchor)
-            
-            # Apply black color to the selected text
+            cursor.movePosition(cursor.NextCharacter, cursor.KeepAnchor, len(source.html()))
             cursor.mergeCharFormat(fmt)
-            
-            # Clear the selection
             cursor.clearSelection()
+
             self.setTextCursor(cursor)
         else:
-            # If the source doesn't have HTML, just insert plain text
             super().insertFromMimeData(source)
