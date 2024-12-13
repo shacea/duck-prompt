@@ -156,20 +156,20 @@ class MainWindow(QMainWindow):
         tm_layout = QVBoxLayout(self.template_manager_tab)
         tm_layout.setContentsMargins(5,5,5,5)
         tm_layout.setSpacing(5)
-        tm_label = QLabel("Select a template below to load or save:")
+        tm_label = QLabel("Select a prompt below to load or save:")
         tm_layout.addWidget(tm_label)
         self.template_tree = QTreeWidget()
         self.template_tree.setHeaderHidden(True)
         tm_layout.addWidget(self.template_tree)
 
         # 버튼과 콤보박스 초기화
-        self.load_selected_template_btn = QPushButton("Load Selected Template")
-        self.save_as_template_btn = QPushButton("Save Current as Template")
+        self.load_selected_template_btn = QPushButton("Load Selected Prompt")
+        self.save_as_template_btn = QPushButton("Save Current as Prompt")
         self.template_type_combo = QComboBox()
         self.template_type_combo.addItem("System")
         self.template_type_combo.addItem("User")
-        self.delete_template_btn = QPushButton("Delete Selected Template")
-        self.update_template_btn = QPushButton("Update Current Template")
+        self.delete_template_btn = QPushButton("Delete Selected Prompt")
+        self.update_template_btn = QPushButton("Update Current Prompt")
 
         # 버튼들을 3단으로 재배치
         tm_bottom_layout = QVBoxLayout()  # 수직 레이아웃으로 변경
