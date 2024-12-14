@@ -2,7 +2,11 @@ import os
 import xml.etree.ElementTree as ET
 
 def apply_changes_from_xml(xml_string: str, project_directory: str):
-    root = ET.fromstring(xml_string.strip())
+    try:
+        root = ET.fromstring(xml_string.strip())
+    except ET.ParseError as e:
+        print(f"Invalid XML input: {str(e)}")
+        return
 
     changed_files_node = root.find('changed_files')
     if changed_files_node is None:
