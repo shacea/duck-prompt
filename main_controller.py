@@ -1,7 +1,7 @@
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTreeWidgetItem
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 from prompt_manager import generate_final_prompt
 from config import config
 import parse_xml_string
@@ -99,7 +99,7 @@ class MainController:
         if self.mw.last_generated_prompt:
             from PyQt5.QtWidgets import QApplication
             QApplication.clipboard().setText(self.mw.last_generated_prompt)
-            self.mw.status_bar.showMessage("Copied to clipboard!")
+            self.mw.status_bar.showMessage("Copied!")
         else:
             self.mw.status_bar.showMessage("No prompt generated yet!")
 
@@ -432,8 +432,7 @@ class MainController:
                 self.mw.status_bar.showMessage("Error updating state")
 
     def generate_meta_prompt(self):
-        if self.mw.mode != "Meta Prompt Builder":
-            return
+        # Meta Prompt Builder 모드에서 META Prompt 생성
         system_text = self.mw.system_tab.toPlainText()
         user_text = self.mw.user_tab.toPlainText()
         final_output = system_text.replace("{{user-input}}", user_text)
@@ -442,6 +441,26 @@ class MainController:
         self.update_counts_for_text(final_output)
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         self.mw.status_bar.showMessage("META Prompt generated!")
+
+    def generate_final_meta_prompt(self):
+        # "Generate Final Prompt" 버튼 클릭 시 동작
+        meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
+        user_prompt_content = self.mw.user_prompt_tab.toPlainText()
+        # [[user-prompt]] 치환
+        final_prompt = meta_prompt_content.replace("[[user-prompt]]", user_prompt_content)
+        self.mw.final_prompt_tab.setText(final_prompt)
+        self.mw.last_generated_prompt = final_prompt
+        self.update_counts_for_text(final_prompt)
+        self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
+        self.mw.status_bar.showMessage("Final Prompt generated!")
+
+    def copy_final_prompt(self):
+        if self.mw.last_generated_prompt:
+            from PyQt5.QtWidgets import QApplication
+            QApplication.clipboard().setText(self.mw.last_generated_prompt)
+            self.mw.status_bar.showMessage("Final Prompt Copied!")
+        else:
+            self.mw.status_bar.showMessage("No final prompt generated yet!")
 
     def save_state_to_default(self):
         state = self.mw.get_current_state()

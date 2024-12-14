@@ -204,35 +204,69 @@ class MainWindow(QMainWindow):
         custom_tab_bar = CustomTabBar(self.build_tabs, self)
         self.build_tabs.setTabBar(custom_tab_bar)
 
+        # 탭명 변경 (Meta Prompt Builder 모드 확인)
+        system_tab_label = "System"
+        user_tab_label = "User"
+        copy_btn_label = "Copy to Clipboard"
+        if self.mode == "Meta Prompt Builder":
+            system_tab_label = "META Prompt Template"
+            user_tab_label = "META User Input"
+            copy_btn_label = "Copy META Prompt"
+
         self.system_tab = CustomTextEdit()
         self.system_tab.setPlaceholderText("Enter System Prompt...")
-        self.build_tabs.addTab(self.system_tab, "System")
+        self.build_tabs.addTab(self.system_tab, system_tab_label)
 
         self.user_tab = CustomTextEdit()
         self.user_tab.setPlaceholderText("Enter User Prompt...")
-        self.build_tabs.addTab(self.user_tab, "User")
+        self.build_tabs.addTab(self.user_tab, user_tab_label)
 
-        self.dir_structure_tab = CustomTextEdit()
-        self.dir_structure_tab.setReadOnly(True)
+        # Meta Prompt Builder 모드가 아닐 때만 File Tree, XML Input 탭 추가
         if self.mode != "Meta Prompt Builder":
+            self.dir_structure_tab = CustomTextEdit()
+            self.dir_structure_tab.setReadOnly(True)
             self.build_tabs.addTab(self.dir_structure_tab, "File Tree")
 
         self.prompt_output_tab = CustomTextEdit()
         self.prompt_output_tab.setReadOnly(False)
         self.prompt_output_tab.setFont(QFont("Consolas", 10))
         self.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }")
+
         if self.mode == "Meta Prompt Builder":
+            # 탭 이름 변경
             self.build_tabs.addTab(self.prompt_output_tab, "Meta Prompt Output")
         else:
             self.build_tabs.addTab(self.prompt_output_tab, "Prompt Output")
 
-        self.xml_input_tab = CustomTextEdit()
-        self.xml_input_tab.setPlaceholderText("Enter XML content here...")
         if self.mode != "Meta Prompt Builder":
+            self.xml_input_tab = CustomTextEdit()
+            self.xml_input_tab.setPlaceholderText("Enter XML content here...")
             self.build_tabs.addTab(self.xml_input_tab, "XML Input")
 
-        # 실행 시 가장 왼쪽 탭 선택
-        self.build_tabs.setCurrentIndex(0)
+        # Meta Prompt Builder 모드일 때 추가 탭들 생성
+        if self.mode == "Meta Prompt Builder":
+            # "   |   " 탭 생성
+            self.separator_tab = CustomTextEdit()
+            self.separator_tab.setReadOnly(True)
+            self.separator_tab.setText("   |   ")
+            self.build_tabs.addTab(self.separator_tab, "   |   ")
+
+            # "META Prompt" 탭
+            self.meta_prompt_tab = CustomTextEdit()
+            self.meta_prompt_tab.setPlaceholderText("META Prompt Content...")
+            self.build_tabs.addTab(self.meta_prompt_tab, "META Prompt")
+
+            # "user-prompt" 탭
+            self.user_prompt_tab = CustomTextEdit()
+            self.user_prompt_tab.setPlaceholderText("Enter user-prompt content...")
+            self.build_tabs.addTab(self.user_prompt_tab, "user-prompt")
+
+            # "Final Prompt" 탭
+            self.final_prompt_tab = CustomTextEdit()
+            self.final_prompt_tab.setReadOnly(False)
+            self.final_prompt_tab.setFont(QFont("Consolas", 10))
+            self.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }")
+            self.build_tabs.addTab(self.final_prompt_tab, "Final Prompt")
 
         self.selected_files_toolbtn = QToolButton()
         self.selected_files_toolbtn.setText("Selected Files")
@@ -273,7 +307,12 @@ class MainWindow(QMainWindow):
         left_side_layout = QVBoxLayout(left_side_widget)
         left_side_layout.setContentsMargins(0,0,0,0)
         left_side_layout.setSpacing(5)
-        left_side_layout.addWidget(self.select_project_btn_large)
+        if self.mode != "Meta Prompt Builder":
+            left_side_layout.addWidget(self.select_project_btn_large)
+        else:
+            self.select_project_btn_large.setDisabled(True)
+            left_side_layout.addWidget(self.select_project_btn_large)
+
         left_side_layout.addWidget(self.template_manager_tab)
 
         if self.mode != "Meta Prompt Builder":
@@ -297,7 +336,7 @@ class MainWindow(QMainWindow):
             self.generate_tree_action = QAction(QIcon(), "Generate Tree", self)
             self.run_xml_parser_action = QAction(QIcon(), "Run XML Parser", self)
             self.generate_action = QAction(QIcon(), "Generate Prompt", self)
-            self.copy_action = QAction(QIcon(), "Copy to Clipboard", self)
+            self.copy_action = QAction(QIcon(), copy_btn_label, self)
 
             ribbon.addAction(self.generate_tree_action)
             ribbon.addSeparator()
@@ -307,10 +346,17 @@ class MainWindow(QMainWindow):
             ribbon.addAction(self.run_xml_parser_action)
         else:
             self.generate_action = QAction(QIcon(), "Generate META Prompt", self)
-            self.copy_action = QAction(QIcon(), "Copy to Clipboard", self)
+            self.copy_action = QAction(QIcon(), copy_btn_label, self)
             ribbon.addAction(self.generate_action)
             ribbon.addSeparator()
             ribbon.addAction(self.copy_action)
+
+            # "Generate Final Prompt" 버튼, "Copy Final Prompt" 버튼 추가
+            self.generate_final_prompt_action = QAction(QIcon(), "Generate Final Prompt", self)
+            self.copy_final_prompt_action = QAction(QIcon(), "Copy Final Prompt", self)
+            ribbon.addSeparator()
+            ribbon.addAction(self.generate_final_prompt_action)
+            ribbon.addAction(self.copy_final_prompt_action)
 
         self.char_count_label = QLabel("Chars: 0")
         self.token_count_label = QLabel("Calculated Total Token: N/A")
@@ -345,10 +391,16 @@ class MainWindow(QMainWindow):
             self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
             self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
         else:
-            self.select_project_btn_large.setDisabled(True)
+            # Meta Prompt Builder 모드일 때 META Prompt.md 자동 로드
+            meta_prompt_path = os.path.join("resources", "prompts", "system", "META Prompt.md")
+            if os.path.exists(meta_prompt_path):
+                with open(meta_prompt_path, 'r', encoding='utf-8') as f:
+                    self.system_tab.setText(f.read())
 
         if self.mode == "Meta Prompt Builder":
             self.generate_action.triggered.connect(self.controller.generate_meta_prompt)
+            self.generate_final_prompt_action.triggered.connect(self.controller.generate_final_meta_prompt)
+            self.copy_final_prompt_action.triggered.connect(self.controller.copy_final_prompt)
         else:
             self.generate_action.triggered.connect(self.controller.generate_prompt)
 
