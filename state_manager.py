@@ -21,27 +21,57 @@ def load_state(filename: str) -> dict:
         file_path = os.path.join("resources", "status", filename + ".json")
         if not os.path.exists(file_path):
             print(colored(f"No state file found at {file_path}", "yellow"))
-            return {}
+            # 수정: 기본값 반환
+            return {
+                "mode": "Code Enhancer Prompt Builder",
+                "project_folder": None,
+                "system_prompt": "",
+                "user_prompt": "",
+                "last_generated_prompt": "",
+                "checked_files": []
+            }
         with open(file_path, 'r', encoding='utf-8') as f:
             state = json.load(f)
         print(colored(f"State loaded from {file_path}", "green"))
         return state
     except Exception as e:
         print(colored(f"Error loading state: {str(e)}", "red"))
-        return {}
+        # 오류 시에도 기본값 반환
+        return {
+            "mode": "Code Enhancer Prompt Builder",
+            "project_folder": None,
+            "system_prompt": "",
+            "user_prompt": "",
+            "last_generated_prompt": "",
+            "checked_files": []
+        }
 
 def import_state_from_file(path: str) -> dict:
     try:
         if not os.path.exists(path):
             print(colored(f"No state file found at {path}", "yellow"))
-            return {}
+            return {
+                "mode": "Code Enhancer Prompt Builder",
+                "project_folder": None,
+                "system_prompt": "",
+                "user_prompt": "",
+                "last_generated_prompt": "",
+                "checked_files": []
+            }
         with open(path, 'r', encoding='utf-8') as f:
             state = json.load(f)
         print(colored(f"State imported from {path}", "green"))
         return state
     except Exception as e:
         print(colored(f"Error importing state: {str(e)}", "red"))
-        return {}
+        return {
+            "mode": "Code Enhancer Prompt Builder",
+            "project_folder": None,
+            "system_prompt": "",
+            "user_prompt": "",
+            "last_generated_prompt": "",
+            "checked_files": []
+        }
 
 def export_state_to_file(state: dict, path: str) -> bool:
     try:
@@ -79,10 +109,16 @@ def backup_all_states(backup_path: str) -> bool:
         if not os.path.isdir(states_dir):
             print(colored("No states directory to backup.", "yellow"))
             return False
+        
+        # 수정: .zip 처리를 명확하게
+        if not backup_path.lower().endswith(".zip"):
+            backup_path += ".zip"
         base_dir = os.path.dirname(backup_path)
         if base_dir:
             os.makedirs(base_dir, exist_ok=True)
-        shutil.make_archive(backup_path.replace(".zip",""), 'zip', states_dir)
+        
+        base_name = backup_path[:-4]  # .zip 제거
+        shutil.make_archive(base_name, 'zip', states_dir)
         print(colored(f"All states backed up to {backup_path}", "green"))
         return True
     except Exception as e:

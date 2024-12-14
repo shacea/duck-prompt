@@ -48,8 +48,9 @@ class MainController:
                 file_contents.append((fpath, content))
                 self.mw.selected_files_data.append((fpath, size))
             except Exception as e:
-                file_contents.append((fpath, f"File load error: {str(e)}"))
-                self.mw.selected_files_data.append((fpath, 0))
+                # 수정: 오류 발생 시 해당 파일 스킵
+                print(f"Error loading file {fpath}: {e}")
+                continue
 
         system_text = self.mw.system_tab.toPlainText()
         user_text = self.mw.user_tab.toPlainText()
@@ -156,7 +157,14 @@ class MainController:
                     current = current[part]
             return tree
 
-        def print_tree(tree, parent_path, indent=0):
+        # 수정: 무한 재귀 방지를 위해 visited 집합 사용
+        def print_tree(tree, parent_path, indent=0, visited=None):
+            if visited is None:
+                visited = set()
+            if parent_path in visited:
+                return []
+            visited.add(parent_path)
+
             lines = []
             indent_str = "  " * indent
             entries = sorted(tree.keys())
@@ -170,7 +178,7 @@ class MainController:
                     files.append(entry)
             for d in dirs:
                 lines.append(f"{indent_str} 📁 {d}/")
-                lines.extend(print_tree(tree[d], os.path.join(parent_path, d), indent+1))
+                lines.extend(print_tree(tree[d], os.path.join(parent_path, d), indent+1, visited))
             for f in files:
                 size = 0
                 if os.path.isfile(os.path.join(parent_path, f)):

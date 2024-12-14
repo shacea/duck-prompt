@@ -14,6 +14,7 @@ def init_utils():
     thread = threading.Thread(target=preload_encoding)
     thread.daemon = True
     thread.start()
+    thread.join()  # ENC 초기화 대기
 
 def get_resource_path(relative_path: str) -> str:
     base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))

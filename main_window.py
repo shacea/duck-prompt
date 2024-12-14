@@ -14,6 +14,7 @@ from file_explorer import FilteredFileSystemModel, CheckableProxyModel
 from main_controller import MainController
 from custom_text_edit import CustomTextEdit
 from tab_manager import is_tab_deletable
+from utils import get_resource_path  # 추가된 임포트
 
 from PyQt5.QtWidgets import QTabBar, QInputDialog, QMessageBox, QFileDialog
 
@@ -400,7 +401,8 @@ class MainWindow(QMainWindow):
             self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
             self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
         else:
-            meta_prompt_path = os.path.join("resources", "prompts", "system", "META_Prompt.md")
+            # 수정된 부분: get_resource_path를 활용
+            meta_prompt_path = get_resource_path(os.path.join("resources", "prompts", "system", "META_Prompt.md"))
             if os.path.exists(meta_prompt_path):
                 with open(meta_prompt_path, 'r', encoding='utf-8') as f:
                     self.system_tab.setText(f.read())
@@ -453,7 +455,6 @@ class MainWindow(QMainWindow):
 
         self.status_bar.showMessage("Ready")
 
-        # 처음 실행 시 가장 왼쪽 탭이 선택되도록 설정
         self.build_tabs.setCurrentIndex(0)
 
     def reset_state(self):
