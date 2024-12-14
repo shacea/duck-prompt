@@ -109,7 +109,6 @@ class MainWindow(QMainWindow):
         mode_menu.addAction(switch_to_code_action)
         mode_menu.addAction(switch_to_meta_action)
 
-        # 상태 관련 메뉴
         state_menu = menubar.addMenu("State")
         save_state_action = QAction("Save State (default)", self)
         load_state_action = QAction("Load State (default)", self)
@@ -154,7 +153,6 @@ class MainWindow(QMainWindow):
         tm_layout.setContentsMargins(5,5,5,5)
         tm_layout.setSpacing(5)
 
-        # Prompts/States 선택 콤보박스
         self.resource_mode_combo = QComboBox()
         self.resource_mode_combo.addItem("Prompts")
         self.resource_mode_combo.addItem("States")
@@ -175,7 +173,6 @@ class MainWindow(QMainWindow):
         self.delete_template_btn = QPushButton("Delete Selected Prompt")
         self.update_template_btn = QPushButton("Update Current Prompt")
 
-        # 백업/복구 버튼 (States 전용)
         self.backup_button = QPushButton("Backup All States")
         self.restore_button = QPushButton("Restore States from Backup")
 
@@ -196,7 +193,6 @@ class MainWindow(QMainWindow):
         third_row.addWidget(self.update_template_btn)
         tm_bottom_layout.addLayout(third_row)
 
-        # 백업/복구 행
         fourth_row = QHBoxLayout()
         fourth_row.addWidget(self.backup_button)
         fourth_row.addWidget(self.restore_button)
@@ -234,6 +230,9 @@ class MainWindow(QMainWindow):
         self.xml_input_tab.setPlaceholderText("Enter XML content here...")
         if self.mode != "Meta Prompt Builder":
             self.build_tabs.addTab(self.xml_input_tab, "XML Input")
+
+        # 실행 시 가장 왼쪽 탭 선택
+        self.build_tabs.setCurrentIndex(0)
 
         self.selected_files_toolbtn = QToolButton()
         self.selected_files_toolbtn.setText("Selected Files")
@@ -361,7 +360,6 @@ class MainWindow(QMainWindow):
         self.delete_template_btn.clicked.connect(self.controller.delete_selected_item)
         self.update_template_btn.clicked.connect(self.controller.update_current_item)
 
-        # 백업/복구 액션
         self.backup_button.clicked.connect(self.controller.backup_all_states_action)
         self.restore_button.clicked.connect(self.controller.restore_states_from_backup_action)
 

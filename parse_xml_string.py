@@ -26,7 +26,7 @@ def apply_changes_from_xml(xml_string: str, project_directory: str):
         if file_code_node is not None and file_code_node.text is not None:
             file_code = file_code_node.text
 
-        if file_operation == "CREATE" or file_operation == "UPDATE":
+        if file_operation in ["CREATE", "UPDATE"]:
             if file_code is None:
                 print(f"No file_code provided for {file_operation} operation on {file_path}")
                 continue

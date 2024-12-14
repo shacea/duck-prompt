@@ -18,8 +18,6 @@ class CustomTextEdit(QTextEdit):
             # HTML 내용 삽입
             cursor.insertHtml(source.html())
 
-            # 붙여넣기 이후 커서를 강제로 끝으로 이동하던 로직 제거
-            # 대신 선택한 텍스트에 색 적용 후 원래 커서 위치 복원
             cursor.setPosition(pos)
             cursor.movePosition(cursor.NextCharacter, cursor.KeepAnchor, len(source.html()))
             cursor.mergeCharFormat(fmt)

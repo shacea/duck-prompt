@@ -269,7 +269,6 @@ class MainController:
             self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
 
     def load_templates_list(self):
-        # 현재 mode_combo에서 선택한 모드에 따라 다르게 로드
         self.mw.template_tree.clear()
         current_mode = self.mw.resource_mode_combo.currentText()
 
@@ -301,7 +300,6 @@ class MainController:
         self.update_buttons_label()
 
     def load_selected_item(self):
-        # Prompts면 템플릿 로드, States면 상태 로드
         current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
@@ -323,7 +321,6 @@ class MainController:
                 self.mw.status_bar.showMessage(f"Loaded user template: {filename}")
 
         elif current_mode == "States":
-            # 확장자 .json 제거
             fname_no_ext = os.path.splitext(filename)[0]
             s = load_state(fname_no_ext)
             if s:
@@ -391,7 +388,6 @@ class MainController:
                 self.load_templates_list()
 
         elif current_mode == "States":
-            # 상태 파일 삭제
             fname_no_ext = os.path.splitext(filename)[0]
             reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
@@ -403,7 +399,6 @@ class MainController:
                     self.mw.status_bar.showMessage("Error deleting state")
 
     def update_current_item(self):
-        # Prompts나 States 모두 현재 편집중인 내용을 선택된 파일에 덮어쓰기
         current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
@@ -483,7 +478,6 @@ class MainController:
                 self.mw.status_bar.showMessage("Error importing state or empty state")
 
     def update_buttons_label(self):
-        # Prompts/States 모드에 따라 버튼 라벨 변경
         current_mode = self.mw.resource_mode_combo.currentText()
         if current_mode == "Prompts":
             self.mw.load_selected_template_btn.setText("Load Selected Prompt")
