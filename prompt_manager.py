@@ -46,6 +46,7 @@ def generate_final_prompt(system_text, user_text, dev_text, file_contents, root_
         final_prompt_parts.append(f"\n--- {os.path.basename(path)} ---\n{content}\n")
 
     if add_tree and root_dir and os.path.isdir(root_dir):
+        from datetime import datetime
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         final_prompt_parts.extend([
             "\n" + "="*80,

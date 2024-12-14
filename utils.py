@@ -4,7 +4,7 @@ import tiktoken
 from typing import Union
 import threading
 
-ENC = None  # 전역 변수로 인코딩 객체를 저장할 예정
+ENC = None
 
 def preload_encoding():
     global ENC

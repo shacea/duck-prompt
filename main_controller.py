@@ -1,7 +1,7 @@
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTreeWidgetItem
 from prompt_manager import generate_final_prompt
 from config import config
 import parse_xml_string
@@ -239,7 +239,7 @@ class MainController:
             try:
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"Renamed '{old_name}' to '{new_name}'")
-                self.mw.controller.refresh_tree()
+                self.refresh_tree()
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"Error renaming: {str(e)}")
 
@@ -273,8 +273,8 @@ class MainController:
         current_mode = self.mw.resource_mode_combo.currentText()
 
         if current_mode == "Prompts":
-            system_item = QTreeWidgetItem(["System Templates"])
-            user_item = QTreeWidgetItem(["User Templates"])
+            system_item = QTreeWidgetItem(["System"])
+            user_item = QTreeWidgetItem(["User"])
             self.mw.template_tree.addTopLevelItem(system_item)
             self.mw.template_tree.addTopLevelItem(user_item)
 
@@ -309,12 +309,12 @@ class MainController:
         filename = item.text(0)
         if current_mode == "Prompts":
             parent_text = item.parent().text(0)
-            if parent_text == "System Templates":
+            if parent_text == "System":
                 file_path = os.path.join("resources", "prompts", "system", filename)
                 content = load_template(file_path)
                 self.mw.system_tab.setText(content)
                 self.mw.status_bar.showMessage(f"Loaded system template: {filename}")
-            elif parent_text == "User Templates":
+            elif parent_text == "User":
                 file_path = os.path.join("resources", "prompts", "user", filename)
                 content = load_template(file_path)
                 self.mw.user_tab.setText(content)
@@ -371,9 +371,9 @@ class MainController:
         filename = item.text(0)
         if current_mode == "Prompts":
             parent_text = item.parent().text(0)
-            if parent_text == "System Templates":
+            if parent_text == "System":
                 file_path = os.path.join("resources", "prompts", "system", filename)
-            elif parent_text == "User Templates":
+            elif parent_text == "User":
                 file_path = os.path.join("resources", "prompts", "user", filename)
             else:
                 QMessageBox.information(self.mw, "Info", "Invalid template selection.")
@@ -409,10 +409,10 @@ class MainController:
 
         if current_mode == "Prompts":
             parent_text = item.parent().text(0)
-            if parent_text == "System Templates":
+            if parent_text == "System":
                 target_dir = "resources/prompts/system"
                 content = self.mw.system_tab.toPlainText()
-            elif parent_text == "User Templates":
+            elif parent_text == "User":
                 target_dir = "resources/prompts/user"
                 content = self.mw.user_tab.toPlainText()
             else:
@@ -432,7 +432,6 @@ class MainController:
                 self.mw.status_bar.showMessage("Error updating state")
 
     def generate_meta_prompt(self):
-        # Meta Prompt Builder 모드에서 META Prompt 생성
         system_text = self.mw.system_tab.toPlainText()
         user_text = self.mw.user_tab.toPlainText()
         final_output = system_text.replace("{{user-input}}", user_text)
@@ -443,10 +442,8 @@ class MainController:
         self.mw.status_bar.showMessage("META Prompt generated!")
 
     def generate_final_meta_prompt(self):
-        # "Generate Final Prompt" 버튼 클릭 시 동작
         meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
         user_prompt_content = self.mw.user_prompt_tab.toPlainText()
-        # [[user-prompt]] 치환
         final_prompt = meta_prompt_content.replace("[[user-prompt]]", user_prompt_content)
         self.mw.final_prompt_tab.setText(final_prompt)
         self.mw.last_generated_prompt = final_prompt

@@ -4,8 +4,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox,
-    QAbstractItemView, QScrollArea, QToolButton, QFrame, QLineEdit,
-    QInputDialog, QMessageBox, QMenuBar, QSplitter, QStyleFactory, QApplication, QToolBar, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox
+    QAbstractItemView, QScrollArea, QToolButton, QFrame, QMenuBar, QSplitter, QStyleFactory, QApplication, QToolBar, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont
 from PyQt5.QtCore import Qt, QSize, QStandardPaths
@@ -16,7 +15,7 @@ from main_controller import MainController
 from custom_text_edit import CustomTextEdit
 from tab_manager import is_tab_deletable
 
-from PyQt5.QtWidgets import QTabBar
+from PyQt5.QtWidgets import QTabBar, QInputDialog, QMessageBox, QFileDialog
 
 class CustomTabBar(QTabBar):
     def __init__(self, parent: QTabWidget, main_window: QMainWindow):
@@ -98,9 +97,9 @@ class MainWindow(QMainWindow):
         switch_to_code_action = QAction("Switch to Code Enhancer Builder", self)
         switch_to_meta_action = QAction("Switch to Meta Prompt Builder", self)
 
-        def restart_with_mode(mode):
+        def restart_with_mode(new_mode):
             self.close()
-            new_window = MainWindow(mode=mode)
+            new_window = MainWindow(mode=new_mode)
             new_window.show()
 
         switch_to_code_action.triggered.connect(lambda: restart_with_mode("Code Enhancer Prompt Builder"))
@@ -204,7 +203,6 @@ class MainWindow(QMainWindow):
         custom_tab_bar = CustomTabBar(self.build_tabs, self)
         self.build_tabs.setTabBar(custom_tab_bar)
 
-        # 탭명 변경 (Meta Prompt Builder 모드 확인)
         system_tab_label = "System"
         user_tab_label = "User"
         copy_btn_label = "Copy to Clipboard"
@@ -221,7 +219,6 @@ class MainWindow(QMainWindow):
         self.user_tab.setPlaceholderText("Enter User Prompt...")
         self.build_tabs.addTab(self.user_tab, user_tab_label)
 
-        # Meta Prompt Builder 모드가 아닐 때만 File Tree, XML Input 탭 추가
         if self.mode != "Meta Prompt Builder":
             self.dir_structure_tab = CustomTextEdit()
             self.dir_structure_tab.setReadOnly(True)
@@ -233,7 +230,6 @@ class MainWindow(QMainWindow):
         self.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }")
 
         if self.mode == "Meta Prompt Builder":
-            # 탭 이름 변경
             self.build_tabs.addTab(self.prompt_output_tab, "Meta Prompt Output")
         else:
             self.build_tabs.addTab(self.prompt_output_tab, "Prompt Output")
@@ -243,25 +239,20 @@ class MainWindow(QMainWindow):
             self.xml_input_tab.setPlaceholderText("Enter XML content here...")
             self.build_tabs.addTab(self.xml_input_tab, "XML Input")
 
-        # Meta Prompt Builder 모드일 때 추가 탭들 생성
         if self.mode == "Meta Prompt Builder":
-            # "   |   " 탭 생성
             self.separator_tab = CustomTextEdit()
             self.separator_tab.setReadOnly(True)
             self.separator_tab.setText("   |   ")
             self.build_tabs.addTab(self.separator_tab, "   |   ")
 
-            # "META Prompt" 탭
             self.meta_prompt_tab = CustomTextEdit()
             self.meta_prompt_tab.setPlaceholderText("META Prompt Content...")
             self.build_tabs.addTab(self.meta_prompt_tab, "META Prompt")
 
-            # "user-prompt" 탭
             self.user_prompt_tab = CustomTextEdit()
             self.user_prompt_tab.setPlaceholderText("Enter user-prompt content...")
             self.build_tabs.addTab(self.user_prompt_tab, "user-prompt")
 
-            # "Final Prompt" 탭
             self.final_prompt_tab = CustomTextEdit()
             self.final_prompt_tab.setReadOnly(False)
             self.final_prompt_tab.setFont(QFont("Consolas", 10))
@@ -296,23 +287,42 @@ class MainWindow(QMainWindow):
         sf_main_layout.addWidget(self.selected_files_toolbtn)
         sf_main_layout.addWidget(self.selected_files_container)
 
-        self.select_project_btn_large = QPushButton("Select Project Folder")
-        self.select_project_btn_large.setFixedHeight(40)
-        font = self.select_project_btn_large.font()
+        self.mode_toggle_btn = QPushButton("Toggle Mode")
+        self.mode_toggle_btn.setFixedHeight(40)
+        font = self.mode_toggle_btn.font()
         font.setPointSize(12)
         font.setBold(True)
-        self.select_project_btn_large.setFont(font)
+        self.mode_toggle_btn.setFont(font)
+        self.mode_toggle_btn.setStyleSheet("QPushButton { background-color: #e0f7fa; border: 1px solid #b2ebf2; border-radius: 5px;}")
+
+        def toggle_mode():
+            if self.mode == "Code Enhancer Prompt Builder":
+                restart_with_mode("Meta Prompt Builder")
+            else:
+                restart_with_mode("Code Enhancer Prompt Builder")
+
+        self.mode_toggle_btn.clicked.connect(toggle_mode)
+
+        self.select_project_btn_large = QPushButton("Select Project Folder")
+        self.select_project_btn_large.setFixedHeight(40)
+        font2 = self.select_project_btn_large.font()
+        font2.setPointSize(12)
+        font2.setBold(True)
+        self.select_project_btn_large.setFont(font2)
+        self.select_project_btn_large.setStyleSheet("QPushButton { background-color: #e8f5e9; border: 1px solid #c8e6c9; border-radius: 5px;}")
+
+        top_buttons_layout = QHBoxLayout()
+        top_buttons_layout.addWidget(self.mode_toggle_btn)
+        top_buttons_layout.addWidget(self.select_project_btn_large)
 
         left_side_widget = QWidget()
         left_side_layout = QVBoxLayout(left_side_widget)
         left_side_layout.setContentsMargins(0,0,0,0)
         left_side_layout.setSpacing(5)
-        if self.mode != "Meta Prompt Builder":
-            left_side_layout.addWidget(self.select_project_btn_large)
-        else:
+        if self.mode == "Meta Prompt Builder":
             self.select_project_btn_large.setDisabled(True)
-            left_side_layout.addWidget(self.select_project_btn_large)
 
+        left_side_layout.addLayout(top_buttons_layout)
         left_side_layout.addWidget(self.template_manager_tab)
 
         if self.mode != "Meta Prompt Builder":
@@ -347,13 +357,12 @@ class MainWindow(QMainWindow):
         else:
             self.generate_action = QAction(QIcon(), "Generate META Prompt", self)
             self.copy_action = QAction(QIcon(), copy_btn_label, self)
+            self.generate_final_prompt_action = QAction(QIcon(), "Generate Final Prompt", self)
+            self.copy_final_prompt_action = QAction(QIcon(), "Copy Final Prompt", self)
+
             ribbon.addAction(self.generate_action)
             ribbon.addSeparator()
             ribbon.addAction(self.copy_action)
-
-            # "Generate Final Prompt" 버튼, "Copy Final Prompt" 버튼 추가
-            self.generate_final_prompt_action = QAction(QIcon(), "Generate Final Prompt", self)
-            self.copy_final_prompt_action = QAction(QIcon(), "Copy Final Prompt", self)
             ribbon.addSeparator()
             ribbon.addAction(self.generate_final_prompt_action)
             ribbon.addAction(self.copy_final_prompt_action)
@@ -391,8 +400,7 @@ class MainWindow(QMainWindow):
             self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
             self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
         else:
-            # Meta Prompt Builder 모드일 때 META Prompt.md 자동 로드
-            meta_prompt_path = os.path.join("resources", "prompts", "system", "META Prompt.md")
+            meta_prompt_path = os.path.join("resources", "prompts", "system", "META_Prompt.md")
             if os.path.exists(meta_prompt_path):
                 with open(meta_prompt_path, 'r', encoding='utf-8') as f:
                     self.system_tab.setText(f.read())
@@ -444,6 +452,9 @@ class MainWindow(QMainWindow):
         import_state_action.triggered.connect(self.controller.import_state_from_file)
 
         self.status_bar.showMessage("Ready")
+
+        # 처음 실행 시 가장 왼쪽 탭이 선택되도록 설정
+        self.build_tabs.setCurrentIndex(0)
 
     def reset_state(self):
         self.current_project_folder = None
