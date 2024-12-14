@@ -14,7 +14,7 @@ from file_explorer import FilteredFileSystemModel, CheckableProxyModel
 from main_controller import MainController
 from custom_text_edit import CustomTextEdit
 from tab_manager import is_tab_deletable
-from utils import get_resource_path  # 추가된 임포트
+from utils import get_resource_path
 
 from PyQt5.QtWidgets import QTabBar, QInputDialog, QMessageBox, QFileDialog
 
@@ -54,7 +54,7 @@ class CustomTabBar(QTabBar):
             if index >= 0:
                 tab_text = self.tabText(index)
                 if is_tab_deletable(tab_text):
-                    new_name, ok = QInputDialog.getText(None, "Rename Tab", "Enter new tab name:", text=tab_text)
+                    new_name, ok = QInputDialog.getText(None, "탭 이름 변경", "새 탭 이름을 입력하세요:", text=tab_text)
                     if ok and new_name.strip():
                         self.setTabText(index, new_name.strip())
         super().mouseDoubleClickEvent(event)
@@ -93,10 +93,10 @@ class MainWindow(QMainWindow):
         menubar = QMenuBar(self)
         self.setMenuBar(menubar)
 
-        mode_menu = menubar.addMenu("Mode")
+        mode_menu = menubar.addMenu("모드")
 
-        switch_to_code_action = QAction("Switch to Code Enhancer Builder", self)
-        switch_to_meta_action = QAction("Switch to Meta Prompt Builder", self)
+        switch_to_code_action = QAction("코드 강화 빌더로 전환", self)
+        switch_to_meta_action = QAction("메타 프롬프트 빌더로 전환", self)
 
         def restart_with_mode(new_mode):
             self.close()
@@ -109,11 +109,11 @@ class MainWindow(QMainWindow):
         mode_menu.addAction(switch_to_code_action)
         mode_menu.addAction(switch_to_meta_action)
 
-        state_menu = menubar.addMenu("State")
-        save_state_action = QAction("Save State (default)", self)
-        load_state_action = QAction("Load State (default)", self)
-        export_state_action = QAction("Export State", self)
-        import_state_action = QAction("Import State", self)
+        state_menu = menubar.addMenu("상태")
+        save_state_action = QAction("상태 저장(기본)", self)
+        load_state_action = QAction("상태 불러오기(기본)", self)
+        export_state_action = QAction("상태 내보내기", self)
+        import_state_action = QAction("상태 가져오기", self)
 
         state_menu.addAction(save_state_action)
         state_menu.addAction(load_state_action)
@@ -154,27 +154,27 @@ class MainWindow(QMainWindow):
         tm_layout.setSpacing(5)
 
         self.resource_mode_combo = QComboBox()
-        self.resource_mode_combo.addItem("Prompts")
-        self.resource_mode_combo.addItem("States")
-        tm_layout.addWidget(QLabel("Choose Resource Type:"))
+        self.resource_mode_combo.addItem("프롬프트")
+        self.resource_mode_combo.addItem("상태")
+        tm_layout.addWidget(QLabel("리소스 타입 선택:"))
         tm_layout.addWidget(self.resource_mode_combo)
 
-        tm_label = QLabel("Select a resource below to load or save:")
+        tm_label = QLabel("아래에서 로드하거나 저장할 리소스를 선택하세요:")
         tm_layout.addWidget(tm_label)
         self.template_tree = QTreeWidget()
         self.template_tree.setHeaderHidden(True)
         tm_layout.addWidget(self.template_tree)
 
-        self.load_selected_template_btn = QPushButton("Load Selected Prompt")
-        self.save_as_template_btn = QPushButton("Save Current as Prompt")
+        self.load_selected_template_btn = QPushButton("선택한 프롬프트 불러오기")
+        self.save_as_template_btn = QPushButton("현재 프롬프트로 저장")
         self.template_type_combo = QComboBox()
-        self.template_type_combo.addItem("System")
-        self.template_type_combo.addItem("User")
-        self.delete_template_btn = QPushButton("Delete Selected Prompt")
-        self.update_template_btn = QPushButton("Update Current Prompt")
+        self.template_type_combo.addItem("시스템")
+        self.template_type_combo.addItem("사용자")
+        self.delete_template_btn = QPushButton("선택한 프롬프트 삭제")
+        self.update_template_btn = QPushButton("현재 프롬프트 업데이트")
 
-        self.backup_button = QPushButton("Backup All States")
-        self.restore_button = QPushButton("Restore States from Backup")
+        self.backup_button = QPushButton("모든 상태 백업")
+        self.restore_button = QPushButton("백업에서 상태 복원")
 
         tm_bottom_layout = QVBoxLayout()
         
@@ -183,7 +183,7 @@ class MainWindow(QMainWindow):
         tm_bottom_layout.addLayout(first_row)
         
         second_row = QHBoxLayout()
-        second_row.addWidget(QLabel("Save as:"))
+        second_row.addWidget(QLabel("저장 타입:"))
         second_row.addWidget(self.template_type_combo)
         second_row.addWidget(self.save_as_template_btn)
         tm_bottom_layout.addLayout(second_row)
@@ -204,26 +204,33 @@ class MainWindow(QMainWindow):
         custom_tab_bar = CustomTabBar(self.build_tabs, self)
         self.build_tabs.setTabBar(custom_tab_bar)
 
-        system_tab_label = "System"
-        user_tab_label = "User"
-        copy_btn_label = "Copy to Clipboard"
         if self.mode == "Meta Prompt Builder":
-            system_tab_label = "META Prompt Template"
-            user_tab_label = "META User Input"
-            copy_btn_label = "Copy META Prompt"
+            system_tab_label = "메타 프롬프트 템플릿"
+            user_tab_label = "메타 사용자 입력"
+            copy_btn_label = "메타 프롬프트 복사"
+        else:
+            system_tab_label = "시스템"
+            user_tab_label = "사용자"
+            copy_btn_label = "클립보드에 복사"
 
         self.system_tab = CustomTextEdit()
-        self.system_tab.setPlaceholderText("Enter System Prompt...")
+        if self.mode == "Meta Prompt Builder":
+            self.system_tab.setPlaceholderText("Enter META Prompt Template...")
+        else:
+            self.system_tab.setPlaceholderText("Enter System Prompt...")
         self.build_tabs.addTab(self.system_tab, system_tab_label)
 
         self.user_tab = CustomTextEdit()
-        self.user_tab.setPlaceholderText("Enter User Prompt...")
+        if self.mode == "Meta Prompt Builder":
+            self.user_tab.setPlaceholderText("Enter META User Prompt...")
+        else:
+            self.user_tab.setPlaceholderText("Enter User Prompt...")
         self.build_tabs.addTab(self.user_tab, user_tab_label)
 
         if self.mode != "Meta Prompt Builder":
             self.dir_structure_tab = CustomTextEdit()
             self.dir_structure_tab.setReadOnly(True)
-            self.build_tabs.addTab(self.dir_structure_tab, "File Tree")
+            self.build_tabs.addTab(self.dir_structure_tab, "파일 트리")
 
         self.prompt_output_tab = CustomTextEdit()
         self.prompt_output_tab.setReadOnly(False)
@@ -231,14 +238,14 @@ class MainWindow(QMainWindow):
         self.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }")
 
         if self.mode == "Meta Prompt Builder":
-            self.build_tabs.addTab(self.prompt_output_tab, "Meta Prompt Output")
+            self.build_tabs.addTab(self.prompt_output_tab, "메타 프롬프트 출력")
         else:
-            self.build_tabs.addTab(self.prompt_output_tab, "Prompt Output")
+            self.build_tabs.addTab(self.prompt_output_tab, "프롬프트 출력")
 
         if self.mode != "Meta Prompt Builder":
             self.xml_input_tab = CustomTextEdit()
             self.xml_input_tab.setPlaceholderText("Enter XML content here...")
-            self.build_tabs.addTab(self.xml_input_tab, "XML Input")
+            self.build_tabs.addTab(self.xml_input_tab, "XML 입력")
 
         if self.mode == "Meta Prompt Builder":
             self.separator_tab = CustomTextEdit()
@@ -248,20 +255,20 @@ class MainWindow(QMainWindow):
 
             self.meta_prompt_tab = CustomTextEdit()
             self.meta_prompt_tab.setPlaceholderText("META Prompt Content...")
-            self.build_tabs.addTab(self.meta_prompt_tab, "META Prompt")
+            self.build_tabs.addTab(self.meta_prompt_tab, "메타 프롬프트")
 
             self.user_prompt_tab = CustomTextEdit()
             self.user_prompt_tab.setPlaceholderText("Enter user-prompt content...")
-            self.build_tabs.addTab(self.user_prompt_tab, "user-prompt")
+            self.build_tabs.addTab(self.user_prompt_tab, "사용자 프롬프트")
 
             self.final_prompt_tab = CustomTextEdit()
             self.final_prompt_tab.setReadOnly(False)
             self.final_prompt_tab.setFont(QFont("Consolas", 10))
             self.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }")
-            self.build_tabs.addTab(self.final_prompt_tab, "Final Prompt")
+            self.build_tabs.addTab(self.final_prompt_tab, "최종 프롬프트")
 
         self.selected_files_toolbtn = QToolButton()
-        self.selected_files_toolbtn.setText("Selected Files")
+        self.selected_files_toolbtn.setText("선택한 파일들")
         self.selected_files_toolbtn.setCheckable(True)
         self.selected_files_toolbtn.setChecked(True)
         self.selected_files_toolbtn.setArrowType(Qt.DownArrow)
@@ -288,7 +295,7 @@ class MainWindow(QMainWindow):
         sf_main_layout.addWidget(self.selected_files_toolbtn)
         sf_main_layout.addWidget(self.selected_files_container)
 
-        self.mode_toggle_btn = QPushButton("Toggle Mode")
+        self.mode_toggle_btn = QPushButton("모드 전환")
         self.mode_toggle_btn.setFixedHeight(40)
         font = self.mode_toggle_btn.font()
         font.setPointSize(12)
@@ -304,7 +311,7 @@ class MainWindow(QMainWindow):
 
         self.mode_toggle_btn.clicked.connect(toggle_mode)
 
-        self.select_project_btn_large = QPushButton("Select Project Folder")
+        self.select_project_btn_large = QPushButton("프로젝트 폴더 선택")
         self.select_project_btn_large.setFixedHeight(40)
         font2 = self.select_project_btn_large.font()
         font2.setPointSize(12)
@@ -344,9 +351,9 @@ class MainWindow(QMainWindow):
         self.addToolBar(Qt.TopToolBarArea, ribbon)
 
         if self.mode != "Meta Prompt Builder":
-            self.generate_tree_action = QAction(QIcon(), "Generate Tree", self)
-            self.run_xml_parser_action = QAction(QIcon(), "Run XML Parser", self)
-            self.generate_action = QAction(QIcon(), "Generate Prompt", self)
+            self.generate_tree_action = QAction(QIcon(), "트리 생성", self)
+            self.run_xml_parser_action = QAction(QIcon(), "XML 파서 실행", self)
+            self.generate_action = QAction(QIcon(), "프롬프트 생성", self)
             self.copy_action = QAction(QIcon(), copy_btn_label, self)
 
             ribbon.addAction(self.generate_tree_action)
@@ -356,10 +363,10 @@ class MainWindow(QMainWindow):
             ribbon.addAction(self.copy_action)
             ribbon.addAction(self.run_xml_parser_action)
         else:
-            self.generate_action = QAction(QIcon(), "Generate META Prompt", self)
+            self.generate_action = QAction(QIcon(), "메타 프롬프트 생성", self)
             self.copy_action = QAction(QIcon(), copy_btn_label, self)
-            self.generate_final_prompt_action = QAction(QIcon(), "Generate Final Prompt", self)
-            self.copy_final_prompt_action = QAction(QIcon(), "Copy Final Prompt", self)
+            self.generate_final_prompt_action = QAction(QIcon(), "최종 프롬프트 생성", self)
+            self.copy_final_prompt_action = QAction(QIcon(), "최종 프롬프트 복사", self)
 
             ribbon.addAction(self.generate_action)
             ribbon.addSeparator()
@@ -401,7 +408,6 @@ class MainWindow(QMainWindow):
             self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
             self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
         else:
-            # 수정된 부분: get_resource_path를 활용
             meta_prompt_path = get_resource_path(os.path.join("resources", "prompts", "system", "META_Prompt.md"))
             if os.path.exists(meta_prompt_path):
                 with open(meta_prompt_path, 'r', encoding='utf-8') as f:
@@ -497,9 +503,9 @@ class MainWindow(QMainWindow):
         file_path = self.dir_model.filePath(src_index)
 
         menu = QMenu()
-        check_action = menu.addAction("Toggle Check")
-        rename_action = menu.addAction("Rename")
-        delete_action = menu.addAction("Delete")
+        check_action = menu.addAction("체크 토글")
+        rename_action = menu.addAction("이름 변경")
+        delete_action = menu.addAction("삭제")
 
         action = menu.exec_(self.tree_view.viewport().mapToGlobal(position))
 
@@ -515,7 +521,7 @@ class MainWindow(QMainWindow):
         plus_index = self.build_tabs.count() - 1
         self.build_tabs.insertTab(plus_index, new_tab, "New Tab")
         self.build_tabs.setCurrentWidget(new_tab)
-        self.status_bar.showMessage("새 탭이 추가되었습니다: New Tab")
+        self.status_bar.showMessage("New tab added: New Tab")
 
     def on_selection_changed_handler(self, selected, deselected):
         self.controller.on_selection_changed(selected, deselected)

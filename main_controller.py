@@ -21,7 +21,7 @@ class MainController:
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 프로젝트 폴더 선택이 필요 없습니다.")
             return
-        folder = QFileDialog.getExistingDirectory(self.mw, "Select Project Folder", os.path.expanduser("~"))
+        folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", os.path.expanduser("~"))
         if folder:
             self.mw.reset_state()
             self.mw.current_project_folder = folder
@@ -48,7 +48,6 @@ class MainController:
                 file_contents.append((fpath, content))
                 self.mw.selected_files_data.append((fpath, size))
             except Exception as e:
-                # 수정: 오류 발생 시 해당 파일 스킵
                 print(f"Error loading file {fpath}: {e}")
                 continue
 
@@ -157,7 +156,6 @@ class MainController:
                     current = current[part]
             return tree
 
-        # 수정: 무한 재귀 방지를 위해 visited 집합 사용
         def print_tree(tree, parent_path, indent=0, visited=None):
             if visited is None:
                 visited = set()
@@ -211,7 +209,7 @@ class MainController:
             return
         xml_str = self.mw.xml_input_tab.toPlainText()
         if not xml_str.strip():
-            self.mw.status_bar.showMessage("XML 내용이 비어있습니다.")
+            self.mw.status_bar.showMessage("XML content is empty.")
             return
 
         project_dir = self.mw.current_project_folder
@@ -219,8 +217,30 @@ class MainController:
             QMessageBox.information(self.mw, "Info", "프로젝트 폴더를 먼저 선택해주세요.")
             return
 
-        parse_xml_string.apply_changes_from_xml(xml_str, project_dir)
-        self.mw.status_bar.showMessage("XML 파싱이 완료되었습니다!")
+        result = parse_xml_string.apply_changes_from_xml(xml_str, project_dir)
+
+        messages = []
+        if result["created"]:
+            messages.append(f"생성된 파일:\n" + "\n".join(result["created"]))
+        if result["updated"]:
+            messages.append(f"수정된 파일:\n" + "\n".join(result["updated"]))
+        if result["deleted"]:
+            messages.append(f"삭제된 파일:\n" + "\n".join(result["deleted"]))
+        if result["errors"]:
+            messages.append("오류:\n" + "\n".join(result["errors"]))
+
+        if not (result["created"] or result["updated"] or result["deleted"] or result["errors"]):
+            messages.append("변경 사항 없음.")
+
+        final_message = "\n\n".join(messages)
+
+        if result["status"] == "fail":
+            QMessageBox.warning(self.mw, "XML 파싱 결과", final_message)
+        else:
+            QMessageBox.information(self.mw, "XML 파싱 결과", final_message)
+
+        self.refresh_tree()
+        self.mw.status_bar.showMessage("XML parsing completed!")
 
     def toggle_file_check(self, file_path):
         if self.mw.mode == "Meta Prompt Builder":
@@ -280,7 +300,8 @@ class MainController:
         self.mw.template_tree.clear()
         current_mode = self.mw.resource_mode_combo.currentText()
 
-        if current_mode == "Prompts":
+        # 여기서 current_mode는 "프롬프트" 또는 "상태" 로 설정되어 있으므로 이를 기반으로 처리
+        if current_mode == "프롬프트":
             system_item = QTreeWidgetItem(["System"])
             user_item = QTreeWidgetItem(["User"])
             self.mw.template_tree.addTopLevelItem(system_item)
@@ -297,7 +318,7 @@ class MainController:
             system_item.setExpanded(True)
             user_item.setExpanded(True)
 
-        elif current_mode == "States":
+        elif current_mode == "상태":
             states_item = QTreeWidgetItem(["States"])
             self.mw.template_tree.addTopLevelItem(states_item)
             states_list = list_states()
@@ -311,11 +332,14 @@ class MainController:
         current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
+            if current_mode == "프롬프트":
+                QMessageBox.information(self.mw, "Info", "프롬프트 파일을 선택해주세요.")
+            else:
+                QMessageBox.information(self.mw, "Info", "상태 파일을 선택해주세요.")
             return
 
         filename = item.text(0)
-        if current_mode == "Prompts":
+        if current_mode == "프롬프트":
             parent_text = item.parent().text(0)
             if parent_text == "System":
                 file_path = os.path.join("resources", "prompts", "system", filename)
@@ -328,7 +352,7 @@ class MainController:
                 self.mw.user_tab.setText(content)
                 self.mw.status_bar.showMessage(f"Loaded user template: {filename}")
 
-        elif current_mode == "States":
+        elif current_mode == "상태":
             fname_no_ext = os.path.splitext(filename)[0]
             s = load_state(fname_no_ext)
             if s:
@@ -339,16 +363,16 @@ class MainController:
 
     def save_current_as_item(self):
         current_mode = self.mw.resource_mode_combo.currentText()
-        if current_mode == "Prompts":
+        if current_mode == "프롬프트":
             template_type = self.mw.template_type_combo.currentText()
-            if template_type == "System":
+            if template_type == "시스템":
                 content = self.mw.system_tab.toPlainText()
                 target_dir = "resources/prompts/system"
             else:
                 content = self.mw.user_tab.toPlainText()
                 target_dir = "resources/prompts/user"
 
-            fname, ok = QInputDialog.getText(self.mw, "Save Template", "Enter template file name (without extension):")
+            fname, ok = QInputDialog.getText(self.mw, "Save Template", "템플릿 파일 이름(확장자 제외)을 입력하세요:")
             if not ok or not fname.strip():
                 return
             fname = fname.strip() + ".md"
@@ -357,9 +381,9 @@ class MainController:
             self.mw.status_bar.showMessage(f"Template saved: {file_path}")
             self.load_templates_list()
 
-        elif current_mode == "States":
+        elif current_mode == "상태":
             state = self.mw.get_current_state()
-            fname, ok = QInputDialog.getText(self.mw, "Save State", "Enter state file name (without extension):")
+            fname, ok = QInputDialog.getText(self.mw, "Save State", "상태 파일 이름(확장자 제외)을 입력하세요:")
             if not ok or not fname.strip():
                 return
             fname = fname.strip()
@@ -373,11 +397,14 @@ class MainController:
         current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
+            if current_mode == "프롬프트":
+                QMessageBox.information(self.mw, "Info", "프롬프트 파일을 선택해주세요.")
+            else:
+                QMessageBox.information(self.mw, "Info", "상태 파일을 선택해주세요.")
             return
 
         filename = item.text(0)
-        if current_mode == "Prompts":
+        if current_mode == "프롬프트":
             parent_text = item.parent().text(0)
             if parent_text == "System":
                 file_path = os.path.join("resources", "prompts", "system", filename)
@@ -387,7 +414,7 @@ class MainController:
                 QMessageBox.information(self.mw, "Info", "Invalid template selection.")
                 return
 
-            reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
+            reply = QMessageBox.question(self.mw, "Delete", f"'{filename}'를 삭제하시겠습니까?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 from template_manager import delete_template
@@ -395,9 +422,9 @@ class MainController:
                 self.mw.status_bar.showMessage(f"Deleted template: {filename}")
                 self.load_templates_list()
 
-        elif current_mode == "States":
+        elif current_mode == "상태":
             fname_no_ext = os.path.splitext(filename)[0]
-            reply = QMessageBox.question(self.mw, "Delete", f"Are you sure you want to delete '{filename}'?",
+            reply = QMessageBox.question(self.mw, "Delete", f"'{filename}'를 삭제하시겠습니까?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 if delete_state(fname_no_ext):
@@ -410,12 +437,15 @@ class MainController:
         current_mode = self.mw.resource_mode_combo.currentText()
         item = self.mw.template_tree.currentItem()
         if not item or not item.parent():
-            QMessageBox.information(self.mw, "Info", f"Please select a {current_mode.lower()} file.")
+            if current_mode == "프롬프트":
+                QMessageBox.information(self.mw, "Info", "프롬프트 파일을 선택해주세요.")
+            else:
+                QMessageBox.information(self.mw, "Info", "상태 파일을 선택해주세요.")
             return
 
         filename = item.text(0)
 
-        if current_mode == "Prompts":
+        if current_mode == "프롬프트":
             parent_text = item.parent().text(0)
             if parent_text == "System":
                 target_dir = "resources/prompts/system"
@@ -431,7 +461,7 @@ class MainController:
             save_template(file_path, content)
             self.mw.status_bar.showMessage(f"Template updated: {filename}")
 
-        elif current_mode == "States":
+        elif current_mode == "상태":
             fname_no_ext = os.path.splitext(filename)[0]
             state = self.mw.get_current_state()
             if save_state(state, fname_no_ext):
@@ -503,23 +533,24 @@ class MainController:
 
     def update_buttons_label(self):
         current_mode = self.mw.resource_mode_combo.currentText()
-        if current_mode == "Prompts":
-            self.mw.load_selected_template_btn.setText("Load Selected Prompt")
-            self.mw.save_as_template_btn.setText("Save Current as Prompt")
-            self.mw.delete_template_btn.setText("Delete Selected Prompt")
-            self.mw.update_template_btn.setText("Update Current Prompt")
-            self.mw.backup_button.setText("Backup All States (Disabled)")
+        # current_mode 가 "프롬프트" 또는 "상태"일 때 각각 버튼 텍스트를 변경
+        if current_mode == "프롬프트":
+            self.mw.load_selected_template_btn.setText("선택한 프롬프트 불러오기")
+            self.mw.save_as_template_btn.setText("현재 프롬프트로 저장")
+            self.mw.delete_template_btn.setText("선택한 프롬프트 삭제")
+            self.mw.update_template_btn.setText("현재 프롬프트 업데이트")
+            self.mw.backup_button.setText("모든 상태 백업 (비활성화)")
             self.mw.backup_button.setEnabled(False)
-            self.mw.restore_button.setText("Restore from Backup (Disabled)")
+            self.mw.restore_button.setText("백업에서 상태 복원 (비활성화)")
             self.mw.restore_button.setEnabled(False)
         else:
-            self.mw.load_selected_template_btn.setText("Load Selected State")
-            self.mw.save_as_template_btn.setText("Save Current as State")
-            self.mw.delete_template_btn.setText("Delete Selected State")
-            self.mw.update_template_btn.setText("Update Current State")
-            self.mw.backup_button.setText("Backup All States")
+            self.mw.load_selected_template_btn.setText("선택한 상태 불러오기")
+            self.mw.save_as_template_btn.setText("현재 상태로 저장")
+            self.mw.delete_template_btn.setText("선택한 상태 삭제")
+            self.mw.update_template_btn.setText("현재 상태 업데이트")
+            self.mw.backup_button.setText("모든 상태 백업")
             self.mw.backup_button.setEnabled(True)
-            self.mw.restore_button.setText("Restore States from Backup")
+            self.mw.restore_button.setText("백업에서 상태 복원")
             self.mw.restore_button.setEnabled(True)
 
     def on_mode_changed(self):
