@@ -67,6 +67,11 @@ class MainController:
                     selected_folder = folder_path
                     break
 
+        # dir_structure_tab 내용 읽어오기
+        dir_structure_content = ""
+        if self.tree_generated:
+            dir_structure_content = self.mw.dir_structure_tab.toPlainText()
+
         final_prompt = generate_final_prompt(
             system_text, user_text, dev_text,
             file_contents,
@@ -74,7 +79,8 @@ class MainController:
             config.allowed_extensions,
             config.excluded_dirs,
             selected_folder=selected_folder,
-            add_tree=self.tree_generated
+            add_tree=self.tree_generated,
+            dir_structure_content=dir_structure_content
         )
 
         self.mw.last_generated_prompt = final_prompt
@@ -186,7 +192,7 @@ class MainController:
             return lines
 
         tree = build_tree(all_checked_paths)
-        root_lines = [f" 📁 {os.path.basename(self.mw.current_project_folder)}/"]
+        root_lines = [f"File Tree:", f" 📁 {os.path.basename(self.mw.current_project_folder)}/"]
         for k in sorted(tree.keys()):
             full_path = os.path.join(self.mw.current_project_folder, k)
             if os.path.isdir(full_path):
@@ -198,7 +204,7 @@ class MainController:
                     size = os.path.getsize(full_path)
                 root_lines.append(f"  📄 {k} ({size:,} bytes)")
 
-        result_text = "File Tree:\n" + "\n".join(root_lines)
+        result_text = "\n".join(root_lines)
         self.mw.dir_structure_tab.setText(result_text)
         self.mw.build_tabs.setCurrentWidget(self.mw.dir_structure_tab)
         self.mw.status_bar.showMessage("File tree generated!")
@@ -301,7 +307,6 @@ class MainController:
         self.mw.template_tree.clear()
         current_mode = self.mw.resource_mode_combo.currentText()
 
-        # 여기서 current_mode는 "프롬프트" 또는 "상태" 로 설정되어 있으므로 이를 기반으로 처리
         if current_mode == "프롬프트":
             system_item = QTreeWidgetItem(["System"])
             user_item = QTreeWidgetItem(["User"])
@@ -481,10 +486,8 @@ class MainController:
         self.mw.status_bar.showMessage("META Prompt generated!")
 
     def generate_final_meta_prompt(self):
-        # 메타 프롬프트 탭 내용
         meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
 
-        # var- 로 시작하는 탭들을 변수로 매핑
         var_map = {}
         for i in range(self.mw.build_tabs.count()):
             tab_name = self.mw.build_tabs.tabText(i)
@@ -494,16 +497,13 @@ class MainController:
                 if tab_widget is not None:
                     var_map[var_name] = tab_widget.toPlainText()
 
-        # user-prompt 처리: var-user-prompt 탭이 있으면 그걸 사용, 없으면 기존 user_prompt_tab 사용
         if "user-prompt" in var_map:
             user_prompt_content = var_map["user-prompt"]
         else:
             user_prompt_content = self.mw.user_prompt_tab.toPlainText()
 
-        # user-prompt 치환
         final_prompt = meta_prompt_content.replace("[[user-prompt]]", user_prompt_content)
 
-        # 나머지 var- 변수 치환
         for k, v in var_map.items():
             if k != "user-prompt":
                 final_prompt = final_prompt.replace(f"[[{k}]]", v)
@@ -558,7 +558,6 @@ class MainController:
 
     def update_buttons_label(self):
         current_mode = self.mw.resource_mode_combo.currentText()
-        # current_mode 가 "프롬프트" 또는 "상태"일 때 각각 버튼 텍스트를 변경
         if current_mode == "프롬프트":
             self.mw.load_selected_template_btn.setText("선택한 프롬프트 불러오기")
             self.mw.save_as_template_btn.setText("현재 프롬프트로 저장")

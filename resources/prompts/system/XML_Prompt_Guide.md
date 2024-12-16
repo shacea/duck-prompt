@@ -11,7 +11,7 @@ Here are some notes on how you should respond in the summary section:
 Provide a brief overall summary
 Provide a 1-sentence summary for each file changed and why.
 Provide a 1-sentence summary for each file deleted and why.
-Provide a git commit message with appropriate prefix (feat, fix, docs, etc).
+Provide a git commit message with appropriate prefix (feat, fix, docs, etc) in Korean.
 Format this section as markdown.
 Here are some notes on how you should respond in the XML section:
 
@@ -68,3 +68,4 @@ __XML HERE__
 - dummy_file.txt 파일을 새로 추가해서 XML 처리 예시를 보여줬어.
 - updated_file.txt 파일을 업데이트해서 새로운 내용으로 바꿨어.
 - old_file.txt 파일은 더 이상 필요 없어서 삭제했어.
+- git commit message는 feat: XML 처리 예시 추가, 파일 업데이트 및 삭제로 작성했어.

@@ -1,10 +1,11 @@
+
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox,
-    QAbstractItemView, QScrollArea, QToolButton, QFrame, QMenuBar, QSplitter, QStyleFactory, QApplication, QToolBar, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox
+    QAbstractItemView, QScrollArea, QToolButton, QFrame, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont
 from PyQt5.QtCore import Qt, QSize, QStandardPaths
@@ -16,7 +17,7 @@ from custom_text_edit import CustomTextEdit
 from tab_manager import is_tab_deletable
 from utils import get_resource_path
 
-from PyQt5.QtWidgets import QTabBar, QInputDialog, QMessageBox, QFileDialog
+from PyQt5.QtWidgets import QTabBar
 
 class CustomTabBar(QTabBar):
     def __init__(self, parent: QTabWidget, main_window: QMainWindow):
@@ -86,7 +87,6 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.mode = mode
         self.setWindowTitle("Duck Prompt Builder")
-        self.resize(1200, 800)
 
         QApplication.setStyle(QStyleFactory.create("Fusion"))
 
@@ -101,6 +101,10 @@ class MainWindow(QMainWindow):
         def restart_with_mode(new_mode):
             self.close()
             new_window = MainWindow(mode=new_mode)
+            # 전체화면 대신 1200x800로 리사이즈
+            new_window.resize(1200,800)
+            new_window.show()
+            new_window.build_tabs.setCurrentIndex(0)  # 왼쪽 첫 번째 탭 선택
             new_window.show()
 
         switch_to_code_action.triggered.connect(lambda: restart_with_mode("Code Enhancer Prompt Builder"))
@@ -165,6 +169,8 @@ class MainWindow(QMainWindow):
         self.template_tree.setHeaderHidden(True)
         tm_layout.addWidget(self.template_tree)
 
+        self.template_tree.itemDoubleClicked.connect(lambda item, col: self.controller.load_selected_item())
+
         self.load_selected_template_btn = QPushButton("선택한 프롬프트 불러오기")
         self.save_as_template_btn = QPushButton("현재 프롬프트로 저장")
         self.template_type_combo = QComboBox()
@@ -177,17 +183,17 @@ class MainWindow(QMainWindow):
         self.restore_button = QPushButton("백업에서 상태 복원")
 
         tm_bottom_layout = QVBoxLayout()
-        
+
         first_row = QHBoxLayout()
         first_row.addWidget(self.load_selected_template_btn)
         tm_bottom_layout.addLayout(first_row)
-        
+
         second_row = QHBoxLayout()
         second_row.addWidget(QLabel("저장 타입:"))
         second_row.addWidget(self.template_type_combo)
         second_row.addWidget(self.save_as_template_btn)
         tm_bottom_layout.addLayout(second_row)
-        
+
         third_row = QHBoxLayout()
         third_row.addWidget(self.delete_template_btn)
         third_row.addWidget(self.update_template_btn)
@@ -327,53 +333,60 @@ class MainWindow(QMainWindow):
         left_side_layout = QVBoxLayout(left_side_widget)
         left_side_layout.setContentsMargins(0,0,0,0)
         left_side_layout.setSpacing(5)
-        if self.mode == "Meta Prompt Builder":
-            self.select_project_btn_large.setDisabled(True)
 
         left_side_layout.addLayout(top_buttons_layout)
-        left_side_layout.addWidget(self.template_manager_tab)
 
         if self.mode != "Meta Prompt Builder":
-            left_side_layout.addWidget(self.tree_view)
+            splitter_left = QSplitter(Qt.Vertical)
+            splitter_left.addWidget(self.template_manager_tab)
+            splitter_left.addWidget(self.tree_view)
+            splitter_left.setSizes([350, 650])
+            left_side_layout.addWidget(splitter_left)
+        else:
+            left_side_layout.addWidget(self.template_manager_tab)
+
+        right_side_widget = QWidget()
+        right_side_layout = QVBoxLayout(right_side_widget)
+        right_side_layout.setContentsMargins(0,0,0,0)
+        right_side_layout.setSpacing(0)
+
+        self.run_buttons_container = QWidget()
+        run_layout = QHBoxLayout(self.run_buttons_container)
+        run_layout.setContentsMargins(5,5,5,5)
+        run_layout.setSpacing(10)
+        run_layout.setAlignment(Qt.AlignLeft)
+
+        if self.mode != "Meta Prompt Builder":
+            self.generate_tree_btn = QPushButton("트리 생성")
+            self.generate_btn = QPushButton("프롬프트 생성")
+            self.copy_btn = QPushButton(copy_btn_label)
+            self.run_xml_parser_btn = QPushButton("XML 파서 실행")
+            run_buttons = [self.generate_tree_btn, self.generate_btn, self.copy_btn, self.run_xml_parser_btn]
+        else:
+            self.generate_btn = QPushButton("메타 프롬프트 생성")
+            self.copy_btn = QPushButton(copy_btn_label)
+            self.generate_final_prompt_btn = QPushButton("최종 프롬프트 생성")
+            run_buttons = [self.generate_btn, self.copy_btn, self.generate_final_prompt_btn]
+
+        for btn in run_buttons:
+            run_layout.addWidget(btn)
+
+        line_frame = QFrame()
+        line_frame.setFrameShape(QFrame.HLine)
+        line_frame.setFrameShadow(QFrame.Sunken)
+
+        right_side_layout.addWidget(self.run_buttons_container)
+        right_side_layout.addWidget(line_frame)
+        right_side_layout.addWidget(self.build_tabs)
 
         top_splitter = QSplitter(Qt.Horizontal)
         top_splitter.addWidget(left_side_widget)
-        top_splitter.addWidget(self.build_tabs)
+        top_splitter.addWidget(right_side_widget)
         top_splitter.setStretchFactor(0, 2)
         top_splitter.setStretchFactor(1, 5)
 
         main_layout.addWidget(top_splitter, stretch=4)
         main_layout.addWidget(selected_files_frame)
-
-        ribbon = QToolBar("Ribbon")
-        ribbon.setMovable(False)
-        ribbon.setIconSize(QSize(32,32))
-        self.addToolBar(Qt.TopToolBarArea, ribbon)
-
-        if self.mode != "Meta Prompt Builder":
-            self.generate_tree_action = QAction(QIcon(), "트리 생성", self)
-            self.run_xml_parser_action = QAction(QIcon(), "XML 파서 실행", self)
-            self.generate_action = QAction(QIcon(), "프롬프트 생성", self)
-            self.copy_action = QAction(QIcon(), copy_btn_label, self)
-
-            ribbon.addAction(self.generate_tree_action)
-            ribbon.addSeparator()
-            ribbon.addAction(self.generate_action)
-            ribbon.addSeparator()
-            ribbon.addAction(self.copy_action)
-            ribbon.addAction(self.run_xml_parser_action)
-        else:
-            self.generate_action = QAction(QIcon(), "메타 프롬프트 생성", self)
-            self.copy_action = QAction(QIcon(), copy_btn_label, self)
-            self.generate_final_prompt_action = QAction(QIcon(), "최종 프롬프트 생성", self)
-            self.copy_final_prompt_action = QAction(QIcon(), "최종 프롬프트 복사", self)
-
-            ribbon.addAction(self.generate_action)
-            ribbon.addSeparator()
-            ribbon.addAction(self.copy_action)
-            ribbon.addSeparator()
-            ribbon.addAction(self.generate_final_prompt_action)
-            ribbon.addAction(self.copy_final_prompt_action)
 
         self.char_count_label = QLabel("Chars: 0")
         self.token_count_label = QLabel("Calculated Total Token: N/A")
@@ -405,8 +418,8 @@ class MainWindow(QMainWindow):
 
         if self.mode != "Meta Prompt Builder":
             self.select_project_btn_large.clicked.connect(self.controller.select_project_folder)
-            self.generate_tree_action.triggered.connect(self.controller.generate_directory_tree_structure)
-            self.run_xml_parser_action.triggered.connect(self.controller.run_xml_parser)
+            self.generate_tree_btn.clicked.connect(self.controller.generate_directory_tree_structure)
+            self.run_xml_parser_btn.clicked.connect(self.controller.run_xml_parser)
         else:
             meta_prompt_path = get_resource_path(os.path.join("resources", "prompts", "system", "META_Prompt.md"))
             if os.path.exists(meta_prompt_path):
@@ -414,13 +427,13 @@ class MainWindow(QMainWindow):
                     self.system_tab.setText(f.read())
 
         if self.mode == "Meta Prompt Builder":
-            self.generate_action.triggered.connect(self.controller.generate_meta_prompt)
-            self.generate_final_prompt_action.triggered.connect(self.controller.generate_final_meta_prompt)
-            self.copy_final_prompt_action.triggered.connect(self.controller.copy_final_prompt)
+            self.generate_btn.clicked.connect(self.controller.generate_meta_prompt)
+            if hasattr(self, 'generate_final_prompt_btn'):
+                self.generate_final_prompt_btn.clicked.connect(self.controller.generate_final_meta_prompt)
         else:
-            self.generate_action.triggered.connect(self.controller.generate_prompt)
+            self.generate_btn.clicked.connect(self.controller.generate_prompt)
 
-        self.copy_action.triggered.connect(self.controller.copy_to_clipboard)
+        self.copy_btn.clicked.connect(self.controller.copy_to_clipboard)
         self.selected_files_toolbtn.clicked.connect(self.toggle_selected_files)
 
         self.load_selected_template_btn.clicked.connect(self.controller.load_selected_item)
@@ -461,7 +474,10 @@ class MainWindow(QMainWindow):
 
         self.status_bar.showMessage("Ready")
 
+        # 초기 실행 시 전체화면 대신 1200x800 크기로 설정
         self.build_tabs.setCurrentIndex(0)
+        self.show()
+        self.resize(1200,800)
 
     def reset_state(self):
         self.current_project_folder = None

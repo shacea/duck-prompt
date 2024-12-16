@@ -1,4 +1,4 @@
-### 통합 개발 가이드 (XML 작성 + 파이썬 코딩 지침)
+   ### 통합 개발 가이드 (XML 작성 + 파이썬 코딩 지침)
 
 **기본 전제**:  
 아래 지침은 LLM이 고품질의 파이썬 코드를 생성하고, 이 코드를 XML 구조에 반영할 때 준수해야 할 사항을 모두 담고 있어. 모든 지침을 빠짐없이 준수해줘. 특히, 파이썬 코딩 가이드와 XML 작성 가이드 모두를 충실히 반영해야 해.  
@@ -27,6 +27,8 @@
 18. **환경 변수 관리**: 환경 변수를 통해 설정을 관리한다.  
 19. **타입 힌트**: `typing` 모듈을 통한 타입 힌트를 적극 활용하고, `dataclasses`나 `NamedTuple`을 선호한다. `Enum` 대신 상수나 딕셔너리를 사용한다.  
 20. **파일, 디렉토리 구조**: 디렉토리는 소문자+언더스코어를 사용한다. 함수는 스네이크 케이스, 클래스는 파스칼 케이스를 사용한다.
+21. **실행 파일 구조**: 실행 파일은 `app/` 폴더에 저장하고, 프로젝트 루트에 `main.py`를 두어 파일을 실행할 수 있도록 한다.
+22. **파일 크기 관리**: 개별 파일이 300줄을 초과할 경우 기능별로 여러 파일로 분리하고, 분리된 파일은 관련 기능끼리 같은 폴더에 위치시킨다.
 
 ---
 
@@ -39,7 +41,7 @@
      - 전체 변경에 대한 간략 요약  
      - 변경된 각 파일에 대한 1줄 요약 (이유 포함)  
      - 삭제된 각 파일에 대한 1줄 요약 (이유 포함)  
-     - git commit message 형식의 변경 요약 (feat, fix, docs 등의 prefix 포함)
+     - git commit message 형식의 변경 요약 (feat, fix, docs 등의 prefix 포함, **한국어로 작성**)
      - 마크다운 형식으로 작성한다.
    
    - **XML 섹션**: XML 형식으로 변경 사항을 표현한다.  
@@ -57,75 +59,55 @@
    - `<file_path>`에는 변경 대상 파일의 전체 경로를 적는다.
    
 3. **예시 구조**:
-   ``````xml
+   ```xml
    <code_changes>
        <changed_files>
            <file>
-               <file_summary>여기에 파일 변경 요약</file_summary>
-               <file_operation>CREATE 또는 UPDATE 또는 DELETE</file_operation>
-               <file_path>파일 경로</file_path>
+               <file_summary>새로운 더미 파일을 생성했어</file_summary>
+               <file_operation>CREATE</file_operation>
+               <file_path>examples/dummy_file.txt</file_path>
                <file_code><![CDATA[
-   여기 전체 코드 (CREATE나 UPDATE 경우)
-   ]]></file_code>
-           </file>
-       </changed_files>
-   </code_changes>
-   ``````
-
-4. **파서 처리 고려사항**:  
-   - 이 XML 섹션을 그대로 파서에 전달하여 변경사항을 반영한다.  
-   - 따라서 XML 섹션 내 불필요한 텍스트, 주석, 또는 가이드 문구는 넣지 않는다.  
-   - `![CDATA[...]]` 안에 모든 코드를 전부 포함한다. 코드 내 내용은 파이썬 코딩 지침을 준수한다.
-
----
-
-#### Summary 작성 규칙
-
-- Summary는 마크다운 형식으로 작성한다.
-- 전체 변경사항 요약 후, 파일별 변경 요약을 1줄씩 작성한다.
-- 삭제된 파일이 있다면 그 이유를 1줄로 명시한다.
-
----
-
-#### 최종 출력 예시
-
-``` 
-### XML
-
-```xml
-<code_changes>
-    <changed_files>
-        <file>
-            <file_summary>새로운 더미 파일을 생성했어</file_summary>
-            <file_operation>CREATE</file_operation>
-            <file_path>examples/dummy_file.txt</file_path>
-            <file_code><![CDATA[
 이것은 새로 만든 더미 파일의 내용!
 여기에 원하는 텍스트를 넣을 수 있어
 ]]></file_code>
-        </file>
-        <file>
-            <file_summary>기존 파일을 새로운 내용으로 업데이트했어</file_summary>
-            <file_operation>UPDATE</file_operation>
-            <file_path>examples/updated_file.txt</file_path>
-            <file_code><![CDATA[
+           </file>
+           <file>
+               <file_summary>기존 파일을 새로운 내용으로 업데이트했어</file_summary>
+               <file_operation>UPDATE</file_operation>
+               <file_path>examples/updated_file.txt</file_path>
+               <file_code><![CDATA[
 업데이트된 파일 내용!
 이전 내용보다 훨씬 좋아졌어
 ]]></file_code>
-        </file>
-        <file>
-            <file_summary>필요 없는 오래된 파일을 삭제했어</file_summary>
-            <file_operation>DELETE</file_operation>
-            <file_path>examples/old_file.txt</file_path>
-        </file>
-    </changed_files>
-</code_changes>
-```
+           </file>
+           <file>
+               <file_summary>필요 없는 오래된 파일을 삭제했어</file_summary>
+               <file_operation>DELETE</file_operation>
+               <file_path>examples/old_file.txt</file_path>
+           </file>
+       </changed_files>
+   </code_changes>
+   ```
 
 ### Summary
 - dummy_file.txt 파일을 새로 추가해서 XML 처리 예시를 보여줬어.
 - updated_file.txt 파일을 업데이트해서 새로운 내용으로 바꿨어.
 - old_file.txt 파일은 더 이상 필요 없어서 삭제했어.
-```
 
 위 예시는 형식 참고용이야. 여기서 파이썬 코드를 작성할 때는 "파이썬 코딩 가이드"를 엄격히 준수해야 해.
+
+### XML
+```xml
+<code_changes>
+    <changed_files>
+        <file>
+            <file_summary>여기에 파일 변경 요약</file_summary>
+            <file_operation>CREATE 또는 UPDATE 또는 DELETE</file_operation>
+            <file_path>파일 경로</file_path>
+            <file_code><![CDATA[
+여기에 전체 코드 (CREATE나 UPDATE 경우)
+]]></file_code>
+        </file>
+    </changed_files>
+</code_changes>
+```
