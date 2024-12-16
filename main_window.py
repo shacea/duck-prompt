@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
     def __init__(self, mode="Code Enhancer Prompt Builder"):
         super().__init__()
         self.mode = mode
-        self.setWindowTitle("LLM Prompt Builder")
+        self.setWindowTitle("Duck Prompt Builder")
         self.resize(1200, 800)
 
         QApplication.setStyle(QStyleFactory.create("Fusion"))

@@ -11,6 +11,7 @@ Here are some notes on how you should respond in the summary section:
 Provide a brief overall summary
 Provide a 1-sentence summary for each file changed and why.
 Provide a 1-sentence summary for each file deleted and why.
+Provide a git commit message with appropriate prefix (feat, fix, docs, etc).
 Format this section as markdown.
 Here are some notes on how you should respond in the XML section:
 
@@ -33,7 +34,7 @@ __XML HERE__
 출력예시:
 ### XML
 
-```xml
+`````xml
 <code_changes>
     <changed_files>
         <file>
@@ -61,7 +62,7 @@ __XML HERE__
         </file>
     </changed_files>
 </code_changes>
-```
+`````
 
 ### Summary
 - dummy_file.txt 파일을 새로 추가해서 XML 처리 예시를 보여줬어.

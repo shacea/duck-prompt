@@ -1,3 +1,4 @@
+
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtCore import Qt
@@ -480,9 +481,33 @@ class MainController:
         self.mw.status_bar.showMessage("META Prompt generated!")
 
     def generate_final_meta_prompt(self):
+        # 메타 프롬프트 탭 내용
         meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
-        user_prompt_content = self.mw.user_prompt_tab.toPlainText()
+
+        # var- 로 시작하는 탭들을 변수로 매핑
+        var_map = {}
+        for i in range(self.mw.build_tabs.count()):
+            tab_name = self.mw.build_tabs.tabText(i)
+            if tab_name.startswith("var-"):
+                var_name = tab_name[4:]
+                tab_widget = self.mw.build_tabs.widget(i)
+                if tab_widget is not None:
+                    var_map[var_name] = tab_widget.toPlainText()
+
+        # user-prompt 처리: var-user-prompt 탭이 있으면 그걸 사용, 없으면 기존 user_prompt_tab 사용
+        if "user-prompt" in var_map:
+            user_prompt_content = var_map["user-prompt"]
+        else:
+            user_prompt_content = self.mw.user_prompt_tab.toPlainText()
+
+        # user-prompt 치환
         final_prompt = meta_prompt_content.replace("[[user-prompt]]", user_prompt_content)
+
+        # 나머지 var- 변수 치환
+        for k, v in var_map.items():
+            if k != "user-prompt":
+                final_prompt = final_prompt.replace(f"[[{k}]]", v)
+
         self.mw.final_prompt_tab.setText(final_prompt)
         self.mw.last_generated_prompt = final_prompt
         self.update_counts_for_text(final_prompt)

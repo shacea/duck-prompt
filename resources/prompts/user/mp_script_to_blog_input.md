@@ -14,3 +14,4 @@ Instructions:
     Theme is white background, light grey cards with black text. Be creative with box shadows and gradients, but make sure the text is readable.
 Sections: script, topic
 Variables: script, topic
+
