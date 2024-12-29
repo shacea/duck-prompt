@@ -1,3 +1,4 @@
+
 from PyQt5.QtWidgets import QTextEdit
 from PyQt5.QtGui import QTextCharFormat, QColor
 from PyQt5.QtCore import Qt
@@ -7,16 +8,8 @@ class CustomTextEdit(QTextEdit):
         super().__init__(parent)
 
     def insertFromMimeData(self, source):
-        if source.hasHtml():
-            fmt = QTextCharFormat()
-            fmt.setForeground(QColor(Qt.black))
-            cursor = self.textCursor()
-            pos = cursor.position()
-            cursor.insertHtml(source.html())
-            cursor.setPosition(pos)
-            cursor.movePosition(cursor.NextCharacter, cursor.KeepAnchor, len(source.html()))
-            cursor.mergeCharFormat(fmt)
-            cursor.clearSelection()
-            self.setTextCursor(cursor)
+        # 오직 plain text 형태로만 붙여넣기
+        if source.hasText():
+            self.insertPlainText(source.text())
         else:
             super().insertFromMimeData(source)

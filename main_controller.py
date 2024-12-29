@@ -67,7 +67,7 @@ class MainController:
                     selected_folder = folder_path
                     break
 
-        # dir_structure_tab 내용 읽어오기
+        # dir_structure_tab 내용
         dir_structure_content = ""
         if self.tree_generated:
             dir_structure_content = self.mw.dir_structure_tab.toPlainText()
@@ -87,7 +87,6 @@ class MainController:
         self.mw.prompt_output_tab.setText(final_prompt)
         length = len(final_prompt)
         self.update_counts_for_text(final_prompt)
-        self.mw.update_selected_files_panel()
         self.mw.status_bar.showMessage(f"Prompt generated! Length: {format(length, ',')} chars")
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
 
@@ -109,8 +108,17 @@ class MainController:
             self.mw.status_bar.showMessage("Copied!")
         else:
             self.mw.status_bar.showMessage("No prompt generated yet!")
+            
+    def on_mode_changed(self):
+        """
+        resource_mode_combo 인덱스가 바뀔 때 호출되는 메서드.
+        필요한 로직을 직접 추가해줄 수 있어.
+        예: update_buttons_label()을 호출하는 식 등.
+        """
+        self.update_buttons_label()
 
     def on_data_changed(self, topLeft, bottomRight, roles):
+        # 선택 파일 전체 콘텐츠 길이 등을 갱신하기 위한 로직
         checked_files = self.mw.checkable_proxy.get_checked_files()
         self.mw.selected_files_data = []
         combined_content = ""
@@ -124,7 +132,6 @@ class MainController:
             except:
                 pass
         self.update_counts_for_text(combined_content)
-        self.mw.update_selected_files_panel()
 
     def on_selection_changed(self, selected, deselected):
         for index in selected.indexes():
@@ -132,14 +139,10 @@ class MainController:
             new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
             self.mw.checkable_proxy.setData(index, new_state, Qt.CheckStateRole)
 
-    def update_selected_files_panel(self):
-        self.mw.update_selected_files_panel()
-
     def generate_directory_tree_structure(self):
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 디렉토리 트리 기능이 필요 없습니다.")
             return
-        import os
         if not self.mw.current_project_folder or not os.path.isdir(self.mw.current_project_folder):
             QMessageBox.information(self.mw, "Info", "No project folder selected.")
             return
@@ -228,11 +231,11 @@ class MainController:
 
         messages = []
         if result["created"]:
-            messages.append(f"생성된 파일:\n" + "\n".join(result["created"]))
+            messages.append("생성된 파일:\n" + "\n".join(result["created"]))
         if result["updated"]:
-            messages.append(f"수정된 파일:\n" + "\n".join(result["updated"]))
+            messages.append("수정된 파일:\n" + "\n".join(result["updated"]))
         if result["deleted"]:
-            messages.append(f"삭제된 파일:\n" + "\n".join(result["deleted"]))
+            messages.append("삭제된 파일:\n" + "\n".join(result["deleted"]))
         if result["errors"]:
             messages.append("오류:\n" + "\n".join(result["errors"]))
 
@@ -556,6 +559,25 @@ class MainController:
             else:
                 self.mw.status_bar.showMessage("Error importing state or empty state")
 
+    # 신규 추가: 모든 상태 백업
+    def backup_all_states_action(self):
+        path, _ = QFileDialog.getSaveFileName(self.mw, "Backup All States", os.path.expanduser("~"), "Zip Files (*.zip)")
+        if path:
+            if backup_all_states(path):
+                self.mw.status_bar.showMessage("All states backed up successfully!")
+            else:
+                self.mw.status_bar.showMessage("Error backing up states")
+
+    # 신규 추가: 백업에서 상태 복원
+    def restore_states_from_backup_action(self):
+        path, _ = QFileDialog.getOpenFileName(self.mw, "Restore States from Backup", os.path.expanduser("~"), "Zip Files (*.zip)")
+        if path:
+            if restore_states_from_backup(path):
+                self.mw.status_bar.showMessage("States restored successfully!")
+                self.load_templates_list()
+            else:
+                self.mw.status_bar.showMessage("Error restoring states")
+
     def update_buttons_label(self):
         current_mode = self.mw.resource_mode_combo.currentText()
         if current_mode == "프롬프트":
@@ -576,23 +598,3 @@ class MainController:
             self.mw.backup_button.setEnabled(True)
             self.mw.restore_button.setText("백업에서 상태 복원")
             self.mw.restore_button.setEnabled(True)
-
-    def on_mode_changed(self):
-        self.load_templates_list()
-
-    def backup_all_states_action(self):
-        path, _ = QFileDialog.getSaveFileName(self.mw, "Backup All States", os.path.expanduser("~"), "Zip Files (*.zip)")
-        if path:
-            if backup_all_states(path):
-                self.mw.status_bar.showMessage("All states backed up successfully!")
-            else:
-                self.mw.status_bar.showMessage("Error backing up states")
-
-    def restore_states_from_backup_action(self):
-        path, _ = QFileDialog.getOpenFileName(self.mw, "Restore States from Backup", os.path.expanduser("~"), "Zip Files (*.zip)")
-        if path:
-            if restore_states_from_backup(path):
-                self.mw.status_bar.showMessage("States restored successfully!")
-                self.load_templates_list()
-            else:
-                self.mw.status_bar.showMessage("Error restoring states")

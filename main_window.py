@@ -60,28 +60,6 @@ class CustomTabBar(QTabBar):
                         self.setTabText(index, new_name.strip())
         super().mouseDoubleClickEvent(event)
 
-class ClickableFileWidget(QWidget):
-    def __init__(self, file_path, size, controller):
-        super().__init__()
-        self.setWindowTitle("Duck Prompt Builder")
-        icon = QIcon("resources/rubber_duck.ico")
-        self.setWindowIcon(icon)
-        self.file_path = file_path
-        self.controller = controller
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(5,5,5,5)
-        layout.setSpacing(2)
-        fname_label = QLabel(os.path.basename(file_path))
-        fsize_label = QLabel(f"{size:,} bytes")
-        layout.addWidget(fname_label)
-        layout.addWidget(fsize_label)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.controller.toggle_file_check(self.file_path)
-        super().mousePressEvent(event)
-
 class MainWindow(QMainWindow):
     def __init__(self, mode="Code Enhancer Prompt Builder"):
         super().__init__()
@@ -101,10 +79,9 @@ class MainWindow(QMainWindow):
         def restart_with_mode(new_mode):
             self.close()
             new_window = MainWindow(mode=new_mode)
-            # 전체화면 대신 1200x800로 리사이즈
-            new_window.resize(1200,800)
+            new_window.resize(1200, 800)
             new_window.show()
-            new_window.build_tabs.setCurrentIndex(0)  # 왼쪽 첫 번째 탭 선택
+            new_window.build_tabs.setCurrentIndex(0)
             new_window.show()
 
         switch_to_code_action.triggered.connect(lambda: restart_with_mode("Code Enhancer Prompt Builder"))
@@ -129,7 +106,7 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(5,5,5,5)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         main_layout.setSpacing(5)
 
         self.dir_model = FilteredFileSystemModel(config)
@@ -154,7 +131,7 @@ class MainWindow(QMainWindow):
 
         self.template_manager_tab = QWidget()
         tm_layout = QVBoxLayout(self.template_manager_tab)
-        tm_layout.setContentsMargins(5,5,5,5)
+        tm_layout.setContentsMargins(5, 5, 5, 5)
         tm_layout.setSpacing(5)
 
         self.resource_mode_combo = QComboBox()
@@ -273,33 +250,7 @@ class MainWindow(QMainWindow):
             self.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }")
             self.build_tabs.addTab(self.final_prompt_tab, "최종 프롬프트")
 
-        self.selected_files_toolbtn = QToolButton()
-        self.selected_files_toolbtn.setText("선택한 파일들")
-        self.selected_files_toolbtn.setCheckable(True)
-        self.selected_files_toolbtn.setChecked(True)
-        self.selected_files_toolbtn.setArrowType(Qt.DownArrow)
-
-        self.selected_files_container = QWidget()
-        self.selected_files_layout = QVBoxLayout(self.selected_files_container)
-        self.selected_files_layout.setContentsMargins(5,5,5,5)
-        self.selected_files_layout.setSpacing(5)
-
-        self.selected_files_scroll = QScrollArea()
-        self.selected_files_scroll.setWidgetResizable(True)
-        self.selected_files_list_widget = QWidget()
-        self.selected_files_list_layout = QHBoxLayout(self.selected_files_list_widget)
-        self.selected_files_list_layout.setContentsMargins(0,0,0,0)
-        self.selected_files_list_layout.setSpacing(5)
-        self.selected_files_list_widget.setStyleSheet("background-color: white; border: 1px solid #c0c0c0;")
-        self.selected_files_scroll.setWidget(self.selected_files_list_widget)
-        self.selected_files_layout.addWidget(self.selected_files_scroll)
-
-        selected_files_frame = QFrame()
-        sf_main_layout = QVBoxLayout(selected_files_frame)
-        sf_main_layout.setContentsMargins(0,0,0,0)
-        sf_main_layout.setSpacing(2)
-        sf_main_layout.addWidget(self.selected_files_toolbtn)
-        sf_main_layout.addWidget(self.selected_files_container)
+        # 선택 파일 패널 관련 위젯/로직 제거됨
 
         self.mode_toggle_btn = QPushButton("모드 전환")
         self.mode_toggle_btn.setFixedHeight(40)
@@ -331,7 +282,7 @@ class MainWindow(QMainWindow):
 
         left_side_widget = QWidget()
         left_side_layout = QVBoxLayout(left_side_widget)
-        left_side_layout.setContentsMargins(0,0,0,0)
+        left_side_layout.setContentsMargins(0, 0, 0, 0)
         left_side_layout.setSpacing(5)
 
         left_side_layout.addLayout(top_buttons_layout)
@@ -347,12 +298,12 @@ class MainWindow(QMainWindow):
 
         right_side_widget = QWidget()
         right_side_layout = QVBoxLayout(right_side_widget)
-        right_side_layout.setContentsMargins(0,0,0,0)
+        right_side_layout.setContentsMargins(0, 0, 0, 0)
         right_side_layout.setSpacing(0)
 
         self.run_buttons_container = QWidget()
         run_layout = QHBoxLayout(self.run_buttons_container)
-        run_layout.setContentsMargins(5,5,5,5)
+        run_layout.setContentsMargins(5, 5, 5, 5)
         run_layout.setSpacing(10)
         run_layout.setAlignment(Qt.AlignLeft)
 
@@ -386,7 +337,6 @@ class MainWindow(QMainWindow):
         top_splitter.setStretchFactor(1, 5)
 
         main_layout.addWidget(top_splitter, stretch=4)
-        main_layout.addWidget(selected_files_frame)
 
         self.char_count_label = QLabel("Chars: 0")
         self.token_count_label = QLabel("Calculated Total Token: N/A")
@@ -394,7 +344,7 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
 
         char_status_layout = QHBoxLayout()
-        char_status_layout.setContentsMargins(0,0,0,0)
+        char_status_layout.setContentsMargins(0, 0, 0, 0)
         char_status_layout.setSpacing(10)
         char_status_layout.addWidget(self.char_count_label)
 
@@ -407,7 +357,7 @@ class MainWindow(QMainWindow):
 
         char_container = QWidget()
         cmain_layout = QVBoxLayout(char_container)
-        cmain_layout.setContentsMargins(0,0,0,0)
+        cmain_layout.setContentsMargins(0, 0, 0, 0)
         cmain_layout.setSpacing(2)
         cmain_layout.addLayout(char_status_layout)
         cmain_layout.addWidget(self.status_bar)
@@ -434,7 +384,6 @@ class MainWindow(QMainWindow):
             self.generate_btn.clicked.connect(self.controller.generate_prompt)
 
         self.copy_btn.clicked.connect(self.controller.copy_to_clipboard)
-        self.selected_files_toolbtn.clicked.connect(self.toggle_selected_files)
 
         self.load_selected_template_btn.clicked.connect(self.controller.load_selected_item)
         self.save_as_template_btn.clicked.connect(self.controller.save_current_as_item)
@@ -474,34 +423,14 @@ class MainWindow(QMainWindow):
 
         self.status_bar.showMessage("Ready")
 
-        # 초기 실행 시 전체화면 대신 1200x800 크기로 설정
         self.build_tabs.setCurrentIndex(0)
         self.show()
-        self.resize(1200,800)
+        self.resize(1200, 800)
 
     def reset_state(self):
         self.current_project_folder = None
         self.last_generated_prompt = []
         self.selected_files_data = []
-
-    def toggle_selected_files(self):
-        if self.selected_files_toolbtn.isChecked():
-            self.selected_files_toolbtn.setArrowType(Qt.DownArrow)
-            self.selected_files_container.show()
-        else:
-            self.selected_files_toolbtn.setArrowType(Qt.RightArrow)
-            self.selected_files_container.hide()
-
-    def update_selected_files_panel(self):
-        while self.selected_files_list_layout.count():
-            item = self.selected_files_list_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
-
-        for fpath, size in self.selected_files_data:
-            file_widget = ClickableFileWidget(fpath, size, self.controller)
-            self.selected_files_list_layout.addWidget(file_widget)
 
     def on_copy_shortcut(self):
         if self.build_tabs.currentWidget() == self.prompt_output_tab:
@@ -571,8 +500,6 @@ class MainWindow(QMainWindow):
         self.uncheck_all_files()
         for fpath in state.get("checked_files", []):
             self.controller.toggle_file_check(fpath)
-
-        self.update_selected_files_panel()
 
     def uncheck_all_files(self):
         def recurse_uncheck(index):
