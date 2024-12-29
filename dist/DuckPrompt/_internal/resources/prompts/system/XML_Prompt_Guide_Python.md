@@ -59,7 +59,7 @@
    - `<file_path>`에는 변경 대상 파일의 전체 경로를 적는다.
    
 3. **예시 구조**:
-   ```xml
+   `````xml
    <code_changes>
        <changed_files>
            <file>
@@ -87,7 +87,7 @@
            </file>
        </changed_files>
    </code_changes>
-   ```
+   `````
 
 ### Summary
 - dummy_file.txt 파일을 새로 추가해서 XML 처리 예시를 보여줬어.
@@ -97,7 +97,7 @@
 위 예시는 형식 참고용이야. 여기서 파이썬 코드를 작성할 때는 "파이썬 코딩 가이드"를 엄격히 준수해야 해.
 
 ### XML
-```xml
+`````xml
 <code_changes>
     <changed_files>
         <file>
@@ -110,4 +110,4 @@
         </file>
     </changed_files>
 </code_changes>
-```
+`````
