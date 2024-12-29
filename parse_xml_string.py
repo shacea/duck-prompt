@@ -1,3 +1,4 @@
+
 import os
 import xml.etree.ElementTree as ET
 from termcolor import colored
@@ -68,6 +69,11 @@ def apply_changes_from_xml(xml_string: str, project_directory: str) -> dict:
                     result["errors"].append(f"Error deleting file '{target_path}': {str(e)}")
             else:
                 result["errors"].append(f"File not found for deletion: {target_path}")
+
+        elif file_operation == "NONE":
+            # 수정 없음 처리
+            pass
+
         else:
             result["errors"].append(f"Unknown file_operation: {file_operation} for file: {file_path}")
 

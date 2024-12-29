@@ -5,8 +5,11 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[
+        ('resources/rubber_duck.ico', 'resources'),
+        ('resources/prompts', 'resources/prompts')
+    ],
+    hiddenimports=['tiktoken', 'tiktoken_ext', 'tiktoken_ext.openai_public'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -19,8 +22,9 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='DuckPrompt',
     debug=False,
     bootloader_ignore_signals=False,
@@ -32,6 +36,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['resources\\rubber_duck.ico'],
 )
 coll = COLLECT(
     exe,

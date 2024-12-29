@@ -250,8 +250,6 @@ class MainWindow(QMainWindow):
             self.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }")
             self.build_tabs.addTab(self.final_prompt_tab, "최종 프롬프트")
 
-        # 선택 파일 패널 관련 위젯/로직 제거됨
-
         self.mode_toggle_btn = QPushButton("모드 전환")
         self.mode_toggle_btn.setFixedHeight(40)
         font = self.mode_toggle_btn.font()
@@ -288,10 +286,11 @@ class MainWindow(QMainWindow):
         left_side_layout.addLayout(top_buttons_layout)
 
         if self.mode != "Meta Prompt Builder":
+            # 아래 부분에서 높이를 기존 [350, 650]에서 [420, 580]으로 변경했어!
             splitter_left = QSplitter(Qt.Vertical)
             splitter_left.addWidget(self.template_manager_tab)
             splitter_left.addWidget(self.tree_view)
-            splitter_left.setSizes([350, 650])
+            splitter_left.setSizes([420, 580])  # 20% 증가 (350 -> 420)
             left_side_layout.addWidget(splitter_left)
         else:
             left_side_layout.addWidget(self.template_manager_tab)
