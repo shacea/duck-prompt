@@ -1,0 +1,7 @@
+
+PyQt5
+pyinstaller
+PyYAML
+termcolor
+tiktoken
+python-dotenv
