@@ -49,6 +49,8 @@ def apply_changes_from_xml(xml_string: str, project_directory: str) -> dict:
             if not file_code:
                 result["errors"].append(f"No file_code provided for {file_operation} operation on {file_path}")
                 continue
+            # 첫 줄 공백 방지를 위해 선행 개행 제거
+            file_code = file_code.lstrip('\r\n')
             try:
                 os.makedirs(os.path.dirname(target_path), exist_ok=True)
                 with open(target_path, 'w', encoding='utf-8') as f:
