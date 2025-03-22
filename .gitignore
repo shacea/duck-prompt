@@ -3,3 +3,4 @@ __pycache__/
 .windsurfrules
 .cursorignore
 .cursorrules
+.venv/
