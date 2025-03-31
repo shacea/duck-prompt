@@ -1,4 +1,3 @@
-
 import sys
 import os
 import ctypes
@@ -8,11 +7,9 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from main_window import MainWindow
-from utils import init_utils
+from utils import init_utils, get_resource_path # get_resource_path 추가
 
-def resource_path(relative_path):
-    base_path = getattr(sys, '_MEIPASS', os.path.abspath("."))
-    return os.path.join(base_path, relative_path)
+# resource_path 함수 제거 (utils.get_resource_path 사용)
 
 if __name__ == '__main__':
     # .env 로드
@@ -29,10 +26,12 @@ if __name__ == '__main__':
 
     init_utils()
     app = QApplication(sys.argv)
-    icon_path = resource_path("resources/rubber_duck.ico")
+    # utils.get_resource_path 사용
+    icon_path = get_resource_path("resources/rubber_duck.ico")
     app_icon = QIcon(icon_path)
     app.setWindowIcon(app_icon)
 
+    # MainWindow 생성 시 mode 전달
     window = MainWindow(mode="Code Enhancer Prompt Builder")
     window.show()
     sys.exit(app.exec_())
