@@ -124,14 +124,14 @@ class CheckableProxyModel(QSortFilterProxyModel):
             if file_path:
                 is_checked = (value == Qt.Checked)
                 self.checked_files_dict[file_path] = is_checked
-                self.dataChanged.emit(index, index, [Qt.CheckStateRole])
+                self.dataChanged.emit(index, index, [Qt.CheckStateRole]) # 클릭된 항목에 대한 시그널 발생
 
                 src_index = self.mapToSource(index)
                 # 폴더면 하위 항목도 체크 처리 및 트리 자동 확장
                 if src_index.isValid() and self.fs_model.isDir(src_index):
-                    self.ensure_loaded(src_index)
-                    self.check_all_children(src_index, is_checked)
-                    self.expand_index_recursively(index)
+                    self.ensure_loaded(src_index) # 하위 항목 로드 보장
+                    self.check_all_children(src_index, is_checked) # 하위 항목 상태 업데이트 및 시그널 발생
+                    self.expand_index_recursively(index) # 트리 확장
                 return True
         return super().setData(index, value, role)
 
@@ -144,7 +144,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def check_all_children(self, parent_index: QModelIndex, checked: bool):
         """
-        parent_index 하위 모든 폴더/파일 체크 상태를 갱신 (필터링된 항목 제외)
+        parent_index 하위 모든 폴더/파일 체크 상태를 갱신하고 dataChanged 시그널 발생 (필터링된 항목 제외)
         """
         row_count = self.fs_model.rowCount(parent_index)
         for row in range(row_count):
@@ -157,14 +157,15 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
             file_path = self.fs_model.filePath(child_index)
 
-            # 체크 상태 업데이트
+            # 체크 상태 업데이트 (내부 상태)
             self.checked_files_dict[file_path] = checked
-            # ★ 중요: super().setData() 호출로 실제 체크 상태 갱신
-            super().setData(child_proxy_index, Qt.Checked if checked else Qt.Unchecked, Qt.CheckStateRole)
+
+            # ★ 중요: super().setData() 대신 dataChanged 시그널을 발생시켜 뷰 갱신
+            self.dataChanged.emit(child_proxy_index, child_proxy_index, [Qt.CheckStateRole])
 
             # 하위 폴더 재귀
             if self.fs_model.isDir(child_index):
-                self.ensure_loaded(child_index)
+                # ensure_loaded는 setData에서 이미 호출되었으므로 여기서 재귀적으로 호출할 필요 없음
                 self.check_all_children(child_index, checked)
 
 
