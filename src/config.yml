@@ -1,5 +1,10 @@
 # DuckPrompt Configuration File (YAML Format)
 
+# Default system prompt file path (relative to project root or absolute).
+# If null or empty, no default prompt is loaded automatically.
+# Example: "resources/prompts/system/My_Default_Prompt.md"
+default_system_prompt: "resources/prompts/system/XML_Prompt_Guide.md" # 기본값 설정
+
 # List of allowed file extensions for processing.
 # If empty or not present, all files are allowed (after exclusion).
 # Example: [".py", ".txt", ".md"]
@@ -13,6 +18,14 @@ excluded_dirs:
   - ".DS_Store"
   - "*.log"
   - "node_modules/"
+  - ".venv/"
+  - "__pycache__/"
+  - ".git/"
+  - ".gitignore"
+  - ".vscode/"
+  - ".idea/"
+  - "build/"
+  - "dist/"
   # Add more custom exclusion patterns here
 
 # Default list of ignore patterns applied universally.
@@ -27,7 +40,7 @@ default_ignore_list:
   - "dist/"
   - "*.pyc"
   - "*.egg-info/"
-  - ".env" # Exclude .env file itself
+  # - ".env" # .env 파일은 더 이상 사용하지 않음
   - ".cache/"
   - ".mypy_cache/"
   - ".pytest_cache/"
@@ -35,7 +48,6 @@ default_ignore_list:
   # Project specific defaults (from original config.py)
   - ".windsurfrules"
   - ".cursorrules"
-
 # Other potential settings:
 # default_theme: "Fusion"
 # max_file_size_mb: 10 # Maximum file size to process

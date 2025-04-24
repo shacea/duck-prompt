@@ -1,7 +1,7 @@
 import sys
 import os
 import ctypes
-from dotenv import load_dotenv
+# from dotenv import load_dotenv # .env 사용 안 함
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
@@ -12,10 +12,9 @@ from ui.main_window import MainWindow
 from utils.helpers import init_utils, get_resource_path
 
 def main():
-    # .env 로드 (프로젝트 루트 기준)
-    # src/app.py 기준 상위 폴더의 .env 파일
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
-    load_dotenv(dotenv_path=dotenv_path)
+    # .env 로드 제거
+    # dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+    # load_dotenv(dotenv_path=dotenv_path)
 
     if sys.platform.startswith("win"):
         try:
@@ -46,7 +45,7 @@ def main():
         print(f"Error loading application icon: {e}") # 아이콘 로딩 오류 로깅
 
     # MainWindow 생성 및 실행
-    # TODO: Core 서비스 초기화 및 주입 필요
+    # TODO: Core 서비스 초기화 및 주입 필요 (app.py 또는 main.py에서 수행)
     window = MainWindow(mode="Code Enhancer Prompt Builder") # 기본 모드 설정
     window.show()
     sys.exit(app.exec_())

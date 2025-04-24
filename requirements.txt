@@ -2,5 +2,5 @@ PyQt5
 PyYAML
 termcolor
 tiktoken
-python-dotenv
+# python-dotenv # 제거됨
 pydantic>=2.0

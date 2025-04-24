@@ -20,12 +20,12 @@ classifiers = [
     "Topic :: Utilities",
 ]
 dependencies = [
-    "pyqt5-qt5==5.15.2",
+    "pyqt5-qt5==5.15.2", # 특정 Qt 버전 고정 (선택적)
     "PyQt5",
     "PyYAML", # For config_service.py
     "termcolor", # Check if still needed after refactoring logging
     "tiktoken",
-    "python-dotenv",
+    # "python-dotenv", # 제거됨
     "pydantic>=2.0",
 ]
 

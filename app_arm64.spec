@@ -1,24 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
+from pathlib import Path # pathlib 사용
 
 # src 디렉토리를 sys.path에 추가 (빌드 시점에 필요)
-src_dir = os.path.join(os.path.dirname(__file__), 'src')
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
+spec_dir = Path(__file__).parent.resolve()
+src_dir = spec_dir / 'src'
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 # 리소스 경로 설정 함수 (빌드 시점용)
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
-    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_path, relative_path)
+    base_path = Path(getattr(sys, '_MEIPASS', spec_dir))
+    return str(base_path / relative_path)
 
 block_cipher = None
 
 a = Analysis(
-    # 엔트리 포인트 변경: main.py 또는 src/app.py
-    ['main.py'],
-    pathex=[src_dir], # src 디렉토리 포함
+    # 엔트리 포인트: main.py
+    [str(spec_dir / 'main.py')],
+    pathex=[str(src_dir)], # src 디렉토리 포함
     binaries=[],
     datas=[
         # 리소스 경로 수정
@@ -26,7 +28,8 @@ a = Analysis(
         (resource_path('resources/prompts'), 'resources/prompts'),
         (resource_path('resources/status'), 'resources/status'), # 상태 디렉토리 추가
         (resource_path('src/config.yml'), 'src'), # 설정 파일 추가
-        # (resource_path('.env'), '.') # .env 포함 여부 결정
+        # .env 파일은 더 이상 포함하지 않음
+        # (resource_path('.env'), '.')
     ],
     # hiddenimports 수정
     hiddenimports=[
@@ -36,7 +39,7 @@ a = Analysis(
         'pydantic',
         'yaml',
         'pkg_resources',
-        'dotenv',
+        # 'dotenv', # 제거됨
     ],
     hookspath=[],
     hooksconfig={},

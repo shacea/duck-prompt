@@ -38,12 +38,13 @@ class XmlController:
             QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return
 
-        reply = QMessageBox.question(self.mw, "XML 변경 적용 확인",
-                                     f"XML 내용에 따라 프로젝트 파일을 변경합니다:\n{project_dir}\n\n계속하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.No:
-            self.mw.status_bar.showMessage("XML 파싱 취소됨.")
-            return
+        # 사용자 확인 메시지 제거
+        # reply = QMessageBox.question(self.mw, "XML 변경 적용 확인",
+        #                              f"XML 내용에 따라 프로젝트 파일을 변경합니다:\n{project_dir}\n\n계속하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+        #                              QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        # if reply == QMessageBox.No:
+        #     self.mw.status_bar.showMessage("XML 파싱 취소됨.")
+        #     return
 
         try:
             result = self.xml_service.apply_changes_from_xml(xml_str, project_dir)
