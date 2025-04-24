@@ -36,8 +36,8 @@ class FilteredFileSystemModel(QFileSystemModel):
             child_index = self.index(row, 0, parent_index)
             if child_index.isValid() and self.isDir(child_index):
                 # Check if we can fetch more for the child directory
-                if self.canFetchMore(child_index):
-                     self._fetch_all_recursively(child_index)
+                # if self.canFetchMore(child_index): # 이 조건 제거해야 깊은 탐색 가능
+                self._fetch_all_recursively(child_index)
 
 
 class CheckableProxyModel(QSortFilterProxyModel):
@@ -54,9 +54,10 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def set_ignore_patterns(self, patterns: Set[str]):
         """Sets the ignore patterns used for filtering."""
-        self._ignore_patterns = patterns
-        # 패턴 변경 시 필터 무효화 필요
-        self.invalidateFilter()
+        if self._ignore_patterns != patterns:
+            self._ignore_patterns = patterns
+            # 패턴 변경 시 필터 무효화
+            self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
         """Determines if a row should be shown based on ignore patterns."""
@@ -69,7 +70,10 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
         # 프로젝트 루트가 설정되지 않았거나, 현재 파일이 프로젝트 루트 밖에 있으면 필터링 안 함
         if not project_root or not file_path.startswith(project_root):
-            return True # 프로젝트 루트 외부는 항상 표시
+            # 루트 경로 자체가 아닌 경우만 외부 표시 (루트 경로는 항상 표시되어야 함)
+            # return file_path != self.sourceModel().rootPath()
+            return True # 프로젝트 루트 외부는 항상 표시 (루트 포함)
+
 
         # 프로젝트 루트 자체는 숨기지 않음
         if file_path == project_root:
@@ -79,6 +83,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
         # 임시: 직접 필터링 로직 수행
         is_dir = self.sourceModel().isDir(source_index)
         if self._should_ignore_local(file_path, project_root, self._ignore_patterns, is_dir):
+            # 무시 대상이면, 체크 상태도 해제 (선택적)
+            if file_path in self.checked_files_dict:
+                del self.checked_files_dict[file_path]
             return False # 무시해야 하면 숨김
 
         return True # 필터링되지 않으면 표시
@@ -87,26 +94,42 @@ class CheckableProxyModel(QSortFilterProxyModel):
         """Internal implementation of ignore logic (to be replaced by FilesystemService)."""
         file_name = os.path.basename(file_path)
         try:
+            # 상대 경로 계산 시 project_root가 file_path의 부모가 아닐 경우 예외 발생 가능
+            if not file_path.startswith(project_root):
+                 return False # 프로젝트 외부는 무시 안 함
             relative_path = os.path.relpath(file_path, project_root).replace(os.sep, '/')
         except ValueError:
             return False # 상대 경로 계산 불가 시 무시 안 함
 
         for pattern in ignore_patterns:
+            # 패턴 앞뒤 공백 제거
+            pattern = pattern.strip()
+            if not pattern or pattern.startswith('#'): # 빈 패턴이나 주석 무시
+                continue
+
             is_dir_pattern = pattern.endswith('/')
             cleaned_pattern = pattern.rstrip('/')
 
+            # 디렉토리 패턴인데 현재 항목이 파일이면 건너뜀
             if is_dir_pattern and not is_dir: continue
 
-            # 1. 파일 이름 매칭
+            # 1. 파일 이름 매칭 (e.g., *.log, __pycache__)
             if fnmatch.fnmatch(file_name, cleaned_pattern):
                 if is_dir_pattern and is_dir: return True
                 elif not is_dir_pattern: return True
 
-            # 2. 상대 경로 매칭
-            match_path = relative_path + '/' if is_dir else relative_path
+            # 2. 상대 경로 매칭 (e.g., build/, docs/temp.txt)
+            # 디렉토리일 경우, 경로 끝에 '/' 추가하여 매칭
+            match_path = relative_path + ('/' if is_dir and not relative_path.endswith('/') else '')
+            # 패턴 매칭 시 와일드카드 등을 고려하여 fnmatch 사용
             if fnmatch.fnmatch(match_path, pattern): return True
+            # 패턴에 /가 포함되어 있고, 디렉토리 패턴이 아닐 때도 경로 매칭 시도
+            # (e.g. 'some/dir/file.txt' 패턴)
             if '/' in pattern and not is_dir_pattern:
                  if fnmatch.fnmatch(relative_path, pattern): return True
+                 # 디렉토리 매칭 시도 (패턴: some/dir, 경로: some/dir/file.txt)
+                 if is_dir and fnmatch.fnmatch(relative_path + '/', pattern + '/'): return True
+
 
         return False
 
@@ -116,6 +139,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
             file_path = self.get_file_path_from_index(index)
             # 체크 상태 반환 (dict에 없으면 Unchecked)
             return Qt.Checked if self.checked_files_dict.get(file_path, False) else Qt.Unchecked
+        # 파일 이름 표시 (기본값)
+        # if index.column() == 0 and role == Qt.DisplayRole:
+        #     return self.fs_model.fileName(self.mapToSource(index))
         return super().data(index, role)
 
     def flags(self, index):
@@ -132,14 +158,18 @@ class CheckableProxyModel(QSortFilterProxyModel):
             if file_path:
                 is_checked = (value == Qt.Checked)
                 # 체크 상태 업데이트 (내부 dict)
-                self.checked_files_dict[file_path] = is_checked
+                if is_checked:
+                    self.checked_files_dict[file_path] = True
+                elif file_path in self.checked_files_dict:
+                    del self.checked_files_dict[file_path] # 체크 해제 시 dict에서 제거
+
                 # 뷰 갱신을 위해 dataChanged 시그널 발생
                 self.dataChanged.emit(index, index, [Qt.CheckStateRole])
 
                 src_index = self.mapToSource(index)
                 # 폴더인 경우 하위 항목 처리 및 트리 확장
                 if src_index.isValid() and self.fs_model.isDir(src_index):
-                    # 하위 항목 로드 보장 (setData 호출 전에 ensure_loaded 호출 필요할 수 있음)
+                    # 하위 항목 로드 보장 (필수)
                     self.ensure_loaded(src_index)
                     # 하위 항목 체크 상태 동기화 및 시그널 발생
                     self.check_all_children(src_index, is_checked)
@@ -151,11 +181,12 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 return True
         return super().setData(index, value, role)
 
-    def ensure_loaded(self, parent_index: QModelIndex):
-        """Ensures all children under the parent index are loaded."""
+    def ensure_loaded(self, parent_src_index: QModelIndex):
+        """Ensures all children under the parent source index are loaded."""
         # FilteredFileSystemModel의 _fetch_all_recursively 호출
-        if parent_index.isValid() and hasattr(self.fs_model, '_fetch_all_recursively'):
-            self.fs_model._fetch_all_recursively(parent_index)
+        if parent_src_index.isValid() and hasattr(self.fs_model, '_fetch_all_recursively'):
+            # print(f"Ensuring loaded for: {self.fs_model.filePath(parent_src_index)}")
+            self.fs_model._fetch_all_recursively(parent_src_index)
 
     def check_all_children(self, parent_src_index: QModelIndex, checked: bool):
         """Recursively updates check state for all visible children."""
@@ -171,14 +202,17 @@ class CheckableProxyModel(QSortFilterProxyModel):
             file_path = self.fs_model.filePath(child_src_index)
 
             # 체크 상태 업데이트 (내부 dict)
-            self.checked_files_dict[file_path] = checked
+            if checked:
+                self.checked_files_dict[file_path] = True
+            elif file_path in self.checked_files_dict:
+                del self.checked_files_dict[file_path]
 
             # 뷰 갱신을 위해 dataChanged 시그널 발생
             self.dataChanged.emit(child_proxy_index, child_proxy_index, [Qt.CheckStateRole])
 
             # 하위 폴더 재귀 호출
             if self.fs_model.isDir(child_src_index):
-                # ensure_loaded는 setData에서 이미 호출되었으므로 여기서 재귀 호출
+                # ensure_loaded는 setData에서 이미 호출되었으므로 여기서 재귀 호출 불필요
                 self.check_all_children(child_src_index, checked)
 
 
@@ -207,9 +241,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
     def get_all_checked_paths(self) -> list[str]:
         """Returns a list of all paths currently marked as checked."""
         # 필터링 상태와 관계없이 dict에 저장된 모든 체크된 경로 반환
-        return [path for path, checked in self.checked_files_dict.items() if checked]
+        return list(self.checked_files_dict.keys()) # 체크된 것만 저장하므로 value 검사 불필요
 
     def get_checked_files(self) -> list[str]:
         """Returns a list of checked paths that correspond to actual files."""
         # 필터링 상태와 관계없이 dict 기반 + 파일 여부 확인
-        return [path for path, checked in self.checked_files_dict.items() if checked and os.path.isfile(path)]
+        return [path for path in self.checked_files_dict if os.path.isfile(path)]

@@ -13,7 +13,8 @@ from utils.helpers import init_utils, get_resource_path
 
 def main():
     # .env 로드 (프로젝트 루트 기준)
-    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    # src/app.py 기준 상위 폴더의 .env 파일
+    dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
     load_dotenv(dotenv_path=dotenv_path)
 
     if sys.platform.startswith("win"):
@@ -34,6 +35,7 @@ def main():
 
     # 아이콘 경로 설정 (get_resource_path 사용)
     try:
+        # get_resource_path는 resources 폴더 기준이므로 파일명만 전달
         icon_path = get_resource_path("rubber_duck.ico")
         if os.path.exists(icon_path):
             app_icon = QIcon(icon_path)
@@ -50,5 +52,6 @@ def main():
     sys.exit(app.exec_())
 
 # 이 파일이 직접 실행될 때 main 함수 호출 (기존 방식 유지)
-if __name__ == '__main__':
-    main()
+# if __name__ == '__main__':
+#     main()
+# 위 방식 대신 main.py에서 app.main()을 호출하도록 변경됨

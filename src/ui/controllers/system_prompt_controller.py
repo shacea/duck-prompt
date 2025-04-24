@@ -7,29 +7,27 @@ from utils.helpers import get_resource_path # 필요시 사용
 
 # .env 파일 경로 (프로젝트 루트 기준)
 # find_dotenv()는 현재 디렉토리부터 상위로 올라가며 .env를 찾음
-DOTENV_PATH = find_dotenv()
+# src/ui/controllers/system_prompt_controller.py 기준 상위 3단계
+project_root_from_controller = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+DOTENV_PATH = find_dotenv(filename='.env', raise_error_if_not_found=False, usecwd=False)
+
 if not DOTENV_PATH:
     # .env 파일이 없으면 프로젝트 루트에 생성되도록 경로 지정
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
-    DOTENV_PATH = os.path.join(project_root, '.env')
-    # print(f".env file not found, will create at: {DOTENV_PATH}")
+    DOTENV_PATH = os.path.join(project_root_from_controller, '.env')
+    print(f".env file not found, will create/use path: {DOTENV_PATH}")
+
 
 def apply_default_system_prompt(main_window):
     """
     Loads the default system prompt specified in .env into the system_tab.
-    If DEFAULT_SYSTEM_PROMPT is empty or not set, does nothing.
+    If DEFAULT_SYSTEM_PROMPT is empty or not set, tries to load XML_Prompt_Guide.md.
     """
-    load_dotenv(dotenv_path=DOTENV_PATH)
+    load_dotenv(dotenv_path=DOTENV_PATH, override=True) # override=True로 최신값 반영
 
     default_system_prompt_path = os.getenv("DEFAULT_SYSTEM_PROMPT")
 
     if not default_system_prompt_path:
-        # 환경 변수가 없거나 비어 있으면 기본값 로드 시도 (선택적)
-        # 또는 메시지 표시 후 종료
-        # print("DEFAULT_SYSTEM_PROMPT not set in .env or is empty.")
-        # main_window.status_bar.showMessage("기본 시스템 프롬프트 경로가 .env에 설정되지 않았습니다.")
-
-        # XML_Prompt_Guide.md를 기본값으로 사용하도록 시도
+        # 환경 변수가 없거나 비어 있으면 기본값 로드 시도
         default_path_relative = os.path.join("prompts", "system", "XML_Prompt_Guide.md")
         try:
             default_system_prompt_path = get_resource_path(default_path_relative)
@@ -83,9 +81,11 @@ def select_default_system_prompt(main_window):
         try:
             # .env 파일에 경로 업데이트 (기존 값 덮어쓰기 또는 추가)
             # set_key는 .env 파일이 없으면 생성함
-            set_key(DOTENV_PATH, "DEFAULT_SYSTEM_PROMPT", path, quote_mode='always')
+            # 경로 구분자를 OS 기본값 대신 '/'로 저장 (호환성)
+            normalized_path = path.replace(os.sep, '/')
+            set_key(DOTENV_PATH, "DEFAULT_SYSTEM_PROMPT", normalized_path, quote_mode='always')
 
-            print(f"DEFAULT_SYSTEM_PROMPT set to: {path} in {DOTENV_PATH}")
+            print(f"DEFAULT_SYSTEM_PROMPT set to: {normalized_path} in {DOTENV_PATH}")
             QMessageBox.information(
                 main_window,
                 "설정 완료",

@@ -8,15 +8,15 @@ PROTECTED_TABS = {
 
     # 기능성 탭
     "+", # 새 탭 추가 버튼
-    "   |   ", # 구분자 탭 (Meta Prompt 모드)
+    "   |   ", # 구분자 탭 (Meta Prompt 모드) - 현재 사용 안 함
 
     # 하드코딩된 변수 탭 이름 (더 나은 방식 필요)
     # "var-...", # 동적으로 생성되는 탭 이름 규칙에 따라 달라짐
 
     # 이전 버전 호환성 또는 다른 고정 탭 이름
-    "Template Manager", # 이전 버전 또는 다른 UI 요소 이름
-    "META Prompt Template", "META User Input", # 중복될 수 있으나 명시적 포함
-    "META Prompt", "user-prompt", "Final Prompt" # 중복될 수 있으나 명시적 포함
+    # "Template Manager", # 이전 버전 또는 다른 UI 요소 이름
+    # "META Prompt Template", "META User Input", # 중복될 수 있으나 명시적 포함
+    # "META Prompt", "user-prompt", "Final Prompt" # 중복될 수 있으나 명시적 포함
 }
 
 def is_tab_deletable(tab_name: str) -> bool:

@@ -1,37 +1,31 @@
 import os
 from typing import Optional, List, Dict, Any
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt5.QtCore import Qt, QModelIndex
+from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QApplication
 
 # 변경된 경로에서 import
-# from core.services.prompt_service import PromptService # TODO: 주입 받도록 수정
-# from core.services.config_service import ConfigService # TODO: 주입 받도록 수정
-# from core.services.xml_service import XmlService # TODO: 주입 받도록 수정
-# from core.services.template_service import TemplateService # TODO: 주입 받도록 수정
-# from core.services.state_service import StateService # TODO: 주입 받도록 수정
-# from core.pydantic_models.app_state import AppState # TODO: 주입 받도록 수정
-
-# 임시 import (서비스 주입 전)
 from core.services.prompt_service import PromptService
 from core.services.xml_service import XmlService
 from core.services.template_service import TemplateService
 from core.services.state_service import StateService
-from core.services.filesystem_service import FilesystemService # 추가
-from core.services.config_service import ConfigService # 추가
+from core.services.filesystem_service import FilesystemService
+from core.services.config_service import ConfigService
 from core.pydantic_models.app_state import AppState
+# MainWindow는 타입 힌트용으로만 사용 (순환 참조 방지)
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ui.main_window import MainWindow
 
-# TODO: Controller를 여러 파일로 분리 (FileTreeController, ResourceController 등)
 
 class MainController:
-    def __init__(self, main_window):
+    def __init__(self, main_window: 'MainWindow'):
         self.mw = main_window # MainWindow 인스턴스
-        # TODO: 서비스 인스턴스 주입 받기
+        # 서비스 인스턴스 생성 (향후 DI 컨테이너 사용 고려)
+        self.config_service = ConfigService()
         self.prompt_service = PromptService()
         self.xml_service = XmlService()
         self.template_service = TemplateService()
         self.state_service = StateService()
-        # ConfigService는 초기화 시 경로 필요, 또는 기본 경로 사용
-        self.config_service = ConfigService()
         self.fs_service = FilesystemService(self.config_service) # FilesystemService에 ConfigService 주입
 
         self.tree_generated = False # 파일 트리 생성 여부 상태
@@ -46,7 +40,11 @@ class MainController:
         settings = self.config_service.get_settings()
         # 기본 무시 목록으로 시작
         patterns.update(settings.default_ignore_list)
-        lines_for_ui.extend(settings.default_ignore_list) # UI에는 기본값 표시
+        # UI에는 기본값 + 설정 파일의 excluded_dirs 표시 (선택적)
+        # lines_for_ui.extend(sorted(list(settings.default_ignore_list.union(settings.excluded_dirs))))
+        # 또는 .gitignore 파일 내용 우선 표시
+        lines_for_ui.extend(sorted(list(settings.default_ignore_list)))
+
 
         if self.mw.current_project_folder:
             possible_path = os.path.join(self.mw.current_project_folder, ".gitignore")
@@ -63,24 +61,17 @@ class MainController:
                     QMessageBox.warning(self.mw, "Error", f".gitignore 로드 중 오류: {str(e)}")
                     # 오류 시 UI는 기본값 유지
 
-        # 최종 패턴을 ConfigService를 통해 업데이트 (저장)
-        # ConfigService의 update_settings는 파일 저장까지 수행하므로 주의
-        # 여기서는 내부 상태만 업데이트하고, 저장은 save_gitignore_settings에서만 수행하도록 변경 고려
-        # 임시: 현재 구조 유지, ConfigSettings 모델 직접 수정 (저장 안 됨)
-        current_settings = self.config_service.get_settings()
-        current_settings.excluded_dirs = patterns # 메모리 상의 설정 업데이트
+        # 설정 파일(config.yml)의 excluded_dirs도 패턴에 추가
+        patterns.update(settings.excluded_dirs)
 
         # UI 업데이트
         self.mw.gitignore_edit.setText("\n".join(lines_for_ui))
 
-        # 파일 탐색기 필터 갱신
-        # CheckableProxyModel이 FilesystemService를 직접 사용하도록 리팩토링 필요
-        # 임시: CheckableProxyModel에 패턴 직접 전달 또는 Controller가 필터링 로직 수행
+        # 파일 탐색기 필터 갱신 (CheckableProxyModel에 패턴 설정)
         if hasattr(self.mw, 'checkable_proxy'):
-             # CheckableProxyModel이 FilesystemService를 사용하도록 수정 필요
-             # 임시 방편: Controller가 패턴을 모델에 전달
-             self.mw.checkable_proxy.set_ignore_patterns(patterns) # 이런 메소드 추가 필요
-             self.mw.checkable_proxy.invalidateFilter()
+             self.mw.checkable_proxy.set_ignore_patterns(patterns) # ProxyModel에 패턴 전달
+             # invalidateFilter는 set_ignore_patterns 내부에서 호출되도록 수정하는 것이 좋음
+             # self.mw.checkable_proxy.invalidateFilter()
 
 
     def save_gitignore_settings(self):
@@ -95,6 +86,12 @@ class MainController:
 
         target_path = os.path.join(self.mw.current_project_folder, ".gitignore")
         try:
+            # 파일 쓰기 전 사용자 확인 (선택적)
+            # reply = QMessageBox.question(self.mw, "저장 확인", f"{target_path}에 저장하시겠습니까?",
+            #                              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            # if reply == QMessageBox.No:
+            #     return
+
             with open(target_path, 'w', encoding='utf-8') as f:
                 f.write("\n".join(lines_to_save) + "\n") # 마지막 줄 개행 추가
 
@@ -108,39 +105,36 @@ class MainController:
 
     def reset_program(self):
         """Resets the application to its initial state."""
-        # UI 초기화
-        self.mw.reset_state() # MainWindow의 상태 초기화 메서드 호출
+        # UI 초기화 (MainWindow 메서드 호출)
+        self.mw.reset_state()
         self.mw.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
         self.mw.system_tab.clear()
         self.mw.user_tab.clear()
-        if hasattr(self.mw, "dir_structure_tab"):
-            self.mw.dir_structure_tab.clear()
-        if hasattr(self.mw, "xml_input_tab"):
-            self.mw.xml_input_tab.clear()
-        if hasattr(self.mw, "prompt_output_tab"):
-            self.mw.prompt_output_tab.clear()
+        if hasattr(self.mw, "dir_structure_tab"): self.mw.dir_structure_tab.clear()
+        if hasattr(self.mw, "xml_input_tab"): self.mw.xml_input_tab.clear()
+        if hasattr(self.mw, "prompt_output_tab"): self.mw.prompt_output_tab.clear()
         self.mw.gitignore_edit.clear()
+        self.tree_generated = False # 트리 생성 상태 초기화
 
         # 설정 및 필터 초기화
         default_settings = self.config_service.get_settings() # 기본 설정 로드
-        self.mw.gitignore_edit.setText("\n".join(default_settings.default_ignore_list))
+        default_patterns = set(default_settings.default_ignore_list).union(default_settings.excluded_dirs)
+        self.mw.gitignore_edit.setText("\n".join(sorted(list(default_patterns)))) # UI 업데이트
         if hasattr(self.mw, 'checkable_proxy'):
-             self.mw.checkable_proxy.set_ignore_patterns(set(default_settings.default_ignore_list)) # 모델에 패턴 전달
-             self.mw.checkable_proxy.invalidateFilter()
+             self.mw.checkable_proxy.set_ignore_patterns(default_patterns) # 모델에 패턴 전달
 
-        # 파일 탐색기 트리 리셋
+        # 파일 탐색기 트리 리셋 (MainWindow 역할)
         home_path = os.path.expanduser("~")
-        # FilteredFileSystemModel 관련 로직은 MainWindow 또는 FileTreeController로 이동 필요
         if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
             idx = self.mw.dir_model.setRootPathFiltered(home_path) # 모델 메소드 호출
             self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
-            self.mw.checkable_proxy.checked_files_dict.clear() # 체크 상태 초기화
+            # self.mw.checkable_proxy.checked_files_dict.clear() # reset_state에서 처리됨
             self.mw.tree_view.collapseAll()
-            self.mw.tree_view.reset() # 뷰 리셋
+            # self.mw.tree_view.reset() # setRootIndex가 어느 정도 리셋 효과 있음
 
         # 윈도우 제목 리셋
         self.mw.update_window_title()
-
+        self.mw.status_bar.showMessage("프로그램 리셋 완료.")
         QMessageBox.information(self.mw, "Info", "프로그램이 초기 상태로 리셋되었습니다.")
 
     def select_project_folder(self):
@@ -149,9 +143,13 @@ class MainController:
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 프로젝트 폴더 선택이 필요 없습니다.")
             return
 
-        folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", os.path.expanduser("~"))
+        # 현재 프로젝트 폴더 또는 홈 디렉토리에서 시작
+        start_dir = self.mw.current_project_folder if self.mw.current_project_folder else os.path.expanduser("~")
+        folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", start_dir)
+
         if folder:
-            self.mw.reset_state() # 상태 초기화
+            # UI 상태 초기화 (MainWindow 메서드 호출)
+            self.mw.reset_state()
             self.mw.current_project_folder = folder
             folder_name = os.path.basename(folder)
             self.mw.project_folder_label.setText(f"현재 프로젝트 폴더: {folder}")
@@ -159,7 +157,7 @@ class MainController:
             # .gitignore 로드 및 필터 갱신
             self.load_gitignore_settings()
 
-            # 파일 탐색기 업데이트 (MainWindow 또는 FileTreeController 역할)
+            # 파일 탐색기 업데이트 (MainWindow 역할)
             if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
                 idx = self.mw.dir_model.setRootPathFiltered(folder)
                 root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
@@ -168,8 +166,9 @@ class MainController:
 
                 # 루트 폴더 자동 체크 및 확장
                 if root_proxy_index.isValid():
+                    # setData 호출 시 하위 항목 로딩 및 체크/확장 자동 처리됨
                     self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
-                    self.mw.tree_view.expand(root_proxy_index)
+                    # self.mw.tree_view.expand(root_proxy_index) # setData 내부에서 처리
 
             # 윈도우 제목 업데이트
             self.mw.update_window_title(folder_name)
@@ -179,8 +178,7 @@ class MainController:
         """Generates the prompt based on selected files and inputs."""
         if self.mw.mode == "Meta Prompt Builder":
             # 메타 프롬프트 생성 로직 호출
-            self.generate_meta_prompt()
-            return True # 또는 generate_meta_prompt의 성공 여부 반환
+            return self.generate_meta_prompt() # 성공 여부 반환
 
         if not self.mw.current_project_folder:
              QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
@@ -195,6 +193,7 @@ class MainController:
         # 파일 내용 읽기
         file_contents = []
         self.mw.selected_files_data = [] # UI 상태 업데이트
+        read_errors = []
         for fpath in checked_files:
             try:
                 # TODO: 파일 크기 제한, 인코딩 처리 강화
@@ -204,10 +203,16 @@ class MainController:
                 file_contents.append((fpath, content))
                 self.mw.selected_files_data.append((fpath, size))
             except Exception as e:
-                print(f"Error loading file {fpath}: {e}")
-                QMessageBox.warning(self.mw, "파일 로딩 오류", f"파일을 읽는 중 오류 발생:\n{fpath}\n{e}")
+                error_msg = f"파일 읽기 오류 ({os.path.basename(fpath)}): {e}"
+                print(error_msg)
+                read_errors.append(error_msg)
                 # 오류 발생 시 계속 진행할지 결정
                 continue
+
+        if read_errors:
+             QMessageBox.warning(self.mw, "파일 로딩 오류", "일부 파일을 읽는 중 오류 발생:\n" + "\n".join(read_errors))
+             # 오류 발생 시 프롬프트 생성을 중단할 수도 있음
+             # return False
 
         # UI에서 텍스트 가져오기
         system_text = self.mw.system_tab.toPlainText()
@@ -239,11 +244,12 @@ class MainController:
         from utils.helpers import calculate_char_count, calculate_token_count
 
         char_count = calculate_char_count(text)
-        token_count = 0
+        token_count = None # 초기화
         token_text = "토큰 계산: 비활성화"
 
         if self.mw.auto_token_calc_check.isChecked():
             # 백그라운드 스레드에서 계산 고려 (UI 블로킹 방지)
+            # TODO: 스레딩 구현 또는 비동기 처리
             token_count = calculate_token_count(text)
             if token_count is not None:
                  token_text = f"Calculated Total Token: {token_count:,}"
@@ -255,34 +261,58 @@ class MainController:
 
     def copy_to_clipboard(self):
         """Copies the last generated prompt to the clipboard."""
-        # TODO: 어떤 프롬프트를 복사할지 명확히 (Code Enhancer vs Meta)
-        prompt_to_copy = self.mw.last_generated_prompt # 임시 저장된 프롬프트 사용
+        # 현재 활성화된 탭의 내용을 복사하는 것이 더 직관적일 수 있음
+        current_widget = self.mw.build_tabs.currentWidget()
+        prompt_to_copy = ""
+        if current_widget == self.mw.prompt_output_tab:
+             prompt_to_copy = self.mw.prompt_output_tab.toPlainText()
+        elif hasattr(self.mw, 'final_prompt_tab') and current_widget == self.mw.final_prompt_tab:
+             prompt_to_copy = self.mw.final_prompt_tab.toPlainText()
+        elif hasattr(self.mw, 'dir_structure_tab') and current_widget == self.mw.dir_structure_tab:
+             prompt_to_copy = self.mw.dir_structure_tab.toPlainText()
+        else:
+             # 다른 탭이면 마지막 생성된 프롬프트(임시 저장된 것) 복사 시도
+             prompt_to_copy = self.mw.last_generated_prompt
 
         if prompt_to_copy:
             QApplication.clipboard().setText(prompt_to_copy)
             self.mw.status_bar.showMessage("Copied!")
             return True
         else:
-            self.mw.status_bar.showMessage("No prompt generated yet!")
+            self.mw.status_bar.showMessage("복사할 내용이 없습니다!")
             return False
 
     def on_mode_changed(self):
         """Handles UI updates when the application mode changes."""
-        # TODO: 모드 변경 시 UI 요소 업데이트 로직 (버튼 텍스트 등)
-        self.update_buttons_label() # 리소스 관리 버튼 레이블 업데이트 호출
+        # MainWindow의 _restart_with_mode가 호출되므로, 여기서는 특별한 작업 불필요
+        # self.update_buttons_label() # 리소스 관리 버튼 레이블 업데이트 호출 (MainWindow __init__에서 처리)
+        pass
 
-    def on_data_changed(self, topLeft, bottomRight, roles):
+    def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
-        # 체크 상태 변경 시 파일 내용 합산 및 카운트 업데이트 (현재는 사용 안 함, 필요시 복구)
+        # 체크 상태 변경 시 파일 내용 합산 및 카운트 업데이트 (선택적 기능)
         # if Qt.CheckStateRole in roles:
+        #     # 성능 고려: 모든 파일 다시 읽지 않고 변경된 부분만 반영?
+        #     # 또는 간단하게 전체 체크된 파일 다시 읽기
         #     checked_files = self.mw.checkable_proxy.get_checked_files()
-        #     # ... (파일 읽고 카운트 업데이트 로직) ...
+        #     combined_content = ""
+        #     self.mw.selected_files_data = []
+        #     for fpath in checked_files:
+        #         try:
+        #             size = os.path.getsize(fpath)
+        #             with open(fpath, 'r', encoding='utf-8', errors='ignore') as fp:
+        #                 content = fp.read()
+        #             self.mw.selected_files_data.append((fpath, size))
+        #             combined_content += content # 메모리 사용량 주의
+        #         except Exception as e:
+        #             print(f"Error reading file for count {fpath}: {e}")
+        #             pass
+        #     # 어떤 텍스트의 카운트를 업데이트할지 결정 필요 (예: 프롬프트 출력 탭?)
+        #     # self.update_counts_for_text(combined_content)
+        #     print(f"Data changed (check state?), {len(checked_files)} files checked.")
         pass # 현재는 특별한 동작 없음
 
-    def on_selection_changed(self, selected, deselected):
-        """Handles selection changes in the file tree view."""
-        # 파일/폴더 선택 시 자동 체크 로직 제거됨 (계획대로)
-        pass
+    # on_selection_changed는 MainWindow에서 처리 (클릭 시 토글)
 
     def generate_directory_tree_structure(self):
         """Generates the directory tree structure based on checked items."""
@@ -291,7 +321,7 @@ class MainController:
             return False
 
         if not self.mw.current_project_folder or not os.path.isdir(self.mw.current_project_folder):
-            QMessageBox.information(self.mw, "Info", "프로젝트 폴더를 먼저 선택해주세요.")
+            QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return False
 
         # 체크된 모든 경로 가져오기 (CheckableProxyModel 역할)
@@ -306,7 +336,11 @@ class MainController:
             return False
 
         # FilesystemService 사용하여 트리 생성
-        tree_string = self.fs_service.get_directory_tree(all_checked_paths, self.mw.current_project_folder)
+        try:
+            tree_string = self.fs_service.get_directory_tree(all_checked_paths, self.mw.current_project_folder)
+        except Exception as e:
+             QMessageBox.critical(self.mw, "오류", f"디렉토리 트리 생성 중 오류 발생: {e}")
+             return False
 
         # UI 업데이트
         if hasattr(self.mw, "dir_structure_tab"):
@@ -335,22 +369,30 @@ class MainController:
             QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return
 
+        # 사용자 확인 (중요!)
+        reply = QMessageBox.question(self.mw, "XML 변경 적용 확인",
+                                     f"XML 내용에 따라 프로젝트 파일을 변경합니다:\n{project_dir}\n\n계속하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.No:
+            self.mw.status_bar.showMessage("XML 파싱 취소됨.")
+            return
+
         # XmlService 사용하여 변경 적용
-        result = self.xml_service.apply_changes_from_xml(xml_str, project_dir)
+        try:
+            result = self.xml_service.apply_changes_from_xml(xml_str, project_dir)
+        except Exception as e:
+             QMessageBox.critical(self.mw, "XML 파싱 오류", f"XML 처리 중 예외 발생: {e}")
+             self.refresh_tree() # 오류 발생 시에도 트리 새로고침 시도
+             return
 
         # 결과 메시지 생성
         messages = []
-        if result["created"]:
-            messages.append("생성된 파일:\n" + "\n".join(result["created"]))
-        if result["updated"]:
-            messages.append("수정된 파일:\n" + "\n".join(result["updated"]))
-        if result["deleted"]:
-            messages.append("삭제된 파일:\n" + "\n".join(result["deleted"]))
-        if result["errors"]:
-            messages.append("오류:\n" + "\n".join(result["errors"]))
+        if result["created"]: messages.append("생성된 파일:\n" + "\n".join(result["created"]))
+        if result["updated"]: messages.append("수정된 파일:\n" + "\n".join(result["updated"]))
+        if result["deleted"]: messages.append("삭제된 파일:\n" + "\n".join(result["deleted"]))
+        if result["errors"]: messages.append("오류:\n" + "\n".join(result["errors"]))
 
-        if not messages:
-            messages.append("변경 사항 없음.")
+        if not messages: messages.append("변경 사항 없음.")
 
         final_message = "\n\n".join(messages)
 
@@ -372,15 +414,11 @@ class MainController:
 
         # 1. 트리 생성
         tree_success = self.generate_directory_tree_structure()
-        if not tree_success:
-            # 실패 메시지는 내부에서 처리됨
-            return
+        if not tree_success: return
 
         # 2. 프롬프트 생성
         prompt_success = self.generate_prompt()
-        if not prompt_success:
-            # 실패 메시지는 내부에서 처리됨
-            return
+        if not prompt_success: return
 
         # 3. 클립보드 복사
         copy_success = self.copy_to_clipboard()
@@ -389,17 +427,22 @@ class MainController:
 
     def toggle_file_check(self, file_path):
         """Toggles the check state of a file/folder in the tree view."""
-        if self.mw.mode == "Meta Prompt Builder":
-            return
-        # 이 로직은 CheckableProxyModel 또는 FileTreeController로 이동해야 함
-        if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            src_index = self.mw.dir_model.index(file_path)
-            if src_index.isValid():
-                proxy_index = self.mw.checkable_proxy.mapFromSource(src_index)
-                if proxy_index.isValid(): # 필터링되지 않은 경우에만 토글
-                    current_state = self.mw.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
-                    new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-                    self.mw.checkable_proxy.setData(proxy_index, new_state, Qt.CheckStateRole)
+        if self.mw.mode == "Meta Prompt Builder": return
+        # 이 로직은 MainWindow의 on_selection_changed_handler에서 처리되거나
+        # FileTreeController로 이동해야 함. Controller가 직접 ProxyModel을 조작하는 것은
+        # UI 상태와 로직 간의 결합도를 높일 수 있음.
+        # 여기서는 MainWindow의 핸들러를 통해 처리되도록 유지.
+        print(f"Toggle check requested for: {file_path} (handled by selection)")
+        # 필요한 경우 ProxyModel의 setData를 직접 호출할 수 있으나 권장하지 않음.
+        # if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
+        #     src_index = self.mw.dir_model.index(file_path)
+        #     if src_index.isValid():
+        #         proxy_index = self.mw.checkable_proxy.mapFromSource(src_index)
+        #         if proxy_index.isValid():
+        #             current_state = self.mw.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
+        #             new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+        #             self.mw.checkable_proxy.setData(proxy_index, new_state, Qt.CheckStateRole)
+
 
     # --- 파일 시스템 작업 (Rename, Delete) ---
     # TODO: 이 기능들은 FilesystemService 또는 별도 서비스로 분리 고려
@@ -412,11 +455,15 @@ class MainController:
 
         base_dir = os.path.dirname(file_path)
         old_name = os.path.basename(file_path)
-        new_name, ok = QInputDialog.getText(self.mw, "이름 변경", f"'{old_name}'의 새 이름을 입력하세요:")
+        new_name, ok = QInputDialog.getText(self.mw, "이름 변경", f"'{old_name}'의 새 이름을 입력하세요:", text=old_name)
 
         if ok and new_name and new_name.strip():
             new_name_stripped = new_name.strip()
             # TODO: 유효하지 않은 파일/폴더 이름 문자 검사 추가
+            if new_name_stripped == old_name:
+                 self.mw.status_bar.showMessage("이름이 변경되지 않았습니다.")
+                 return
+
             new_path = os.path.join(base_dir, new_name_stripped)
 
             if os.path.exists(new_path):
@@ -426,6 +473,11 @@ class MainController:
             try:
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
+                # 이름 변경 후 체크 상태 업데이트
+                if hasattr(self.mw, 'checkable_proxy'):
+                    if file_path in self.mw.checkable_proxy.checked_files_dict:
+                        is_checked = self.mw.checkable_proxy.checked_files_dict.pop(file_path)
+                        self.mw.checkable_proxy.checked_files_dict[new_path] = is_checked
                 self.refresh_tree() # 트리 새로고침
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"이름 변경 중 오류 발생: {str(e)}")
@@ -454,10 +506,12 @@ class MainController:
                 else:
                     os.remove(file_path) # 파일 삭제
                 self.mw.status_bar.showMessage(f"'{item_name}' 삭제 완료")
-                # 삭제 후 체크 상태 업데이트 필요 (CheckableProxyModel에서 관리)
+                # 삭제 후 체크 상태 업데이트
                 if hasattr(self.mw, 'checkable_proxy'):
                     if file_path in self.mw.checkable_proxy.checked_files_dict:
                         del self.mw.checkable_proxy.checked_files_dict[file_path]
+                        # 하위 항목 체크 상태도 제거해야 할 수 있음 (폴더 삭제 시)
+                        # TODO: 폴더 삭제 시 하위 체크 상태 제거 로직 추가
                 self.refresh_tree() # 트리 새로고침
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"삭제 중 오류 발생: {str(e)}")
@@ -466,13 +520,20 @@ class MainController:
         """Refreshes the file explorer tree view."""
         # 이 로직은 MainWindow 또는 FileTreeController 역할
         if self.mw.current_project_folder and hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
+            # 현재 확장된 노드 저장 (선택적)
+            # expanded_indexes = self._get_expanded_indexes()
+
             # 모델 루트 경로 재설정 (내부적으로 fetch 실행됨)
             idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
-            # 필터 갱신 (필수)
-            self.mw.checkable_proxy.invalidateFilter()
+            # 필터 갱신 (필수) - setRootPathFiltered 이후 또는 set_ignore_patterns 호출 시 자동 수행되도록
+            # self.mw.checkable_proxy.invalidateFilter()
             # 뷰 루트 인덱스 설정
             self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
-            # TODO: 필요하다면 트리 확장 상태 복원 로직 추가
+
+            # 확장 상태 복원 (선택적)
+            # self._restore_expanded_indexes(expanded_indexes)
+
+            self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
 
 
     # --- 리소스 관리 (템플릿/상태) ---
@@ -491,8 +552,8 @@ class MainController:
             # UI 업데이트 (MainWindow 역할)
             system_item = self.mw.create_tree_item("System")
             user_item = self.mw.create_tree_item("User")
-            for st in system_templates: self.mw.create_tree_item(st, system_item)
-            for ut in user_templates: self.mw.create_tree_item(ut, user_item)
+            for st in sorted(system_templates): self.mw.create_tree_item(st, system_item)
+            for ut in sorted(user_templates): self.mw.create_tree_item(ut, user_item)
             system_item.setExpanded(True)
             user_item.setExpanded(True)
 
@@ -502,7 +563,7 @@ class MainController:
 
             # UI 업데이트 (MainWindow 역할)
             states_item = self.mw.create_tree_item("States")
-            for st_file in states_list: self.mw.create_tree_item(st_file, states_item) # 확장자 포함 표시
+            for st_file in sorted(states_list): self.mw.create_tree_item(st_file, states_item) # 확장자 포함 표시
             states_item.setExpanded(True)
 
         self.update_buttons_label() # 버튼 레이블 업데이트
@@ -520,19 +581,19 @@ class MainController:
         if current_mode == "프롬프트":
             parent_text = item.parent().text(0)
             relative_path = ""
+            target_tab = None
             if parent_text == "System":
                 relative_path = os.path.join("prompts", "system", filename)
+                target_tab = self.mw.system_tab
             elif parent_text == "User":
                 relative_path = os.path.join("prompts", "user", filename)
+                target_tab = self.mw.user_tab
 
-            if relative_path:
+            if relative_path and target_tab:
                 # TemplateService 사용
                 content = self.template_service.load_template(relative_path)
                 # UI 업데이트
-                if parent_text == "System":
-                    self.mw.system_tab.setText(content)
-                else: # User
-                    self.mw.user_tab.setText(content)
+                target_tab.setText(content)
                 self.mw.status_bar.showMessage(f"Loaded {parent_text.lower()} template: {filename}")
 
         elif current_mode == "상태":
@@ -543,7 +604,7 @@ class MainController:
             if loaded_state:
                 # MainWindow의 상태 설정 메서드 호출
                 self.mw.set_current_state(loaded_state) # Pydantic 모델 전달
-                self.mw.status_bar.showMessage(f"Loaded state: {filename}")
+                # set_current_state 내부에서 status_bar 메시지 업데이트됨
             else:
                 QMessageBox.warning(self.mw, "오류", "상태 파일을 불러오는 데 실패했습니다.")
 
@@ -556,12 +617,18 @@ class MainController:
             template_type = self.mw.template_type_combo.currentText() # UI 요소 접근
             content = ""
             target_dir_relative = ""
+            source_tab = None
             if template_type == "시스템":
-                content = self.mw.system_tab.toPlainText() # UI 요소 접근
+                source_tab = self.mw.system_tab
                 target_dir_relative = os.path.join("prompts", "system")
             else: # 사용자
-                content = self.mw.user_tab.toPlainText() # UI 요소 접근
+                source_tab = self.mw.user_tab
                 target_dir_relative = os.path.join("prompts", "user")
+
+            content = source_tab.toPlainText()
+            if not content.strip():
+                 QMessageBox.warning(self.mw, "경고", "저장할 내용이 없습니다.")
+                 return
 
             fname, ok = QInputDialog.getText(self.mw, "템플릿 저장", "템플릿 파일 이름(확장자 제외)을 입력하세요:")
             if not ok or not fname or not fname.strip():
@@ -648,18 +715,25 @@ class MainController:
         filename = item.text(0) # 확장자 포함
         parent_text = item.parent().text(0)
 
+        reply = QMessageBox.question(self.mw, "업데이트 확인", f"'{filename}'의 내용을 현재 편집 중인 내용으로 덮어쓰시겠습니까?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+        if reply != QMessageBox.Yes:
+            return
+
         updated = False
         if current_mode == "프롬프트":
             content = ""
             relative_path = ""
+            source_tab = None
             if parent_text == "System":
-                content = self.mw.system_tab.toPlainText()
+                source_tab = self.mw.system_tab
                 relative_path = os.path.join("prompts", "system", filename)
             elif parent_text == "User":
-                content = self.mw.user_tab.toPlainText()
+                source_tab = self.mw.user_tab
                 relative_path = os.path.join("prompts", "user", filename)
 
-            if relative_path:
+            if relative_path and source_tab:
+                content = source_tab.toPlainText()
                 # TemplateService 사용
                 updated = self.template_service.save_template(relative_path, content) # save가 update 역할
 
@@ -705,8 +779,12 @@ class MainController:
     def generate_final_meta_prompt(self):
         """Generates the final prompt by replacing variables in the meta prompt."""
         # UI에서 텍스트 가져오기
-        meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
-        user_prompt_content = self.mw.user_prompt_tab.toPlainText()
+        meta_prompt_content = ""
+        user_prompt_content = ""
+        if hasattr(self.mw, 'meta_prompt_tab'):
+             meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
+        if hasattr(self.mw, 'user_prompt_tab'):
+             user_prompt_content = self.mw.user_prompt_tab.toPlainText()
 
         # 동적 탭에서 변수 값 가져오기 (MainWindow 역할)
         variables = {}
@@ -728,11 +806,14 @@ class MainController:
         )
 
         # UI 업데이트
-        self.mw.final_prompt_tab.setText(final_prompt) # 최종 프롬프트 탭
-        self.mw.last_generated_prompt = final_prompt # 임시 저장
-        self.update_counts_for_text(final_prompt)
-        self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
-        self.mw.status_bar.showMessage("Final Prompt generated!")
+        if hasattr(self.mw, 'final_prompt_tab'):
+            self.mw.final_prompt_tab.setText(final_prompt) # 최종 프롬프트 탭
+            self.mw.last_generated_prompt = final_prompt # 임시 저장
+            self.update_counts_for_text(final_prompt)
+            self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
+            self.mw.status_bar.showMessage("Final Prompt generated!")
+        else:
+             QMessageBox.warning(self.mw, "오류", "최종 프롬프트 탭을 찾을 수 없습니다.")
 
 
     # --- 상태 관리 액션 ---
@@ -751,7 +832,7 @@ class MainController:
         state = self.state_service.load_state("default")
         if state:
             self.mw.set_current_state(state) # Pydantic 모델 전달
-            self.mw.status_bar.showMessage("기본 상태 불러오기 완료!")
+            # set_current_state 내부에서 status_bar 메시지 업데이트됨
         else:
             # load_state 내부에서 이미 로그 출력 또는 기본값 반환 처리됨
              QMessageBox.warning(self.mw, "오류", "기본 상태 파일을 불러오는 데 실패했습니다.")
@@ -774,7 +855,7 @@ class MainController:
             state = self.state_service.import_state_from_file(path)
             if state:
                 self.mw.set_current_state(state) # Pydantic 모델 전달
-                self.mw.status_bar.showMessage("상태 가져오기 완료!")
+                # set_current_state 내부에서 status_bar 메시지 업데이트됨
             else:
                  QMessageBox.warning(self.mw, "오류", "상태 가져오기 중 오류가 발생했거나 파일 내용이 유효하지 않습니다.")
 

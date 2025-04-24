@@ -46,6 +46,11 @@ class CustomTabBar(QTabBar):
                 tab_text = self.tabText(index)
                 # 보호된 탭 또는 "+" 탭은 닫지 않음
                 if tab_text != "+" and is_tab_deletable(tab_text):
+                    # 닫기 전 확인 (선택적)
+                    # reply = QMessageBox.question(self.parentWidget(), "탭 닫기 확인",
+                    #                              f"'{tab_text}' 탭을 닫으시겠습니까?",
+                    #                              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+                    # if reply == QMessageBox.Yes:
                     self.parentWidget().removeTab(index) # QTabWidget에서 탭 제거
                 elif tab_text != "+": # 보호된 탭 클릭 시 경고
                     QMessageBox.warning(self.parentWidget(), "경고", f"'{tab_text}' 탭은 제거할 수 없습니다.")
@@ -65,7 +70,12 @@ class CustomTabBar(QTabBar):
                                                         "새 탭 이름을 입력하세요:", text=tab_text)
                     if ok and new_name and new_name.strip():
                         # TODO: 중복 탭 이름 검사 추가
-                        self.setTabText(index, new_name.strip())
+                        # TODO: 보호된 이름으로 변경 불가 처리
+                        new_name_stripped = new_name.strip()
+                        if not is_tab_deletable(new_name_stripped):
+                             QMessageBox.warning(self.parentWidget(), "경고", f"'{new_name_stripped}'(으)로는 변경할 수 없습니다.")
+                             return
+                        self.setTabText(index, new_name_stripped)
                     elif ok:
                          QMessageBox.warning(self.parentWidget(), "경고", "탭 이름은 비워둘 수 없습니다.")
                 # "+" 탭 또는 보호된 탭은 아무 동작 안 함

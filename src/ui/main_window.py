@@ -361,7 +361,7 @@ class MainWindow(QMainWindow):
         self.select_default_prompt_btn.clicked.connect(lambda: select_default_system_prompt(self)) # 컨트롤러 함수 직접 연결
 
         # 파일 트리
-        # self.tree_view.customContextMenuRequested.connect(self.on_tree_view_context_menu) # TODO: 컨텍스트 메뉴 구현
+        self.tree_view.customContextMenuRequested.connect(self.on_tree_view_context_menu) # 컨텍스트 메뉴 연결
         # selectionChanged 시그널 연결 (파일/폴더 클릭 시 체크 토글)
         self.tree_view.selectionModel().selectionChanged.connect(self.on_selection_changed_handler)
         # checkable_proxy의 dataChanged 시그널 연결 (체크 상태 변경 시 카운트 업데이트 등)
@@ -396,12 +396,20 @@ class MainWindow(QMainWindow):
 
         # 상태바
         self.auto_token_calc_check.stateChanged.connect(
-            lambda: self.controller.update_counts_for_text(self.prompt_output_tab.toPlainText()) # 현재 텍스트로 카운트 업데이트
+            # 현재 활성화된 탭의 텍스트로 카운트 업데이트 (prompt_output 또는 final_prompt)
+            lambda: self.controller.update_counts_for_text(
+                self.final_prompt_tab.toPlainText() if self.mode == "Meta Prompt Builder" and hasattr(self, 'final_prompt_tab')
+                else self.prompt_output_tab.toPlainText()
+            )
         )
-        # 텍스트 변경 시 카운트 업데이트 (prompt_output_tab만)
+        # 텍스트 변경 시 카운트 업데이트 (prompt_output_tab 또는 final_prompt_tab)
         self.prompt_output_tab.textChanged.connect(
              lambda: self.controller.update_counts_for_text(self.prompt_output_tab.toPlainText())
         )
+        if hasattr(self, 'final_prompt_tab'):
+            self.final_prompt_tab.textChanged.connect(
+                 lambda: self.controller.update_counts_for_text(self.final_prompt_tab.toPlainText())
+            )
         # TODO: 다른 탭 (system, user 등) 변경 시에도 카운트 업데이트 필요시 연결
 
         # 메뉴 액션
@@ -533,6 +541,11 @@ class MainWindow(QMainWindow):
         else:
              self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
              # 파일 트리 홈으로 리셋?
+             home_path = os.path.expanduser("~")
+             if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
+                 idx = self.dir_model.setRootPathFiltered(home_path)
+                 self.tree_view.setRootIndex(self.checkable_proxy.mapFromSource(idx))
+
 
         # 텍스트 탭 설정
         self.system_tab.setText(state.system_prompt)
@@ -566,7 +579,7 @@ class MainWindow(QMainWindow):
 
         # ProxyModel의 내부 상태(checked_files_dict)를 직접 수정하고
         # 전체 뷰 갱신을 유도하는 것이 더 효율적일 수 있음
-        checked_paths_to_uncheck = list(self.checkable_proxy.checked_files_dict.keys())
+        # checked_paths_to_uncheck = list(self.checkable_proxy.checked_files_dict.keys())
         self.checkable_proxy.checked_files_dict.clear()
 
         # 뷰 갱신 (전체 모델 리셋 또는 dataChanged 시그널 발생)
@@ -593,7 +606,15 @@ class MainWindow(QMainWindow):
         # 현재 항목 체크 해제 (setData 호출 -> 시그널 발생)
         current_state = self.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
         if current_state == Qt.Checked:
-            self.checkable_proxy.setData(proxy_index, Qt.Unchecked, Qt.CheckStateRole)
+            # setData 호출 시 check_all_children이 재귀적으로 호출되므로,
+            # 여기서 직접 setData를 호출하면 중복 및 비효율 발생 가능.
+            # 대신 내부 상태만 변경하고 dataChanged 시그널만 발생시키는 것이 나을 수 있음.
+            # self.checkable_proxy.setData(proxy_index, Qt.Unchecked, Qt.CheckStateRole)
+            file_path = self.checkable_proxy.get_file_path_from_index(proxy_index)
+            if file_path in self.checkable_proxy.checked_files_dict:
+                del self.checkable_proxy.checked_files_dict[file_path]
+            self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
+
 
         # 자식 항목 재귀 호출
         child_count = self.checkable_proxy.rowCount(proxy_index)
@@ -619,10 +640,10 @@ class MainWindow(QMainWindow):
             new_name = new_tab_name.strip()
             # TODO: 중복 이름 확인
             # TODO: 보호된 이름 사용 불가 처리
-            # from ui.widgets.tab_manager import is_tab_deletable
-            # if not is_tab_deletable(new_name):
-            #     QMessageBox.warning(self, "경고", f"'{new_name}'은(는) 사용할 수 없는 탭 이름입니다.")
-            #     return
+            from ui.widgets.tab_manager import is_tab_deletable
+            if not is_tab_deletable(new_name):
+                 QMessageBox.warning(self, "경고", f"'{new_name}'은(는) 사용할 수 없는 탭 이름입니다.")
+                 return
 
             new_tab = CustomTextEdit()
             new_tab.setPlaceholderText(f"{new_name} 내용 입력...")
@@ -661,11 +682,11 @@ class MainWindow(QMainWindow):
 
     def on_tree_view_context_menu(self, position):
         """Handles context menu requests on the file tree view."""
-        # TODO: 파일/폴더 우클릭 메뉴 구현 (이름 변경, 삭제 등)
         index = self.tree_view.indexAt(position)
         if not index.isValid():
             return
 
+        # 프록시 인덱스에서 파일 경로 가져오기
         file_path = self.checkable_proxy.get_file_path_from_index(index)
         if not file_path:
             return
@@ -679,39 +700,38 @@ class MainWindow(QMainWindow):
 
         action = menu.exec_(self.tree_view.viewport().mapToGlobal(position))
 
-        # 액션 처리
+        # 액션 처리 (컨트롤러 메서드 호출)
         if action == rename_action:
             self.controller.rename_item(file_path)
         elif action == delete_action:
             self.controller.delete_item(file_path)
 
 
-    def on_selection_changed_handler(self, selected: QModelIndex, deselected: QModelIndex):
+    def on_selection_changed_handler(self, selected: QItemSelection, deselected: QItemSelection):
         """Handles selection changes in the file tree view to toggle check state."""
         # QItemSelectionModel::selectionChanged 시그널은 QItemSelection을 인자로 받음
-        # 인자 타입을 맞추거나, 이전 방식(selectedIndexes 사용) 유지 필요
-        # 여기서는 이전 방식 유지 (클릭 시 토글)
+        # selected.indexes()를 사용하여 선택된 인덱스 목록 가져오기
 
-        # 클릭된 인덱스 가져오기 (마우스 클릭 위치 기준 - 더 정확할 수 있음)
-        # clicked_index = self.tree_view.indexAt(self.tree_view.viewport().mapFromGlobal(QCursor.pos()))
-        # if not clicked_index.isValid(): return
+        # 클릭/드래그 시 여러 항목이 선택될 수 있으므로, 모든 선택된 인덱스 처리
+        # 하지만 일반적인 클릭 동작은 하나의 항목만 선택/해제하므로 첫 번째 인덱스만 처리해도 무방할 수 있음
+        # 여기서는 첫 번째 인덱스만 처리하여 클릭 시 토글 동작 구현
+        indexes = selected.indexes()
+        if not indexes:
+            return
 
-        # 또는 selectionModel().selectedIndexes() 사용
-        selected_indexes = self.tree_view.selectionModel().selectedIndexes()
-        if not selected_indexes: return
+        proxy_index = indexes[0] # 첫 번째 선택된 인덱스
+        if proxy_index.column() != 0: return # 첫 번째 컬럼(이름/체크박스)만 처리
 
-        # 첫 번째 선택된 인덱스만 처리 (일반적인 클릭 동작)
-        proxy_index = selected_indexes[0]
-        if proxy_index.column() != 0: return # 첫 번째 컬럼만
+        # 체크 상태 토글 (Controller에게 위임하거나 ProxyModel 직접 조작)
+        # Controller에게 위임하는 방식:
+        # file_path = self.checkable_proxy.get_file_path_from_index(proxy_index)
+        # if file_path:
+        #     self.controller.toggle_file_check(file_path) # Controller의 토글 메서드 호출
 
-        # 체크 상태 토글
+        # ProxyModel 직접 조작 방식 (기존 유지):
         current_state = self.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
         new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+        # setData 호출 시 내부적으로 ensure_loaded, check_all_children, expand_index_recursively 등이 호출됨
         self.checkable_proxy.setData(proxy_index, new_state, Qt.CheckStateRole)
 
-        # 폴더 로딩 보장 (setData 내부에서 처리됨)
-        # src_index = self.checkable_proxy.mapToSource(proxy_index)
-        # if src_index.isValid() and self.dir_model.isDir(src_index):
-        #     self.checkable_proxy.ensure_loaded(src_index)
-
-        # deselected 처리는 제거 (클릭 시 선택된 항목만 토글)
+        # deselected 처리는 복잡성을 증가시키므로 여기서는 생략
