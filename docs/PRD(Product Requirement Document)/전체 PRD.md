@@ -1,15 +1,18 @@
-
 # 0. 0. 전체 PRD
 
 ## 프로젝트명
+
 DuckPrompt (덕 프롬프트)
 
 ## 개요
+
 DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 있는 프롬프트를 생성하는 **GUI 도구**입니다.
+
 - **코드 강화 빌더 모드**: 특정 디렉토리(또는 파일)를 선택하여, 시스템 프롬프트 + 사용자 프롬프트 + 선택한 파일의 내용을 하나로 합칩니다.
 - **메타 프롬프트 빌더 모드**: 기존 프롬프트를 상위 템플릿(메타 프롬프트)으로 감싸, 새로운 맥락의 프롬프트를 생성합니다.
 
 ## 주요 목표
+
 1. **파일 선택 및 통합**: 다수의 파일을 선택 후 자동으로 내용을 합쳐 제공.
 2. **시스템 / 사용자 프롬프트 분리**: 시스템 / 사용자 프롬프트를 탭으로 구분하여 편집 용이성 확보.
 3. **디렉토리 구조 시각화**: 선택된 파일과 폴더 구조를 한눈에 확인.
@@ -17,33 +20,46 @@ DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 �
 5. **템플릿/상태 관리**: 템플릿(프롬프트) 및 현재 상태를 불러오기/저장/백업/복원.
 
 ## 세부 요구사항
+
 - **GUI**: PyQt5 기반으로 마우스 클릭만으로 직관적 조작.
+- **설정 관리**: `config.yml` 파일을 통해 확장자, 제외 목록 등 설정 관리.
+- **상태 관리**: Pydantic 모델(`AppState`)을 사용하여 애플리케이션 상태 관리 및 JSON 파일로 저장/로드.
 - **.env** 파일 연동: `DEFAULT_SYSTEM_PROMPT` 등 기본 설정을 로드.
 - **토큰 계산 기능**: `tiktoken` 라이브러리를 사용한 토큰 수 추정 (옵션).
-- **상태 저장**: 현재 체크된 파일, 입력된 프롬프트 등을 파일(`*.json`)로 저장/불러오기.
 - **배포**: PyInstaller를 통해 Windows 환경에서 단일 실행 파일 형태로 배포 가능.
+- **서비스 지향 아키텍처**: 핵심 로직을 서비스 계층으로 분리하여 재사용성 및 테스트 용이성 확보.
 
 ## 프로젝트 아키텍처 (간단 요약)
-- **app.py**: 메인 진입점(QApplication 초기화)
-- **main_window.py**: PyQt5 UI(메인 윈도우) 구성
-- **main_controller.py**: UI 이벤트 및 로직 제어
-- **file_explorer.py**, **custom_text_edit.py**: GUI 요소 확장
-- **prompt_manager.py**, **parse_xml_string.py**: LLM 프롬프트 생성 / XML 파싱 로직
-- **state_manager.py**: 상태 저장, 불러오기, 백업/복원 기능
-- **config.py**: 기본 설정(Config 클래스)
-- **system_prompt_controller.py**: 기본 시스템 프롬프트(.env 연동) 로직
-- **template_manager.py**: 템플릿 파일(프롬프트) 저장/삭제/불러오기
-- **utils.py**: 기타 유틸, 토큰 계산 등
+
+- **`main.py`**: 최상위 진입점, `sys.path` 설정 및 `src/app.py` 호출.
+- **`src/app.py`**: QApplication 초기화, 환경 설정 로드, `MainWindow` 생성 및 실행.
+- **`src/config.yml`**: 애플리케이션 설정 파일 (YAML 형식).
+- **`src/core/`**: 핵심 비즈니스 로직 및 데이터 모델.
+  - **`pydantic_models/`**: Pydantic 모델 정의 (`AppState`, `ConfigSettings`).
+  - **`services/`**: 핵심 기능 서비스 구현 (`ConfigService`, `FilesystemService`, `PromptService`, `StateService`, `TemplateService`, `XmlService`).
+- **`src/ui/`**: 사용자 인터페이스 관련 코드.
+  - **`controllers/`**: UI 이벤트 처리 및 서비스 계층 호출 (`FileTreeController`, `MainController`, `PromptController`, `ResourceController`, `XmlController`, `system_prompt_controller` 함수).
+  - **`models/`**: UI 관련 모델 (`FilteredFileSystemModel`, `CheckableProxyModel`).
+  - **`widgets/`**: 커스텀 UI 위젯 (`CustomTabBar`, `CustomTextEdit`, `tab_manager`).
+  - **`main_window.py`**: 메인 UI 창 정의 및 위젯 배치, 컨트롤러/서비스 초기화 및 연결.
+- **`src/utils/`**: 보조 유틸리티 함수.
+  - **`helpers.py`**: 경로 관리, 텍스트 계산, tiktoken 초기화 등.
+- **`resources/`**: 아이콘, 프롬프트 템플릿, 상태 파일 등 리소스 저장.
+- **`docs/`**: 문서 (PRD 등).
+- **Build/Dependency Files**: `app_*.spec`, `build.bat`, `pyproject.toml`, `requirements*.txt`, `uv.lock`.
 
 ## 비기능적 요구사항
-- **코드 가독성 및 유지보수성**: 함수형 프로그래밍과 모듈화 지향.
-- **로그**: `termcolor`와 `logging`을 활용해 에러 메시지 등을 사용자에게 안내.
-- **성능**: 중복 파일 포함 지양, 불필요한 파일 로딩 최소화.
+
+- **코드 가독성 및 유지보수성**: 서비스 계층 분리, Pydantic 모델 사용, 타입 힌트 적용.
+- **로그**: 표준 출력 및 상태 표시줄을 통해 사용자에게 정보/오류 안내.
+- **성능**: 파일 시스템 모델 최적화, tiktoken 비동기 로딩.
 
 ## 테스트 및 검증
-- 주기적으로 상태를 저장하며 기능 테스트.
+
+- (향후 추가 예정) 단위 테스트 및 통합 테스트.
 - XML 파서 동작 시, 임시 폴더에서 테스트 진행.
 - 폴더 구조가 큰 경우도 안정적으로 동작하는지 확인.
 
 ## 기타
-- 자세한 파일별 설명은 [2. 1. 파일별 기능 상세](2. 1. 파일별 기능 상세.md) 문서를 참고하세요.
+
+- 자세한 파일별 설명은 [파일별 기능 상세](파일별 기능 상세.md) 문서를 참고하세요.
