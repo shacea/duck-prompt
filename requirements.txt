@@ -2,5 +2,7 @@ PyQt5
 PyYAML
 termcolor
 tiktoken
-# python-dotenv # 제거됨
-pydantic>=2.0
+pydantic
+# google-cloud-aiplatform # Removed
+google-generativeai # Added
+anthropic

@@ -19,7 +19,8 @@ def connect_signals(mw: 'MainWindow'):
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
-    mw.tree_view.selectionModel().selectionChanged.connect(mw.on_selection_changed_handler) # MainWindow (컨트롤러 호출)
+    # Click event is now handled by the view/model interaction for checking (setData)
+    # mw.tree_view.selectionModel().selectionChanged.connect(mw.on_selection_changed_handler) # Removed
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
 
     # 실행 버튼
@@ -48,19 +49,29 @@ def connect_signals(mw: 'MainWindow'):
     # .gitignore
     mw.save_gitignore_btn.clicked.connect(mw.file_tree_controller.save_gitignore_settings) # FileTreeController
 
-    # 상태바
-    mw.auto_token_calc_check.stateChanged.connect(mw.main_controller.update_active_tab_counts) # MainController
-    # 텍스트 변경 시 카운트 업데이트
-    mw.prompt_output_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
-    if hasattr(mw, 'final_prompt_tab'):
-        mw.final_prompt_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
-    # 다른 탭들도 필요시 연결
-    mw.system_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
-    mw.user_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
+    # 상태바 & 모델 선택
+    # mw.auto_token_calc_check.stateChanged.connect(mw.main_controller.update_active_tab_counts) # Removed
+    mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController
+    # mw.model_name_input.textChanged.connect(mw.main_controller.update_active_tab_counts) # Removed - No auto update
+    mw.save_model_config_btn.clicked.connect(mw.main_controller.save_model_config) # MainController
+
+    # 텍스트 변경 시 문자 수만 업데이트 (현재 활성 탭 기준)
+    mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts when tab changes
+    # Connect textChanged for all relevant text edit widgets to update char count
+    mw.system_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    mw.user_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    mw.prompt_output_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    if hasattr(mw, 'dir_structure_tab'):
+        mw.dir_structure_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab) # ReadOnly, but maybe useful
+    if hasattr(mw, 'xml_input_tab'):
+        mw.xml_input_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     if hasattr(mw, 'meta_prompt_tab'):
-        mw.meta_prompt_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
+        mw.meta_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     if hasattr(mw, 'user_prompt_tab'):
-        mw.user_prompt_tab.textChanged.connect(mw.main_controller.update_active_tab_counts)
+        mw.user_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    if hasattr(mw, 'final_prompt_tab'):
+        mw.final_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    # Custom tabs added later will have their signals connected in add_new_custom_tab
 
 
     # 메뉴 액션
@@ -75,7 +86,8 @@ def connect_signals(mw: 'MainWindow'):
     if mw.mode == "Meta Prompt Builder":
          shortcut_generate.triggered.connect(mw.prompt_controller.generate_meta_prompt) # PromptController
     else:
-         shortcut_generate.triggered.connect(mw.prompt_controller.generate_prompt) # PromptController
+         # Connect to generate_all_and_copy for Ctrl+Return in Code Enhancer mode
+         shortcut_generate.triggered.connect(mw.prompt_controller.generate_all_and_copy) # PromptController
     mw.addAction(shortcut_generate)
 
     shortcut_copy = QAction(mw)

@@ -15,6 +15,15 @@ class ConfigSettings(BaseModel):
         ".windsurfrules",
         ".cursorrules"
     ])
+    gemini_default_model: str = "gemini-1.5-pro-latest" # Gemini 기본 모델명
+    claude_default_model: str = "claude-3-sonnet-20240229" # Claude 기본 모델명
+
+    # API Keys (Optional, read from config.yml)
+    # google_cloud_project: Optional[str] = None # Removed
+    # google_cloud_location: Optional[str] = None # Removed
+    anthropic_api_key: Optional[str] = None
+    gemini_api_key: Optional[str] = None # Added for google-generativeai SDK
+    # use_vertexai_for_gemini: bool = True # Removed
 
     @field_validator('allowed_extensions', 'excluded_dirs', mode='before')
     @classmethod

@@ -67,7 +67,8 @@ class PromptController:
 
         self.mw.last_generated_prompt = final_prompt
         self.mw.prompt_output_tab.setText(final_prompt)
-        self.mw.main_controller.update_counts_for_text(final_prompt) # MainController 통해 업데이트
+        # Calculate tokens for the generated prompt
+        self.mw.main_controller.calculate_and_display_tokens(final_prompt)
         self.mw.status_bar.showMessage(f"Prompt generated! Length: {len(final_prompt):,} chars")
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         return True
@@ -84,7 +85,8 @@ class PromptController:
 
         self.mw.prompt_output_tab.setText(final_output) # 메타 프롬프트 출력 탭
         self.mw.last_generated_prompt = final_output
-        self.mw.main_controller.update_counts_for_text(final_output) # MainController 통해 업데이트
+        # Calculate tokens for the generated meta prompt
+        self.mw.main_controller.calculate_and_display_tokens(final_output)
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         self.mw.status_bar.showMessage("META Prompt generated!")
         return True
@@ -117,7 +119,8 @@ class PromptController:
         if hasattr(self.mw, 'final_prompt_tab'):
             self.mw.final_prompt_tab.setText(final_prompt)
             self.mw.last_generated_prompt = final_prompt
-            self.mw.main_controller.update_counts_for_text(final_prompt) # MainController 통해 업데이트
+            # Calculate tokens for the generated final prompt
+            self.mw.main_controller.calculate_and_display_tokens(final_prompt)
             self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
             self.mw.status_bar.showMessage("Final Prompt generated!")
         else:
@@ -154,7 +157,7 @@ class PromptController:
             return False
 
     def generate_all_and_copy(self):
-        """Generates directory tree, prompt, and copies to clipboard (Code Enhancer mode only)."""
+        """Generates directory tree, prompt, calculates tokens, and copies to clipboard (Code Enhancer mode only)."""
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 이 기능을 사용할 수 없습니다.")
             return
@@ -163,11 +166,11 @@ class PromptController:
         tree_success = self.mw.file_tree_controller.generate_directory_tree_structure()
         if not tree_success: return
 
-        # 자신의 프롬프트 생성 메서드 호출
+        # 자신의 프롬프트 생성 메서드 호출 (내부에서 토큰 계산 포함)
         prompt_success = self.generate_prompt()
         if not prompt_success: return
 
         # 자신의 클립보드 복사 메서드 호출
         copy_success = self.copy_to_clipboard()
         if copy_success:
-            self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성 및 복사 완료!")
+            self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성, 토큰 계산 및 복사 완료!")

@@ -22,6 +22,7 @@ class ConfigService:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     config_data = yaml.safe_load(f) or {}
                 # Pydantic 모델로 유효성 검사 및 변환
+                # 누락된 필드는 Pydantic 모델의 기본값으로 채워짐
                 settings = ConfigSettings(**config_data)
                 print(f"Configuration loaded from {self.config_path}")
             else:
@@ -73,3 +74,29 @@ class ConfigService:
             print(f"Configuration update validation error: {e}")
         except Exception as e:
             print(f"Error updating configuration: {e}")
+
+    def get_default_model_name(self, llm_type: str) -> str:
+        """Gets the default model name for a given LLM type from settings."""
+        settings = self.get_settings()
+        if llm_type == "Gemini":
+            return settings.gemini_default_model
+        elif llm_type == "Claude":
+            return settings.claude_default_model
+        elif llm_type == "GPT":
+            return "gpt-4o" # GPT는 tiktoken 사용하므로 특정 모델명 필요 없을 수 있음
+        else:
+            return ""
+
+    def save_default_model_name(self, llm_type: str, model_name: str):
+        """Saves the default model name for a given LLM type to settings."""
+        update_dict = {}
+        if llm_type == "Gemini":
+            update_dict["gemini_default_model"] = model_name
+        elif llm_type == "Claude":
+            update_dict["claude_default_model"] = model_name
+        # GPT는 현재 저장 안 함
+
+        if update_dict:
+            self.update_settings(**update_dict)
+        else:
+            print(f"Warning: Cannot save default model for unknown LLM type: {llm_type}")

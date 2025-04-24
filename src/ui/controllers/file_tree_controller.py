@@ -51,6 +51,7 @@ class FileTreeController:
 
                 # 루트 폴더 자동 체크 (선택적)
                 if root_proxy_index.isValid():
+                    # Check the root folder by default
                     self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
 
             self.mw.update_window_title(folder_name)
@@ -244,22 +245,20 @@ class FileTreeController:
             self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
             # 루트 폴더 자동 체크 (선택적)
             if root_proxy_index.isValid():
-                self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
+                # Re-apply check state based on dict after refresh
+                root_path = self.mw.checkable_proxy.get_file_path_from_index(root_proxy_index)
+                if root_path and self.mw.checkable_proxy.checked_files_dict.get(root_path, False):
+                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
+                else:
+                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Unchecked, Qt.CheckStateRole)
 
 
-    def handle_selection_change(self, selected: QItemSelection, deselected: QItemSelection):
-        """Handles selection changes in the file tree view to toggle check state."""
-        indexes = selected.indexes()
-        if not indexes: return
-
-        proxy_index = indexes[0]
-        if proxy_index.column() != 0: return
-
-        # ProxyModel의 setData 호출하여 체크 상태 토글
-        if hasattr(self.mw, 'checkable_proxy'):
-            current_state = self.mw.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
-            new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-            self.mw.checkable_proxy.setData(proxy_index, new_state, Qt.CheckStateRole)
+    # def handle_selection_change(self, selected: QItemSelection, deselected: QItemSelection):
+    #     """Handles selection changes in the file tree view. (No longer toggles check state)"""
+    #     # Selection change doesn't toggle check state anymore, click does.
+    #     # This handler might be used for other purposes if needed, like updating
+    #     # a preview pane based on selection.
+    #     pass
 
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes."""
@@ -278,4 +277,3 @@ class FileTreeController:
                     pass # 오류 무시
             # 상태바 등에 정보 표시 (선택적)
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
-            

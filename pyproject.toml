@@ -1,6 +1,6 @@
 [project]
 name = "duckprompt"
-version = "1.1.0" # Version after Refactoring Phase 1
+version = "1.2.1" # Version after Gemini SDK change
 description = "GUI tool to build prompts for LLMs by integrating file contents."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,7 +8,7 @@ license = { text = "MIT" } # Specify your license
 authors = [
   { name = "Your Name", email = "your.email@example.com" }, # Update with actual author info
 ]
-keywords = ["prompt", "llm", "gui", "pyqt5", "developer-tools"]
+keywords = ["prompt", "llm", "gui", "pyqt5", "developer-tools", "token", "gemini", "claude"]
 classifiers = [
     "Development Status :: 4 - Beta", # Or appropriate status
     "Intended Audience :: Developers",
@@ -22,27 +22,15 @@ classifiers = [
 dependencies = [
     "pyqt5-qt5==5.15.2", # 특정 Qt 버전 고정 (선택적)
     "PyQt5",
-    "PyYAML", # For config_service.py
-    "termcolor", # Check if still needed after refactoring logging
+    "PyYAML",
     "tiktoken",
-    # "python-dotenv", # 제거됨
-    "pydantic>=2.0",
+    "pydantic",
+    "google-generativeai",     # Added for Gemini token calculation via Gemini API
+    "anthropic",               # Added for Claude token calculation
 ]
 
 [project.optional-dependencies]
-dev = [
-    "pytest",
-    "pytest-qt",
-    "pytest-mock",
-    "pytest-cov",
-    "ruff",
-    "black",
-    "mypy",
-    "radon", # For complexity measurement
-    "uv", # Recommended package manager
-    # "types-PyYAML",
-    # "types-PyQt5",
-]
+dev = []
 
 [project.scripts]
 # If you want to create a command-line entry point (optional)
@@ -92,7 +80,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true # Enforce type hints on function definitions
 disallow_incomplete_defs = true # Enforce type hints for all arguments/return types
-# ignore_missing_imports = true # Start with True, aim for False
+ignore_missing_imports = true # Start with True, aim for False (needed for google.generativeai/anthropic optional imports)
 # Pydantic plugin activation
 plugins = ["pydantic.mypy"]
 # Specify paths for mypy to check

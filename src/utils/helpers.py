@@ -1,42 +1,9 @@
 import os
 import sys
-import tiktoken
+# import tiktoken # No longer directly used here, moved to TokenCalculationService
 from typing import Union, Optional
-import threading
+# import threading # No longer needed for preloading here
 from pathlib import Path # pathlib 사용
-
-# --- Tiktoken 인코딩 관련 ---
-ENC: Optional[tiktoken.Encoding] = None
-enc_lock = threading.Lock() # 스레드 안전성을 위한 잠금
-
-def preload_encoding():
-    """Preloads the tiktoken encoding in a separate thread."""
-    global ENC
-    try:
-        with enc_lock:
-            if ENC is None: # 중복 로딩 방지
-                print("Preloading tiktoken encoding...")
-                ENC = tiktoken.get_encoding("o200k_base")
-                print("Tiktoken encoding loaded.")
-    except Exception as e:
-        print(f"Error preloading tiktoken encoding: {e}")
-        # ENC가 None으로 유지됨
-
-def init_utils():
-    """Initializes utility functions, including preloading encoding."""
-    # 백그라운드 스레드에서 인코딩 로딩 시작
-    thread = threading.Thread(target=preload_encoding, daemon=True)
-    thread.start()
-    # 메인 스레드는 계속 진행 (필요시 thread.join()으로 대기)
-
-def get_encoding() -> Optional[tiktoken.Encoding]:
-    """Returns the preloaded tiktoken encoding, loading if necessary."""
-    global ENC
-    if ENC is None:
-        # 아직 로드되지 않았으면 동기적으로 로드 시도 (UI 블로킹 가능성)
-        print("Tiktoken encoding not preloaded, loading synchronously...")
-        preload_encoding() # 잠금 포함된 함수 호출
-    return ENC
 
 # --- 경로 관련 ---
 def get_project_root() -> Path:
@@ -65,17 +32,24 @@ def calculate_char_count(text: str) -> int:
     """Calculates the number of characters in the text."""
     return len(text)
 
-def calculate_token_count(text: str) -> Optional[int]:
-    """
-    Calculates the number of tokens using the preloaded tiktoken encoding.
-    Returns None if encoding is not available or an error occurs.
-    """
-    enc = get_encoding()
-    if enc is None:
-        print("Token calculation failed: Encoding not available.")
-        return None
-    try:
-        return len(enc.encode(text))
-    except Exception as e:
-        print(f"Error calculating tokens: {str(e)}")
-        return None
+# calculate_token_count is now handled by TokenCalculationService
+# def calculate_token_count(text: str) -> Optional[int]:
+#     """
+#     Calculates the number of tokens using the preloaded tiktoken encoding.
+#     Returns None if encoding is not available or an error occurs.
+#     """
+#     # ... (old implementation removed) ...
+
+# init_utils and preload_encoding are removed as tiktoken loading is now
+# handled within TokenCalculationService when needed.
+# def preload_encoding():
+#     """Preloads the tiktoken encoding in a separate thread."""
+#     # ... (old implementation removed) ...
+
+# def init_utils():
+#     """Initializes utility functions, including preloading encoding."""
+#     # ... (old implementation removed) ...
+
+# def get_encoding() -> Optional[tiktoken.Encoding]:
+#     """Returns the preloaded tiktoken encoding, loading if necessary."""
+#     # ... (old implementation removed) ...

@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox,
-    QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox, QFrame
+    QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox, QFrame, QLineEdit # QLineEdit 추가
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices
 from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl # QItemSelection, QUrl 추가
@@ -17,6 +17,7 @@ from core.services.template_service import TemplateService
 from core.services.prompt_service import PromptService
 from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
+from core.services.token_service import TokenCalculationService # Added
 
 from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
 # 컨트롤러 import
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
         self.prompt_service = PromptService()
         self.xml_service = XmlService()
         self.fs_service = FilesystemService(self.config_service)
+        # Pass config_service to TokenCalculationService
+        self.token_service = TokenCalculationService(self.config_service) # Modified
 
         # --- UI 구성 요소 생성 (외부 함수 호출) ---
         create_menu_bar(self)
@@ -69,7 +72,7 @@ class MainWindow(QMainWindow):
 
         # --- 컨트롤러 생성 및 연결 ---
         # 각 컨트롤러에 MainWindow와 필요한 서비스 주입
-        self.main_controller = MainController(self)
+        self.main_controller = MainController(self) # Needs token_service, config_service (gets them from mw)
         self.resource_controller = ResourceController(self, self.template_service, self.state_service)
         self.prompt_controller = PromptController(self, self.prompt_service)
         self.xml_controller = XmlController(self, self.xml_service)
@@ -80,7 +83,7 @@ class MainWindow(QMainWindow):
 
         # --- 초기화 작업 ---
         self.resource_controller.load_templates_list() # 리소스 목록 로드
-        self._apply_initial_settings() # 기본 설정 적용 (기본 프롬프트 등)
+        self._apply_initial_settings() # 기본 설정 적용 (기본 프롬프트, 모델명 등)
 
         # 상태바 메시지 및 창 크기 설정
         self.status_bar.showMessage("Ready")
@@ -103,7 +106,7 @@ class MainWindow(QMainWindow):
     # _create_menu_bar, _create_widgets, _create_layout, _create_status_bar, _connect_signals
 
     def _apply_initial_settings(self):
-        """Applies initial settings like default system prompt."""
+        """Applies initial settings like default system prompt and model names."""
         apply_default_system_prompt(self)
 
         if self.mode == "Meta Prompt Builder":
@@ -115,6 +118,14 @@ class MainWindow(QMainWindow):
                         self.system_tab.setText(f.read())
             except Exception as e:
                 print(f"Error loading default META prompt: {e}")
+
+        # Load initial model settings from config
+        settings = self.config_service.get_settings()
+        self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini")) # Default to Gemini UI
+        # Set the model name input based on the config default for Gemini
+        self.model_name_input.setText(settings.gemini_default_model)
+        # Trigger count update if needed (handled by main_controller.on_llm_selected called implicitly or explicitly if needed)
+        # self.main_controller.on_llm_selected() # Call explicitly if needed after setting UI elements
 
         self.file_tree_controller.load_gitignore_settings() # FileTreeController
         self.resource_controller.update_buttons_label() # ResourceController
@@ -159,6 +170,9 @@ class MainWindow(QMainWindow):
         # 파일 트리 비우기 (컨트롤러 호출)
         if hasattr(self, 'file_tree_controller'):
             self.file_tree_controller.reset_file_tree()
+        # 모델 선택 UI 초기화 (MainController에서 처리)
+        # if hasattr(self, 'main_controller'):
+        #     self.main_controller.reset_model_selection()
 
 
     def update_window_title(self, folder_name: Optional[str] = None):
@@ -171,26 +185,41 @@ class MainWindow(QMainWindow):
     def get_current_state(self) -> AppState:
         """Gathers the current UI state and returns it as an AppState model."""
         checked_paths = self.checkable_proxy.get_all_checked_paths() if hasattr(self, 'checkable_proxy') else []
+        selected_llm = self.llm_combo.currentText() if hasattr(self, 'llm_combo') else "Gemini"
+        selected_model_name = self.model_name_input.text().strip() if hasattr(self, 'model_name_input') else ""
+
         state_data = {
             "mode": self.mode,
             "project_folder": self.current_project_folder,
             "system_prompt": self.system_tab.toPlainText(),
             "user_prompt": self.user_tab.toPlainText(),
-            "checked_files": checked_paths
+            "checked_files": checked_paths,
+            "selected_llm": selected_llm,
+            "selected_model_name": selected_model_name,
         }
         try:
             app_state = AppState(**state_data)
             return app_state
         except Exception as e:
              print(f"Error creating AppState model: {e}")
-             return AppState(mode=self.mode)
+             # Return default state but preserve current mode
+             default_state = AppState(mode=self.mode)
+             # Try to preserve model selection if possible
+             default_state.selected_llm = selected_llm
+             default_state.selected_model_name = selected_model_name
+             return default_state
+
 
     def set_current_state(self, state: AppState):
         """Sets the UI state based on the provided AppState model."""
         if self.mode != state.mode:
             print(f"Mode mismatch during state load. Current: {self.mode}, Loaded: {state.mode}. Restarting...")
             self._restart_with_mode(state.mode)
-            return # 재시작 후 새 인스턴스에서 상태 로드됨
+            # After restart, the new instance will load the state again if needed,
+            # but typically state is loaded *after* mode is set.
+            # We might need to pass the state to the new instance or reload it.
+            # For simplicity, we just restart here. The user might need to reload the state manually.
+            return
 
         self.reset_state() # UI 및 내부 상태 초기화 (트리 포함)
 
@@ -216,9 +245,19 @@ class MainWindow(QMainWindow):
         self.system_tab.setText(state.system_prompt)
         self.user_tab.setText(state.user_prompt)
 
+        # Restore model selection state
+        llm_index = self.llm_combo.findText(state.selected_llm)
+        if llm_index != -1:
+            self.llm_combo.setCurrentIndex(llm_index)
+        # Set model name *after* setting the combo box index to avoid overwriting
+        # Use the loaded state's model name if present, otherwise fall back to config default for the selected LLM
+        self.model_name_input.setText(state.selected_model_name if state.selected_model_name else self.config_service.get_default_model_name(state.selected_llm))
+
+
         # 체크 상태 복원 (프로젝트 폴더가 유효할 때만 의미 있음)
         if self.current_project_folder and hasattr(self, 'checkable_proxy'):
             # self.uncheck_all_files() # reset_state에서 이미 처리됨
+            self.checkable_proxy.checked_files_dict.clear() # Ensure dict is clear before restoring
             for fpath in state.checked_files:
                  # 경로가 현재 프로젝트 폴더 하위에 있는지 확인 (선택적이지만 안전)
                  if fpath.startswith(self.current_project_folder):
@@ -227,7 +266,12 @@ class MainWindow(QMainWindow):
                          proxy_index = self.checkable_proxy.mapFromSource(src_index)
                          if proxy_index.isValid():
                              # setData를 호출하여 체크 상태 설정 및 하위 항목 처리 유발
+                             # Use internal dict update first for efficiency if many files
+                             # self.checkable_proxy.checked_files_dict[fpath] = True
+                             # self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
+                             # Calling setData ensures visual update and potential child checking logic
                              self.checkable_proxy.setData(proxy_index, Qt.Checked, Qt.CheckStateRole)
+
 
         self.file_tree_controller.load_gitignore_settings() # FileTreeController
         self.update_window_title(folder_name)
@@ -238,14 +282,30 @@ class MainWindow(QMainWindow):
     def uncheck_all_files(self):
         """Unchecks all items in the file tree view."""
         if not hasattr(self, 'checkable_proxy'): return
-        self.checkable_proxy.checked_files_dict.clear()
-        root_proxy_index = self.tree_view.rootIndex()
-        if root_proxy_index.isValid():
-            self._recursive_uncheck(root_proxy_index)
+        # Create a copy of keys to iterate over as setData modifies the dict
+        paths_to_uncheck = list(self.checkable_proxy.checked_files_dict.keys())
+        self.checkable_proxy.checked_files_dict.clear() # Clear the dict first
+
+        # Efficiently signal changes for all potentially visible items
+        # This might be complex to get right. A simpler approach is to just refresh the view
+        # or iterate and call setData if performance is acceptable.
+        # Let's stick to iterating through known checked paths for now.
+        for fpath in paths_to_uncheck:
+            src_index = self.dir_model.index(fpath)
+            if src_index.isValid():
+                proxy_index = self.checkable_proxy.mapFromSource(src_index)
+                if proxy_index.isValid():
+                    # Emit dataChanged to update the view for this specific item
+                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
+
+        # Alternative: Reset the model or refresh the view if simpler
+        # self.tree_view.model().invalidateFilter() # Or similar refresh mechanism
 
 
     def _recursive_uncheck(self, proxy_index: QModelIndex):
         """Helper method to recursively uncheck items via setData."""
+        # This method might be inefficient if called repeatedly.
+        # uncheck_all_files provides a potentially better approach.
         if not proxy_index.isValid(): return
         current_state = self.checkable_proxy.data(proxy_index, Qt.CheckStateRole)
         if current_state == Qt.Checked:
@@ -289,6 +349,7 @@ class MainWindow(QMainWindow):
                  self.build_tabs.insertTab(plus_tab_index, new_tab, new_name)
                  self.build_tabs.setCurrentIndex(plus_tab_index)
             else:
+                 # Fallback if "+" tab isn't found (shouldn't happen with CustomTabBar)
                  self.build_tabs.addTab(new_tab, new_name)
                  self.build_tabs.setCurrentIndex(self.build_tabs.count() - 1)
             # 새 탭 추가 시 토큰 계산 연결
@@ -334,4 +395,9 @@ class MainWindow(QMainWindow):
 
     def on_selection_changed_handler(self, selected: QItemSelection, deselected: QItemSelection):
         """Handles selection changes in the file tree view to toggle check state."""
-        self.file_tree_controller.handle_selection_change(selected, deselected)
+        # Selection change doesn't toggle check state anymore, click does.
+        # This handler might be used for other purposes if needed, like updating
+        # a preview pane based on selection. For now, it does nothing.
+        pass
+        # Original logic moved to FileTreeController.handle_selection_change
+        # self.file_tree_controller.handle_selection_change(selected, deselected)

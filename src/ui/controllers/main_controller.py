@@ -10,8 +10,9 @@ from core.services.template_service import TemplateService
 from core.services.prompt_service import PromptService
 from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
+from core.services.token_service import TokenCalculationService # Added
 from core.pydantic_models.app_state import AppState
-from utils.helpers import calculate_char_count, calculate_token_count
+from utils.helpers import calculate_char_count # Removed calculate_token_count
 
 # MainWindow는 타입 힌트용으로만 사용 (순환 참조 방지)
 from typing import TYPE_CHECKING
@@ -34,6 +35,8 @@ class MainController:
         self.mw = main_window # MainWindow 인스턴스
         # 서비스는 MainWindow에서 생성되어 각 컨트롤러에 주입됨
         # 하위 컨트롤러 참조는 MainWindow를 통해 접근 (예: self.mw.resource_controller)
+        self.token_service: TokenCalculationService = self.mw.token_service # Get service from MainWindow
+        self.config_service: ConfigService = self.mw.config_service # Get service from MainWindow
 
     def reset_program(self):
         """Resets the application to its initial state."""
@@ -54,36 +57,91 @@ class MainController:
         # 파일 탐색기 트리 리셋 (FileTreeController에게 위임)
         self.mw.file_tree_controller.reset_file_tree()
 
+        # 모델 선택 UI 초기화
+        self.mw.llm_combo.setCurrentIndex(self.mw.llm_combo.findText("Gemini")) # 기본값 Gemini
+        self.on_llm_selected() # 모델명 업데이트
+        # 리셋 후에는 텍스트가 비어있으므로 update_active_tab_counts 호출해도 계산 안 함
+        self.update_char_count_for_active_tab() # 문자 수만 업데이트
+        self.mw.token_count_label.setText("토큰 계산: -") # 토큰 카운트 리셋
+
         # 윈도우 제목 리셋
         self.mw.update_window_title()
         self.mw.status_bar.showMessage("프로그램 리셋 완료.")
         QMessageBox.information(self.mw, "Info", "프로그램이 초기 상태로 리셋되었습니다.")
 
-    def update_counts_for_text(self, text: str):
-        """Updates character and token counts in the status bar."""
+    def update_char_count(self, text: str):
+        """Updates character count in the status bar."""
         char_count = calculate_char_count(text)
-        token_count = None
-        token_text = "토큰 계산: 비활성화"
-
-        if self.mw.auto_token_calc_check.isChecked():
-            token_count = calculate_token_count(text)
-            if token_count is not None:
-                 token_text = f"Calculated Total Token: {token_count:,}"
-            else:
-                 token_text = "토큰 계산 오류"
-
         self.mw.char_count_label.setText(f"Chars: {char_count:,}")
-        self.mw.token_count_label.setText(token_text)
 
-    def update_active_tab_counts(self):
-        """Updates the counts based on the currently active text edit tab."""
+    def update_char_count_for_active_tab(self):
+        """Updates the character count based on the currently active text edit tab."""
         current_widget = self.mw.build_tabs.currentWidget()
         if hasattr(current_widget, 'toPlainText'):
-            self.update_counts_for_text(current_widget.toPlainText())
+            self.update_char_count(current_widget.toPlainText())
         else:
-            # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화 또는 유지
+            # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화
             self.mw.char_count_label.setText("Chars: 0")
-            self.mw.token_count_label.setText("토큰 계산: -")
+
+    def calculate_and_display_tokens(self, text: str):
+        """Calculates tokens for the given text and updates the status bar."""
+        char_count = calculate_char_count(text)
+        self.mw.char_count_label.setText(f"Chars: {char_count:,}")
+
+        token_count = None
+        token_text = "토큰 계산: -" # 기본 메시지
+
+        # 텍스트가 비어 있으면 계산하지 않음
+        if not text:
+            self.mw.token_count_label.setText(token_text)
+            return
+
+        selected_llm = self.mw.llm_combo.currentText()
+        model_name = self.mw.model_name_input.text().strip()
+        token_text = f"{selected_llm} 토큰 계산 중..."
+        self.mw.token_count_label.setText(token_text) # Show calculating message
+        QApplication.processEvents() # Allow UI update
+
+        if not model_name:
+            token_text = f"{selected_llm} 모델명을 입력하세요."
+        else:
+            token_count = self.token_service.calculate_tokens(selected_llm, model_name, text)
+            if token_count is not None:
+                token_text = f"Calculated Total Token ({selected_llm}): {token_count:,}"
+            else:
+                token_text = f"{selected_llm} 토큰 계산 오류"
+
+        self.mw.token_count_label.setText(token_text)
+
+
+    def on_llm_selected(self):
+        """Handles the selection change in the LLM dropdown."""
+        selected_llm = self.mw.llm_combo.currentText()
+        # Load the default model name for the selected LLM from config
+        default_model = self.config_service.get_default_model_name(selected_llm)
+        self.mw.model_name_input.setText(default_model)
+        # Trigger only character count update for the currently active tab's text
+        self.update_char_count_for_active_tab()
+        # Reset token count display when LLM changes
+        self.mw.token_count_label.setText("토큰 계산: -")
+
+
+    def save_model_config(self):
+        """Saves the current model name for the selected LLM to config.yml."""
+        selected_llm = self.mw.llm_combo.currentText()
+        model_name = self.mw.model_name_input.text().strip()
+
+        if not model_name:
+            QMessageBox.warning(self.mw, "저장 오류", "모델 이름은 비워둘 수 없습니다.")
+            return
+
+        try:
+            self.config_service.save_default_model_name(selected_llm, model_name)
+            QMessageBox.information(self.mw, "저장 완료", f"{selected_llm}의 기본 모델 이름이 '{model_name}'(으)로 저장되었습니다.")
+            self.mw.status_bar.showMessage(f"{selected_llm} 모델 설정 저장됨.")
+        except Exception as e:
+            QMessageBox.critical(self.mw, "저장 실패", f"모델 설정을 저장하는 중 오류 발생:\n{e}")
+            self.mw.status_bar.showMessage("모델 설정 저장 실패.")
 
 
     # on_mode_changed는 MainWindow에서 처리 (_toggle_mode -> _restart_with_mode)

@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
-    QFrame
+    QFrame, QLineEdit # QLineEdit 추가
 )
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
@@ -74,9 +74,15 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setModel(mw.checkable_proxy)
     mw.tree_view.setColumnWidth(0, 250) # 초기 너비 설정 (레이아웃 후 조정될 수 있음)
     mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
-    mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection) # Use ExtendedSelection
     mw.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
-    # 초기 루트 경로는 __init__ 또는 reset_file_tree에서 설정
+    # Enable clicking on items to check/uncheck
+    mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers) # Disable editing on double click
+    # Connect click to setData in the proxy model
+    mw.tree_view.clicked.connect(lambda index: mw.checkable_proxy.setData(index,
+                                                                          Qt.Checked if mw.checkable_proxy.data(index, Qt.CheckStateRole) == Qt.Unchecked else Qt.Unchecked,
+                                                                          Qt.CheckStateRole))
+
 
     # --- 탭 위젯 (오른쪽) ---
     mw.build_tabs = QTabWidget()
@@ -159,6 +165,19 @@ def create_widgets(mw: 'MainWindow'):
     mw.gitignore_edit = CustomTextEdit()
     mw.gitignore_edit.setPlaceholderText(".gitignore 내용...")
     mw.save_gitignore_btn = QPushButton("💾 .gitignore 저장")
+
+    # --- 상태 표시줄 위젯 (create_status_bar에서 사용) ---
+    mw.char_count_label = QLabel("Chars: 0")
+    mw.token_count_label = QLabel("토큰 계산: -") # 초기값 변경
+    # mw.auto_token_calc_check = QCheckBox("토큰 자동 계산") # Removed
+    # mw.auto_token_calc_check.setChecked(True) # Removed
+    mw.llm_combo = QComboBox()
+    mw.llm_combo.addItems(["Gemini", "Claude", "GPT"]) # 순서 변경, Gemini 기본
+    mw.model_name_input = QLineEdit()
+    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-1.5-pro-latest)")
+    mw.save_model_config_btn = QPushButton("💾 모델 저장")
+    mw.save_model_config_btn.setToolTip("현재 선택된 LLM의 기본 모델명을 설정 파일에 저장합니다.")
+
 
 def create_layout(mw: 'MainWindow'):
     """Creates the layout and arranges widgets."""
@@ -274,21 +293,34 @@ def create_layout(mw: 'MainWindow'):
     mw.bottom_splitter.setStretchFactor(1, 1)
 
 def create_status_bar(mw: 'MainWindow'):
-    """Creates the status bar with character and token counts."""
+    """Creates the status bar with character and token counts, and model selection."""
     mw.status_bar = QStatusBar()
     mw.setStatusBar(mw.status_bar)
 
-    mw.char_count_label = QLabel("Chars: 0")
-    mw.token_count_label = QLabel("토큰 계산: 비활성화")
-    mw.auto_token_calc_check = QCheckBox("토큰 자동 계산")
-    mw.auto_token_calc_check.setChecked(True)
+    # --- Left side of status bar (dynamic message) ---
+    # mw.status_bar.showMessage("Ready") # Set dynamically
 
+    # --- Right side of status bar (permanent widgets) ---
     status_widget = QWidget()
     status_layout = QHBoxLayout(status_widget)
-    status_layout.setContentsMargins(0, 0, 0, 0)
+    status_layout.setContentsMargins(5, 2, 5, 2) # Adjust margins for status bar
     status_layout.setSpacing(10)
+
     status_layout.addWidget(mw.char_count_label)
-    status_layout.addWidget(mw.auto_token_calc_check)
-    status_layout.addWidget(mw.token_count_label)
+    # status_layout.addWidget(mw.auto_token_calc_check) # Removed
+
+    # Token calculation section
+    status_layout.addWidget(QLabel("Model:")) # Label for LLM dropdown
+    status_layout.addWidget(mw.llm_combo)
+    mw.llm_combo.setFixedWidth(80) # Adjust width as needed
+
+    status_layout.addWidget(mw.model_name_input)
+    mw.model_name_input.setMinimumWidth(200) # Adjust width as needed
+
+    status_layout.addWidget(mw.save_model_config_btn)
+
+    status_layout.addWidget(mw.token_count_label) # Token count display
+
+    status_layout.addStretch(1) # Push widgets to the right
 
     mw.status_bar.addPermanentWidget(status_widget)

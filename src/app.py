@@ -5,7 +5,8 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
 from ui.main_window import MainWindow
-from utils.helpers import init_utils, get_resource_path
+# init_utils는 더 이상 사용되지 않으므로 제거
+from utils.helpers import get_resource_path
 
 def main():
     if sys.platform.startswith("win"):
@@ -19,8 +20,8 @@ def main():
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-    # 유틸리티 초기화 (tiktoken 로딩 등)
-    init_utils()
+    # 유틸리티 초기화 (tiktoken 로딩 등) - 이제 TokenCalculationService에서 처리
+    # init_utils() # 제거
 
     app = QApplication(sys.argv)
 
