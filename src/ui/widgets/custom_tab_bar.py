@@ -27,7 +27,7 @@ class CustomTabBar(QTabBar):
                 if hasattr(self.main_window, 'add_new_custom_tab'):
                     self.main_window.add_new_custom_tab()
                 return # 이벤트 처리 완료
-        super().mousePressEvent(event) 
+        super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """Handles middle mouse button release for closing tabs."""
@@ -38,7 +38,7 @@ class CustomTabBar(QTabBar):
                 tab_text = self.tabText(index)
                 if tab_text != "+" and is_tab_deletable(tab_text):
                     self.parentWidget().removeTab(index)
-                elif tab_text != "+": 
+                elif tab_text != "+":
                     QMessageBox.warning(self.parentWidget(), "경고", f"'{tab_text}' 탭은 제거할 수 없습니다.")
                 # "+" 탭은 아무 동작 안 함
         super().mouseReleaseEvent(event)
@@ -55,12 +55,17 @@ class CustomTabBar(QTabBar):
                     new_name, ok = QInputDialog.getText(self.parentWidget(), "탭 이름 변경",
                                                         "새 탭 이름을 입력하세요:", text=tab_text)
                     if ok and new_name and new_name.strip():
-                        # TODO: 중복 탭 이름 검사 추가
-                        # TODO: 보호된 이름으로 변경 불가 처리
                         new_name_stripped = new_name.strip()
+                        # 보호된 이름으로 변경 불가 처리
                         if not is_tab_deletable(new_name_stripped):
                              QMessageBox.warning(self.parentWidget(), "경고", f"'{new_name_stripped}'(으)로는 변경할 수 없습니다.")
                              return
+                        # 중복 탭 이름 검사
+                        for i in range(self.count()):
+                            if i != index and self.tabText(i) == new_name_stripped:
+                                QMessageBox.warning(self.parentWidget(), "경고", f"'{new_name_stripped}' 탭이 이미 존재합니다.")
+                                return
+                        # 이름 변경 적용
                         self.setTabText(index, new_name_stripped)
                     elif ok:
                          QMessageBox.warning(self.parentWidget(), "경고", "탭 이름은 비워둘 수 없습니다.")

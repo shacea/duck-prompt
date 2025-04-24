@@ -7,19 +7,15 @@ from PyQt5.QtWidgets import (
     QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox, QFrame
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices
-from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl # QItemSelection, QUrl 추가
-
-# 변경된 경로에서 import
-from core.pydantic_models.app_state import AppState # 상태 타입 힌트용
+from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl
+from core.pydantic_models.app_state import AppState
 from core.services.config_service import ConfigService
 from core.services.state_service import StateService
 from core.services.template_service import TemplateService
 from core.services.prompt_service import PromptService
 from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
-
 from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
-# 컨트롤러 import
 from ui.controllers.main_controller import MainController
 from ui.controllers.resource_controller import ResourceController
 from ui.controllers.prompt_controller import PromptController
@@ -28,7 +24,7 @@ from ui.controllers.file_tree_controller import FileTreeController
 from ui.controllers.system_prompt_controller import apply_default_system_prompt, select_default_system_prompt
 
 from ui.widgets.custom_text_edit import CustomTextEdit
-from ui.widgets.custom_tab_bar import CustomTabBar # CustomTabBar 임포트
+from ui.widgets.custom_tab_bar import CustomTabBar
 from utils.helpers import get_resource_path
 
 
@@ -37,9 +33,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.mode = mode
         self.base_title = "DuckPrompt"
-        self.update_window_title() # 초기 제목 설정
-
-        # 스타일 설정
+        self.update_window_title()
         QApplication.setStyle(QStyleFactory.create("Fusion"))
 
         # --- 상태 변수 ---
@@ -49,7 +43,7 @@ class MainWindow(QMainWindow):
         self.tree_generated: bool = False # 파일 트리 생성 여부
 
         # --- 서비스 인스턴스 생성 ---
-        # TODO: 서비스 인스턴스를 app.py 등에서 생성하고 주입하는 방식
+        # 서비스 인스턴스는 MainWindow 내에서 생성 및 관리
         self.config_service = ConfigService()
         self.state_service = StateService()
         self.template_service = TemplateService()
@@ -134,7 +128,8 @@ class MainWindow(QMainWindow):
         self.dir_model = FilteredFileSystemModel()
         self.tree_view = QTreeView()
         project_folder_getter = lambda: self.current_project_folder
-        self.checkable_proxy = CheckableProxyModel(self.dir_model, project_folder_getter, self.tree_view)
+        # FilesystemService 주입
+        self.checkable_proxy = CheckableProxyModel(self.dir_model, project_folder_getter, self.fs_service, self.tree_view)
         self.checkable_proxy.setSourceModel(self.dir_model)
         self.tree_view.setModel(self.checkable_proxy)
         self.tree_view.setColumnWidth(0, 250)

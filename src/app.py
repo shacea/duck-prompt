@@ -35,7 +35,7 @@ def main():
         print(f"Error loading application icon: {e}") # 아이콘 로딩 오류 로깅
 
     # MainWindow 생성 및 실행
-    # TODO: Core 서비스 초기화 및 주입 필요 (app.py 또는 main.py에서 수행)
+    # Core 서비스는 MainWindow 내부에서 초기화 및 관리됨
     window = MainWindow(mode="Code Enhancer Prompt Builder") # 기본 모드 설정
     window.show()
     sys.exit(app.exec_())

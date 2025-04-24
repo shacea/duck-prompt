@@ -4,7 +4,8 @@ from PyQt5.QtCore import QSortFilterProxyModel, Qt, QModelIndex
 from PyQt5.QtWidgets import QFileSystemModel, QTreeView
 from typing import Callable, Optional, Set
 
-# TODO: FilesystemService를 주입받아 필터링 로직 위임
+# FilesystemService import
+from core.services.filesystem_service import FilesystemService
 
 class FilteredFileSystemModel(QFileSystemModel):
     """
@@ -41,10 +42,11 @@ class CheckableProxyModel(QSortFilterProxyModel):
     """
     Proxy model that provides checkable items and filters based on ignore patterns.
     """
-    def __init__(self, fs_model: FilteredFileSystemModel, project_folder_getter: Callable[[], Optional[str]], tree_view: QTreeView, parent=None):
+    def __init__(self, fs_model: FilteredFileSystemModel, project_folder_getter: Callable[[], Optional[str]], fs_service: FilesystemService, tree_view: QTreeView, parent=None):
         super().__init__(parent)
         self.fs_model = fs_model
         self.project_folder_getter = project_folder_getter
+        self.fs_service = fs_service # FilesystemService 저장
         self.tree_view = tree_view
         self.checked_files_dict = {} # {file_path: bool}
         self._ignore_patterns: Set[str] = set() # .gitignore 패턴 저장
@@ -67,19 +69,15 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
         # 프로젝트 루트가 설정되지 않았거나, 현재 파일이 프로젝트 루트 밖에 있으면 필터링 안 함
         if not project_root or not file_path.startswith(project_root):
-            # 루트 경로 자체가 아닌 경우만 외부 표시 (루트 경로는 항상 표시되어야 함)
-            # return file_path != self.sourceModel().rootPath()
             return True # 프로젝트 루트 외부는 항상 표시 (루트 포함)
-
 
         # 프로젝트 루트 자체는 숨기지 않음
         if file_path == project_root:
             return True
 
-        # FilesystemService의 should_ignore 사용하도록 리팩토링 필요
-        # 임시: 직접 필터링 로직 수행
+        # FilesystemService의 should_ignore 사용
         is_dir = self.sourceModel().isDir(source_index)
-        if self._should_ignore_local(file_path, project_root, self._ignore_patterns, is_dir):
+        if self.fs_service.should_ignore(file_path, project_root, self._ignore_patterns, is_dir):
             # 무시 대상이면, 체크 상태도 해제 (선택적)
             if file_path in self.checked_files_dict:
                 del self.checked_files_dict[file_path]
@@ -87,48 +85,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
         return True # 필터링되지 않으면 표시
 
-    def _should_ignore_local(self, file_path: str, project_root: str, ignore_patterns: Set[str], is_dir: bool) -> bool:
-        """Internal implementation of ignore logic (to be replaced by FilesystemService)."""
-        file_name = os.path.basename(file_path)
-        try:
-            # 상대 경로 계산 시 project_root가 file_path의 부모가 아닐 경우 예외 발생 가능
-            if not file_path.startswith(project_root):
-                 return False # 프로젝트 외부는 무시 안 함
-            relative_path = os.path.relpath(file_path, project_root).replace(os.sep, '/')
-        except ValueError:
-            return False # 상대 경로 계산 불가 시 무시 안 함
-
-        for pattern in ignore_patterns:
-            # 패턴 앞뒤 공백 제거
-            pattern = pattern.strip()
-            if not pattern or pattern.startswith('#'): # 빈 패턴이나 주석 무시
-                continue
-
-            is_dir_pattern = pattern.endswith('/')
-            cleaned_pattern = pattern.rstrip('/')
-
-            # 디렉토리 패턴인데 현재 항목이 파일이면 건너뜀
-            if is_dir_pattern and not is_dir: continue
-
-            # 1. 파일 이름 매칭 (e.g., *.log, __pycache__)
-            if fnmatch.fnmatch(file_name, cleaned_pattern):
-                if is_dir_pattern and is_dir: return True
-                elif not is_dir_pattern: return True
-
-            # 2. 상대 경로 매칭 (e.g., build/, docs/temp.txt)
-            # 디렉토리일 경우, 경로 끝에 '/' 추가하여 매칭
-            match_path = relative_path + ('/' if is_dir and not relative_path.endswith('/') else '')
-            # 패턴 매칭 시 와일드카드 등을 고려하여 fnmatch 사용
-            if fnmatch.fnmatch(match_path, pattern): return True
-            # 패턴에 /가 포함되어 있고, 디렉토리 패턴이 아닐 때도 경로 매칭 시도
-            # (e.g. 'some/dir/file.txt' 패턴)
-            if '/' in pattern and not is_dir_pattern:
-                 if fnmatch.fnmatch(relative_path, pattern): return True
-                 # 디렉토리 매칭 시도 (패턴: some/dir, 경로: some/dir/file.txt)
-                 if is_dir and fnmatch.fnmatch(relative_path + '/', pattern + '/'): return True
-
-
-        return False
+    # _should_ignore_local 메서드는 FilesystemService 사용으로 대체되어 제거됨
 
     def data(self, index, role=Qt.DisplayRole):
         """Returns data for the item, including check state."""

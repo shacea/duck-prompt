@@ -178,7 +178,7 @@ class FileTreeController:
                  return
 
             try:
-                # TODO: FilesystemService에 rename 기능 추가
+                # 실제 파일 시스템 작업 (컨트롤러 내에서 수행)
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
                 # 체크 상태 업데이트
@@ -207,7 +207,7 @@ class FileTreeController:
 
         if reply == QMessageBox.Yes:
             try:
-                # TODO: FilesystemService에 delete 기능 추가
+                # 실제 파일 시스템 작업 (컨트롤러 내에서 수행)
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path)
                 else:
@@ -227,7 +227,7 @@ class FileTreeController:
     def refresh_tree(self):
         """Refreshes the file explorer tree view."""
         if self.mw.current_project_folder and hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            # TODO: 확장 상태 저장/복원 로직 추가
+            # 트리 확장 상태 저장/복원 로직은 현재 미구현
             idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
             # 필터 갱신은 setRootPathFiltered 또는 set_ignore_patterns 호출 시 처리됨
             self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
