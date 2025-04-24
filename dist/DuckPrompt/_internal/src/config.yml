@@ -1,29 +1,29 @@
-default_system_prompt: resources/prompts/system/XML_Prompt_Guide.md
+default_system_prompt: resources/prompts/system/XML_prompt_guide_python_en.md
 allowed_extensions: !!set {}
 excluded_dirs: !!set
-  .git/: null
+  .idea/: null
   .gitignore: null
-  '*.log': null
-  .venv/: null
   node_modules/: null
-  .vscode/: null
-  build/: null
+  dist/: null
+  .git/: null
   __pycache__/: null
   .DS_Store: null
-  dist/: null
-  .idea/: null
+  build/: null
+  .vscode/: null
+  .venv/: null
+  "*.log": null
 default_ignore_list:
-- '*.egg-info/'
-- '*.pyc'
-- .cursorrules
-- .git/
-- .gitignore
-- .idea/
-- .vscode/
-- .windsurfrules
-- __pycache__/
-- build/
-- dist/
+  - "*.egg-info/"
+  - "*.pyc"
+  - .cursorrules
+  - .git/
+  - .gitignore
+  - .idea/
+  - .vscode/
+  - .windsurfrules
+  - __pycache__/
+  - build/
+  - dist/
 gemini_default_model: gemini-2.5-flash-preview-04-17
 claude_default_model: claude-3-7-sonnet-20250219
 anthropic_api_key: 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

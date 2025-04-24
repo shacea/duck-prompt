@@ -29,12 +29,13 @@ Here is how you should structure the XML:
 
 So the XML section will be:
 
-__XML HERE__
+**XML HERE**
 
 출력예시:
+
 ### XML
 
-`````xml
+```xml
 <code_changes>
     <changed_files>
         <file>
@@ -62,9 +63,10 @@ __XML HERE__
         </file>
     </changed_files>
 </code_changes>
-`````
+```
 
 ### Summary
+
 - dummy_file.txt 파일을 새로 추가해서 XML 처리 예시를 보여줬어.
 - updated_file.txt 파일을 업데이트해서 새로운 내용으로 바꿨어.
 - old_file.txt 파일은 더 이상 필요 없어서 삭제했어.

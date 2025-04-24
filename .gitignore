@@ -4,3 +4,5 @@ __pycache__
 .cursorignore
 .cursorrules
 .venv/
+build/
+dist/

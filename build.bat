@@ -3,7 +3,7 @@ systeminfo | find "x64-based" > nul
 if %errorlevel% equ 0 (
     echo AMD64 Windows Build...
     call .venv\Scripts\activate
-    uvx pyinstaller app_amd64.spec
+    pyinstaller app_amd64.spec
     goto :done
 )
 
@@ -11,7 +11,7 @@ systeminfo | find "ARM64-based" > nul
 if %errorlevel% equ 0 (
     echo ARM64 Windows Build...
     call .venv\Scripts\activate
-    uvx pyinstaller app_arm64.spec
+    pyinstaller app_arm64.spec
     goto :done
 )
 

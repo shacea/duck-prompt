@@ -38,9 +38,6 @@ a = Analysis(
     # hiddenimports에 tzdata, sip 추가
     hiddenimports=[
         'pkg_resources', # setuptools 관련 hook에서 필요할 수 있음
-        'tzdata',        # 시간대 데이터 포함
-        'sip',           # PyQt 관련 도구 포함
-        # 다른 라이브러리는 자동 감지에 의존
     ],
     hookspath=[],
     hooksconfig={},
