@@ -1,11 +1,12 @@
 import os
+import sys # sys 모듈 import
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
     QFrame, QLineEdit, QGroupBox
 )
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QFontDatabase # QFontDatabase import
 from PyQt5.QtCore import Qt
 
 # MainWindow 타입 힌트
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 from .models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
 from .widgets.custom_text_edit import CustomTextEdit
 from .widgets.custom_tab_bar import CustomTabBar
+# get_resource_path import
+from utils.helpers import get_resource_path
 
 def create_menu_bar(mw: 'MainWindow'):
     """Creates the main menu bar."""
@@ -57,6 +60,43 @@ def create_menu_bar(mw: 'MainWindow'):
 
 def create_widgets(mw: 'MainWindow'):
     """Creates the main widgets used in the window."""
+    # --- OS별 기본 폰트 설정 ---
+    default_font = QFont() # 기본 시스템 폰트
+    font_family_name = ""
+
+    if sys.platform == "win32":
+        try:
+            font_path = get_resource_path("fonts/malgun.ttf")
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id != -1:
+                family = QFontDatabase.applicationFontFamilies(font_id)[0]
+                print(f"Loaded custom font: {family} from {font_path}")
+                default_font = QFont(family, 10) # 폰트 크기 지정 (예: 10)
+                font_family_name = family
+            else:
+                print(f"Failed to load custom font from {font_path}. Using system default.")
+                # 실패 시 기본 sans-serif 폰트 사용 시도
+                default_font.setFamily("Malgun Gothic") # 대체 폰트 지정
+                default_font.setPointSize(10)
+                font_family_name = "Malgun Gothic (Fallback)"
+        except Exception as e:
+            print(f"Error loading custom font: {e}. Using system default.")
+            # 예외 발생 시 기본 sans-serif 폰트 사용 시도
+            default_font.setFamily("Malgun Gothic") # 대체 폰트 지정
+            default_font.setPointSize(10)
+            font_family_name = "Malgun Gothic (Exception Fallback)"
+    elif sys.platform == "darwin": # macOS
+        default_font.setFamily("Apple SD Gothic Neo") # macOS 기본 한글 폰트 예시
+        default_font.setPointSize(11) # macOS 기본 크기 예시
+        font_family_name = "Apple SD Gothic Neo"
+    else: # Linux 등 기타
+        # 시스템 기본 sans-serif 폰트 사용
+        default_font.setStyleHint(QFont.SansSerif)
+        default_font.setPointSize(10)
+        font_family_name = "System Default Sans-Serif"
+
+    print(f"Applying default font: {font_family_name}, Size: {default_font.pointSize()}")
+
     # --- 상단 버튼 및 레이블 ---
     mw.mode_toggle_btn = QPushButton("🔄 모드 전환")
     mw.reset_program_btn = QPushButton("🗑️ 전체 프로그램 리셋")
@@ -81,8 +121,8 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection) # Allow multi-selection
     mw.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
     mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers) # Disable editing item names directly
-    # REMOVED: Redundant clicked signal connection previously here (was commented out).
-    # The default view behavior handles clicking the checkbox indicator.
+    # 파일 트리 폰트 설정 (선택적)
+    # mw.tree_view.setFont(default_font)
 
     # --- 리소스 관리 (왼쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리") # GroupBox로 감싸기
@@ -131,38 +171,48 @@ def create_widgets(mw: 'MainWindow'):
 
     mw.system_tab = CustomTextEdit()
     mw.system_tab.setPlaceholderText(f"{system_tab_label} 내용 입력...")
+    mw.system_tab.setFont(default_font) # 폰트 적용
     mw.build_tabs.addTab(mw.system_tab, system_tab_label)
 
     mw.user_tab = CustomTextEdit()
     mw.user_tab.setPlaceholderText(f"{user_tab_label} 내용 입력...")
+    mw.user_tab.setFont(default_font) # 폰트 적용
     mw.build_tabs.addTab(mw.user_tab, user_tab_label)
 
     if mw.mode != "Meta Prompt Builder":
         mw.dir_structure_tab = CustomTextEdit()
         mw.dir_structure_tab.setReadOnly(True)
+        mw.dir_structure_tab.setFont(default_font) # 폰트 적용
         mw.build_tabs.addTab(mw.dir_structure_tab, "파일 트리")
 
     mw.prompt_output_tab = CustomTextEdit()
-    mw.prompt_output_tab.setFont(QFont("Consolas", 10))
+    # 출력 탭은 고정폭 폰트 사용 고려 (Consolas 등)
+    output_font = QFont("Consolas", 10) if sys.platform == "win32" else QFont("Monaco", 11) if sys.platform == "darwin" else QFont("Monospace", 10)
+    output_font.setStyleHint(QFont.Monospace)
+    mw.prompt_output_tab.setFont(output_font)
     mw.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }")
     mw.build_tabs.addTab(mw.prompt_output_tab, prompt_output_label)
 
     if mw.mode != "Meta Prompt Builder":
         mw.xml_input_tab = CustomTextEdit()
         mw.xml_input_tab.setPlaceholderText("XML 내용 입력...")
+        mw.xml_input_tab.setFont(default_font) # 폰트 적용
         mw.build_tabs.addTab(mw.xml_input_tab, "XML 입력")
 
     if mw.mode == "Meta Prompt Builder":
         mw.meta_prompt_tab = CustomTextEdit()
         mw.meta_prompt_tab.setPlaceholderText("메타 프롬프트 내용...")
+        mw.meta_prompt_tab.setFont(default_font) # 폰트 적용
         mw.build_tabs.addTab(mw.meta_prompt_tab, "메타 프롬프트")
 
         mw.user_prompt_tab = CustomTextEdit()
         mw.user_prompt_tab.setPlaceholderText("사용자 프롬프트 내용 입력...")
+        mw.user_prompt_tab.setFont(default_font) # 폰트 적용
         mw.build_tabs.addTab(mw.user_prompt_tab, "사용자 프롬프트")
 
         mw.final_prompt_tab = CustomTextEdit()
-        mw.final_prompt_tab.setFont(QFont("Consolas", 10))
+        # 최종 프롬프트 탭도 고정폭 폰트 사용 고려
+        mw.final_prompt_tab.setFont(output_font)
         mw.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }")
         mw.build_tabs.addTab(mw.final_prompt_tab, "최종 프롬프트")
 

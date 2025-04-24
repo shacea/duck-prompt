@@ -24,6 +24,7 @@ datas = [
     (resource_path('resources/rubber_duck.ico'), 'resources'),
     (resource_path('resources/prompts'), 'resources/prompts'),
     (resource_path('resources/status'), 'resources/status'),
+    (resource_path('resources/fonts/malgun.ttf'), 'resources/fonts'), # 폰트 파일 추가
     (resource_path('src/config.yml'), 'src'),
 ]
 binaries = [] # 필요한 바이너리는 PyInstaller가 자동으로 찾도록 함
@@ -34,7 +35,7 @@ a = Analysis(
     [str(spec_dir / 'main.py')],
     pathex=[str(src_dir)], # src 디렉토리 포함
     binaries=binaries, # 기본값 사용
-    datas=datas,       # 기본 리소스만 포함
+    datas=datas,       # 리소스 및 폰트 포함
     # hiddenimports에 tzdata, sip 추가
     hiddenimports=[
         'pkg_resources', # setuptools 관련 hook에서 필요할 수 있음
