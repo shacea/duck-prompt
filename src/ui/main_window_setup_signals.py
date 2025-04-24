@@ -18,8 +18,8 @@ def connect_signals(mw: 'MainWindow'):
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
-    # REMOVED: Connect the clicked signal to the new handler in MainWindow for toggling check state
-    # mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # MainWindow
+    # Connect the clicked signal to the new handler in MainWindow for toggling check state
+    mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # MainWindow
     # Data changes (like check state) are handled by the model signal
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
 
@@ -65,9 +65,13 @@ def connect_signals(mw: 'MainWindow'):
     if hasattr(mw, 'meta_prompt_tab'):
         mw.meta_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     if hasattr(mw, 'user_prompt_tab'):
-        mw.user_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+        user_prompt_tab_widget = getattr(mw, 'user_prompt_tab', None)
+        if user_prompt_tab_widget:
+            user_prompt_tab_widget.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     if hasattr(mw, 'final_prompt_tab'):
-        mw.final_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+        final_prompt_tab_widget = getattr(mw, 'final_prompt_tab', None)
+        if final_prompt_tab_widget:
+            final_prompt_tab_widget.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     # Custom tabs added later will have their signals connected in add_new_custom_tab
 
 
@@ -96,5 +100,3 @@ def connect_signals(mw: 'MainWindow'):
     shortcut_copy.setShortcut(QKeySequence("Ctrl+C"))
     shortcut_copy.triggered.connect(mw.on_copy_shortcut) # MainWindow
     mw.addAction(shortcut_copy)
-
-            

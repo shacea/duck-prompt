@@ -86,7 +86,8 @@ class MainController:
         if hasattr(current_widget, 'toPlainText'):
             self.update_char_count(current_widget.toPlainText())
             # 토큰 계산은 버튼 클릭 시에만 수행되므로 여기서는 레이블만 리셋
-            if self.mw._initialized:
+            # _initialized 체크 추가: 초기화 중이 아닐 때만 리셋
+            if hasattr(self.mw, '_initialized') and self.mw._initialized:
                 self.mw.token_count_label.setText("토큰 계산: -")
         else:
             # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화
@@ -98,6 +99,7 @@ class MainController:
         """Calculates tokens for the given text and updates the status bar. Called on button click."""
         # 초기화 중이거나 MainWindow가 없으면 실행하지 않음
         if not hasattr(self.mw, '_initialized') or not self.mw._initialized:
+            print("Token calculation skipped: MainWindow not initialized.")
             self.mw.token_count_label.setText("토큰 계산: -") # 초기 상태 표시
             return
 
@@ -109,6 +111,7 @@ class MainController:
 
         # 텍스트가 비어 있으면 계산하지 않음
         if not text:
+            print("Token calculation skipped: Text is empty.")
             self.mw.token_count_label.setText(token_text)
             return
 
@@ -120,14 +123,21 @@ class MainController:
 
         if not model_name:
             token_text = f"{selected_llm} 모델명을 입력하세요."
+            print("Token calculation skipped: Model name is empty.")
         else:
+            print(f"Calling token_service.calculate_tokens for {selected_llm}, {model_name}...")
             token_count = self.token_service.calculate_tokens(selected_llm, model_name, text)
+            print(f"Token calculation result: {token_count}") # 디버깅 로그 추가
+
             if token_count is not None:
                 token_text = f"Calculated Total Token ({selected_llm}): {token_count:,}"
             else:
                 token_text = f"{selected_llm} 토큰 계산 오류"
+                print(f"Token calculation failed for {selected_llm}, {model_name}.") # 실패 로그 추가
 
+        print(f"Updating token label to: {token_text}") # 최종 업데이트 전 로그 추가
         self.mw.token_count_label.setText(token_text)
+        QApplication.processEvents() # Ensure the label update is processed
 
 
     def on_llm_selected(self):
@@ -147,5 +157,3 @@ class MainController:
 
     # 참고: 이전 MainController의 다른 메서드들은
     # ResourceController, PromptController, XmlController, FileTreeController로 이동되었습니다.
-
-            

@@ -416,9 +416,18 @@ class MainWindow(QMainWindow):
         elif action == delete_action:
             self.file_tree_controller.delete_item(file_path)
 
+    def on_tree_view_item_clicked(self, index: QModelIndex):
+        """Handles item clicks in the tree view to toggle check state."""
+        if not index.isValid() or index.column() != 0:
+            return
 
-    def on_selection_changed_handler(self, selected: QItemSelection, deselected: QItemSelection):
-        """Handles selection changes in the file tree view to toggle check state."""
-        pass
+        # CheckableProxyModel의 setData를 호출하여 체크 상태 토글
+        current_state = self.checkable_proxy.data(index, Qt.CheckStateRole)
+        new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
+        # setData 호출 시 재귀 방지 플래그(_is_setting_data)가 있으므로 직접 호출 가능
+        self.checkable_proxy.setData(index, new_state, Qt.CheckStateRole)
 
-            
+    # def on_selection_changed_handler(self, selected: QItemSelection, deselected: QItemSelection):
+    #     """Handles selection changes in the file tree view to toggle check state."""
+    #     # This handler is likely no longer needed as clicking toggles the check state directly.
+    #     pass
