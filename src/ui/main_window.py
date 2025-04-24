@@ -88,16 +88,9 @@ class MainWindow(QMainWindow):
         initial_height = 800
         self.resize(initial_width, initial_height)
 
-        # 초기 스플리터 크기 설정 (왼쪽:오른쪽 비율 조정)
-        # 예: 왼쪽을 오른쪽보다 약 1.8배 크게 (전체 너비 기준 비율 계산)
-        # left_width = int(initial_width * (1.8 / (1.8 + 1))) # 약 642
-        # right_width = initial_width - left_width # 약 558
-        # 더 명확하게: 왼쪽 540, 오른쪽 660 (1200 기준) -> 비율 약 1:1.22
-        # 왼쪽 700, 오른쪽 500 -> 비율 1.4:1
-        # 왼쪽 600, 오른쪽 600 -> 비율 1:1
-        # 왼쪽 770, 오른쪽 430 -> 비율 약 1.8:1
-        left_width = int(initial_width * 1.8 / 2.8) # 약 771
-        right_width = initial_width - left_width # 약 429
+        # 초기 스플리터 크기 설정 (파일 탐색기:탭 위젯 비율을 약 30:70으로 조정)
+        left_width = int(initial_width * 0.3)  # 1200 * 0.3 = 360
+        right_width = initial_width - left_width # 1200 - 360 = 840
         self.center_splitter.setSizes([left_width, right_width])
 
         self.build_tabs.setCurrentIndex(1) # 사용자 탭을 기본으로 표시
@@ -207,12 +200,12 @@ class MainWindow(QMainWindow):
             folder_name = os.path.basename(state.project_folder)
             self.project_folder_label.setText(f"현재 프로젝트 폴더: {state.project_folder}")
             if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
-                idx = self.mw.dir_model.setRootPathFiltered(state.project_folder)
-                root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
-                self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 인덱스 설정
+                idx = self.dir_model.setRootPathFiltered(state.project_folder) # dir_model 사용
+                root_proxy_index = self.checkable_proxy.mapFromSource(idx) # checkable_proxy 사용
+                self.tree_view.setRootIndex(root_proxy_index) # tree_view 사용
                 # 루트 폴더 자동 체크 (선택적)
                 if root_proxy_index.isValid():
-                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    self.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
 
             self.status_bar.showMessage(f"Project Folder: {state.project_folder}")
         else:
