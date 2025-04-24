@@ -1,0 +1,42 @@
+# DuckPrompt Configuration File (YAML Format)
+
+# List of allowed file extensions for processing.
+# If empty or not present, all files are allowed (after exclusion).
+# Example: [".py", ".txt", ".md"]
+allowed_extensions: []
+
+# List of directory or file patterns to exclude from the file tree and processing.
+# Uses .gitignore pattern matching rules.
+# These are combined with the patterns from the project's .gitignore file (if found)
+# and the default_ignore_list below.
+excluded_dirs:
+  - ".DS_Store"
+  - "*.log"
+  - "node_modules/"
+  # Add more custom exclusion patterns here
+
+# Default list of ignore patterns applied universally.
+# These are always included in the exclusion logic.
+default_ignore_list:
+  - "__pycache__/"
+  - ".git/"
+  - ".gitignore"
+  - ".vscode/"
+  - ".idea/"
+  - "build/"
+  - "dist/"
+  - "*.pyc"
+  - "*.egg-info/"
+  - ".env" # Exclude .env file itself
+  - ".cache/"
+  - ".mypy_cache/"
+  - ".pytest_cache/"
+  - ".ruff_cache/"
+  # Project specific defaults (from original config.py)
+  - ".windsurfrules"
+  - ".cursorrules"
+
+# Other potential settings:
+# default_theme: "Fusion"
+# max_file_size_mb: 10 # Maximum file size to process
+# log_level: "INFO" # Logging level (DEBUG, INFO, WARNING, ERROR)

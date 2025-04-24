@@ -1,7 +1,6 @@
-
 PyQt5
-pyinstaller
 PyYAML
 termcolor
 tiktoken
 python-dotenv
+pydantic>=2.0

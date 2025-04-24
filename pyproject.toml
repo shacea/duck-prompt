@@ -1,0 +1,137 @@
+[project]
+name = "duckprompt"
+version = "1.1.0" # Version after Refactoring Phase 1
+description = "GUI tool to build prompts for LLMs by integrating file contents."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" } # Specify your license
+authors = [
+  { name = "Your Name", email = "your.email@example.com" }, # Update with actual author info
+]
+keywords = ["prompt", "llm", "gui", "pyqt5", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta", # Or appropriate status
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "pyqt5-qt5==5.15.2",
+    "PyQt5",
+    "PyYAML", # For config_service.py
+    "termcolor", # Check if still needed after refactoring logging
+    "tiktoken",
+    "python-dotenv",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-qt",
+    "pytest-mock",
+    "pytest-cov",
+    "ruff",
+    "black",
+    "mypy",
+    "radon", # For complexity measurement
+    "uv", # Recommended package manager
+    # "types-PyYAML",
+    # "types-PyQt5",
+]
+
+[project.scripts]
+# If you want to create a command-line entry point (optional)
+# duckprompt = "src.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# --- Tool Configurations ---
+
+[tool.uv]
+# uv specific settings (if any)
+
+[tool.ruff]
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "SIM",# flake8-simplify
+    "PTH",# flake8-use-pathlib
+    "RUF",# Ruff-specific rules
+]
+ignore = [
+    "E501", # Line too long (handled by black)
+]
+# Specify source directories for Ruff to check
+src = ["src", "tests"]
+target-version = "py312"
+
+[tool.black]
+line-length = 88
+target-version = ['py312']
+include = '\.pyi?$'
+# You can explicitly include src and tests if needed, but default usually works
+# include = '(src/|tests/).*\.pyi?$'
+
+[tool.mypy]
+python_version = "3.12"
+# Basic strictness flags (adjust as needed)
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true # Enforce type hints on function definitions
+disallow_incomplete_defs = true # Enforce type hints for all arguments/return types
+# ignore_missing_imports = true # Start with True, aim for False
+# Pydantic plugin activation
+plugins = ["pydantic.mypy"]
+# Specify paths for mypy to check
+files = ["src", "tests"]
+# Exclude specific files/directories if necessary
+# exclude = ["src/vendored/"]
+
+# Pydantic plugin specific settings (optional)
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+warn_untyped_fields = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+# Add options: -ra (show extra summary info), -q (quiet), coverage options
+addopts = "-q --maxfail=3 --disable-warnings" # Example coverage threshold
+testpaths = [
+    "tests", # Directory where tests are located
+]
+pythonpath = ["src"] # Add 'src' to PYTHONPATH so tests can import 'from core...' etc.
+# Filter warnings (optional)
+# filterwarnings = [
+#     "ignore::DeprecationWarning",
+# ]
+
+[tool.coverage.run]
+source = ["src"] # Measure coverage for the src directory
+omit = [
+    "src/app.py", # Exclude main entry point if UI testing is complex
+    "src/ui/main_window.py", # Exclude UI definition if not easily testable
+    "*/__init__.py", # Exclude init files
+]
+
+[tool.coverage.report]
+# Fail if coverage is below threshold (defined in addopts)
+fail_under = 70 # Redundant if set in addopts, but good for clarity
+show_missing = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
