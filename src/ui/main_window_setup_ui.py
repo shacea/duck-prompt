@@ -207,25 +207,25 @@ def create_layout(mw: 'MainWindow'):
     central_widget = QWidget()
     mw.setCentralWidget(central_widget)
     main_layout = QVBoxLayout(central_widget)
-    main_layout.setContentsMargins(5, 5, 5, 5)
-    main_layout.setSpacing(5)
+    main_layout.setContentsMargins(5, 5, 5, 5) # Main layout margins
+    main_layout.setSpacing(2) # Main layout spacing 줄임 (5 -> 2)
 
     # --- 상단 레이아웃 ---
     top_button_container = QWidget()
     top_button_layout = QHBoxLayout(top_button_container)
     top_button_layout.setSpacing(10)
-    top_button_layout.setContentsMargins(0, 0, 0, 0)
+    top_button_layout.setContentsMargins(0, 0, 0, 0) # Button container margins
     top_button_layout.addWidget(mw.mode_toggle_btn)
     top_button_layout.addWidget(mw.reset_program_btn)
     top_button_layout.addWidget(mw.select_project_btn)
     top_button_layout.addStretch(1)
 
     top_layout_wrapper = QVBoxLayout()
-    top_layout_wrapper.setSpacing(5)
-    top_layout_wrapper.setContentsMargins(0, 0, 0, 0)
+    top_layout_wrapper.setSpacing(2) # Spacing between button container and label 줄임 (5 -> 2)
+    top_layout_wrapper.setContentsMargins(0, 0, 0, 0) # Wrapper margins
     top_layout_wrapper.addWidget(top_button_container)
     top_layout_wrapper.addWidget(mw.project_folder_label)
-    main_layout.addLayout(top_layout_wrapper)
+    main_layout.addLayout(top_layout_wrapper) # Add the wrapper to the main layout
 
     # --- 중앙 스플리터 (왼쪽 영역 | 오른쪽 영역) ---
     mw.center_splitter = QSplitter(Qt.Horizontal)

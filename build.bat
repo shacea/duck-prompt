@@ -1,9 +1,8 @@
-
 @echo off
 systeminfo | find "x64-based" > nul
 if %errorlevel% equ 0 (
     echo AMD64 Windows Build...
-    call conda activate duck-prompt
+    call .venv\Scripts\activate
     pyinstaller app_amd64.spec
     goto :done
 )
@@ -11,7 +10,7 @@ if %errorlevel% equ 0 (
 systeminfo | find "ARM64-based" > nul
 if %errorlevel% equ 0 (
     echo ARM64 Windows Build...
-    call conda activate duck-prompt
+    call .venv\Scripts\activate
     pyinstaller app_arm64.spec
     goto :done
 )

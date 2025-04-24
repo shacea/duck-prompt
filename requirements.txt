@@ -3,6 +3,5 @@ PyYAML
 termcolor
 tiktoken
 pydantic
-# google-cloud-aiplatform # Removed
-google-generativeai # Added
+google-generativeai
 anthropic
