@@ -126,6 +126,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def setData(self, index: QModelIndex, value: any, role: int = Qt.EditRole) -> bool:
         """Sets data for the item, handling check state changes, including multi-select and folder recursion."""
+        # --- 디버깅 로그 추가 (1) ---
+        # print("▶ setData called:", index.row(), index.column(), "role=", role, "value=", value)
+
         if self._is_setting_data: # 재귀 호출 방지
             # print(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
             return False
@@ -156,6 +159,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
             processed_paths = set() # Avoid processing the same path multiple times in one go
             items_to_update_signal = [] # Collect indices for batch signal emission
+            folders_to_expand = [] # Collect folders to expand if checked
 
             for target_index in target_indexes_to_process:
                 if not target_index.isValid(): continue
@@ -171,6 +175,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 current_state_in_dict = self.checked_files_dict.get(file_path, False)
                 needs_update = (is_checked != current_state_in_dict)
 
+                # --- 디버깅 로그 추가 (3) ---
+                # print(f"    needs_update for {file_path}? {needs_update}")
+
                 if needs_update:
                     if is_checked:
                         self.checked_files_dict[file_path] = True
@@ -179,7 +186,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
                     items_to_update_signal.append(target_index)
                     # print(f"  State changed for {file_path}. Added to signal list.")
 
-                # If it's a directory, recursively update children AND expand if checking
+                # If it's a directory, recursively update children AND potentially expand
                 src_index = self.mapToSource(target_index)
                 if src_index.isValid() and self.fs_model.isDir(src_index):
                     # print(f"  {file_path} is a directory. Checking children...")
@@ -190,8 +197,14 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
                     # Expand the folder recursively if it was just checked
                     if is_checked and needs_update: # Only expand if state actually changed to checked
-                        # print(f"  Recursively expanding folder: {file_path}")
-                        self.expand_index_recursively(target_index) # Use recursive expand
+                        # --- 디버깅 코드 추가 (4) ---
+                        proxy_idx = target_index # Use the current target_index (which is a proxy index)
+                        self.tree_view.expand(proxy_idx)
+                        # print("  ▶ force expand:", self.get_file_path_from_index(proxy_idx))
+                        # --- End of Debugging Code (4) ---
+
+                        # print(f"  Adding folder to expand list: {file_path}")
+                        folders_to_expand.append(target_index) # Add to list for later expansion
 
 
             # Emit dataChanged signals only once after all processing is done
@@ -202,6 +215,17 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 for idx_to_signal in unique_indices_to_signal:
                     # print(f"  Emitting for: {self.get_file_path_from_index(idx_to_signal)}")
                     self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.CheckStateRole])
+                    # --- 디버깅 로그 제거 (2) ---
+                    # print("  ▶ dataChanged emitted for:", self.get_file_path_from_index(idx_to_signal))
+
+
+            # Expand folders after signals are emitted
+            if folders_to_expand:
+                # print(f"Expanding {len(folders_to_expand)} folders.")
+                for folder_idx in folders_to_expand:
+                    if folder_idx.isValid():
+                        # print(f"  Expanding: {self.get_file_path_from_index(folder_idx)}")
+                        self.expand_index_recursively(folder_idx) # Use recursive expand
 
             return True # Indicate success
 
@@ -242,6 +266,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
             # print(f"    Processing child: {file_path}")
             current_state_in_dict = self.checked_files_dict.get(file_path, False)
             needs_update = (checked != current_state_in_dict)
+
+            # --- 디버깅 로그 추가 (3) - 자식 노드용 ---
+            # print(f"      needs_update for child {file_path}? {needs_update}")
 
             if needs_update:
                 if checked:
@@ -293,5 +320,3 @@ class CheckableProxyModel(QSortFilterProxyModel):
     def get_checked_files(self) -> list[str]:
         """Returns a list of checked paths that correspond to actual files."""
         return [path for path, checked in self.checked_files_dict.items() if checked and os.path.isfile(path)]
-
-            

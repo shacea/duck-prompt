@@ -7,8 +7,6 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
 
 # 컨트롤러 import (함수 호출용)
-# from .controllers.system_prompt_controller import select_default_system_prompt # 이제 MainWindow에서 직접 호출 안 함
-
 def connect_signals(mw: 'MainWindow'):
     """Connects widget signals to controller slots."""
     # 상단 버튼
@@ -18,9 +16,6 @@ def connect_signals(mw: 'MainWindow'):
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
-    # Connect the clicked signal to the new handler in MainWindow for toggling check state
-    mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # MainWindow
-    # Data changes (like check state) are handled by the model signal
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
 
     # 실행 버튼
@@ -46,34 +41,30 @@ def connect_signals(mw: 'MainWindow'):
     mw.restore_button.clicked.connect(mw.resource_controller.restore_states_from_backup_action) # ResourceController
     mw.template_tree.itemDoubleClicked.connect(mw.resource_controller.load_selected_item) # ResourceController
 
-    # .gitignore (제거됨)
-    # mw.save_gitignore_btn.clicked.connect(mw.file_tree_controller.save_gitignore_settings) # FileTreeController
-
     # 상태바 & 모델 선택
     mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController (Resets token label)
 
     # 텍스트 변경 시 문자 수 업데이트 및 토큰 레이블 리셋 (현재 활성 탭 기준)
-    mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts and reset token label when tab changes
-    # Connect textChanged for all relevant text edit widgets to update char count and reset token label
-    mw.system_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
-    mw.user_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
-    mw.prompt_output_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+    mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts when tab changes
+    # Connect textChanged for all relevant text edit widgets to the new handler
+    mw.system_tab.textChanged.connect(mw.main_controller.handle_text_changed)
+    mw.user_tab.textChanged.connect(mw.main_controller.handle_text_changed)
+    mw.prompt_output_tab.textChanged.connect(mw.main_controller.handle_text_changed)
     if hasattr(mw, 'dir_structure_tab'):
-        mw.dir_structure_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab) # ReadOnly, but maybe useful
+        mw.dir_structure_tab.textChanged.connect(mw.main_controller.handle_text_changed) # ReadOnly, but connect anyway
     if hasattr(mw, 'xml_input_tab'):
-        mw.xml_input_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+        mw.xml_input_tab.textChanged.connect(mw.main_controller.handle_text_changed)
     if hasattr(mw, 'meta_prompt_tab'):
-        mw.meta_prompt_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+        mw.meta_prompt_tab.textChanged.connect(mw.main_controller.handle_text_changed)
     if hasattr(mw, 'user_prompt_tab'):
         user_prompt_tab_widget = getattr(mw, 'user_prompt_tab', None)
         if user_prompt_tab_widget:
-            user_prompt_tab_widget.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+            user_prompt_tab_widget.textChanged.connect(mw.main_controller.handle_text_changed)
     if hasattr(mw, 'final_prompt_tab'):
         final_prompt_tab_widget = getattr(mw, 'final_prompt_tab', None)
         if final_prompt_tab_widget:
-            final_prompt_tab_widget.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
+            final_prompt_tab_widget.textChanged.connect(mw.main_controller.handle_text_changed)
     # Custom tabs added later will have their signals connected in add_new_custom_tab
-
 
     # 메뉴 액션
     mw.settings_action.triggered.connect(mw.open_settings_dialog) # 설정 메뉴 연결

@@ -37,6 +37,7 @@ class MainController:
         # 하위 컨트롤러 참조는 MainWindow를 통해 접근 (예: self.mw.resource_controller)
         self.token_service: TokenCalculationService = self.mw.token_service # Get service from MainWindow
         self.config_service: ConfigService = self.mw.config_service # Get service from MainWindow
+        self.last_token_count: Optional[int] = None # 마지막 계산된 토큰 수 저장
 
     def reset_program(self):
         """Resets the application to its initial state."""
@@ -66,7 +67,7 @@ class MainController:
 
         # 리셋 후에는 텍스트가 비어있으므로 update_active_tab_counts 호출해도 계산 안 함
         self.update_char_count_for_active_tab() # 문자 수만 업데이트
-        self.mw.token_count_label.setText("토큰 계산: -") # 토큰 카운트 리셋
+        self.reset_token_label() # 토큰 카운트 리셋
 
         # 윈도우 제목 리셋
         self.mw.update_window_title()
@@ -81,26 +82,35 @@ class MainController:
         self.mw.char_count_label.setText(f"Chars: {char_count:,}")
 
     def update_char_count_for_active_tab(self):
-        """Updates the character count based on the currently active text edit tab and resets token label."""
+        """Updates the character count based on the currently active text edit tab."""
         current_widget = self.mw.build_tabs.currentWidget()
         if hasattr(current_widget, 'toPlainText'):
             self.update_char_count(current_widget.toPlainText())
-            # 토큰 계산은 버튼 클릭 시에만 수행되므로 여기서는 레이블만 리셋
-            # _initialized 체크 추가: 초기화 중이 아닐 때만 리셋
-            if hasattr(self.mw, '_initialized') and self.mw._initialized:
-                self.mw.token_count_label.setText("토큰 계산: -")
+            # 토큰 레이블 리셋은 별도 함수로 분리
+            # self.reset_token_label() # 여기서 리셋하지 않음
         else:
             # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화
             self.mw.char_count_label.setText("Chars: 0")
-            self.mw.token_count_label.setText("토큰 계산: -")
+            # self.reset_token_label() # 여기서 리셋하지 않음
 
+    def reset_token_label(self):
+        """Resets the token count label to its default state."""
+        # _initialized 체크 추가: 초기화 중이 아닐 때만 리셋
+        if hasattr(self.mw, '_initialized') and self.mw._initialized:
+            self.mw.token_count_label.setText("토큰 계산: -")
+            self.last_token_count = None # 마지막 계산 값도 초기화
+
+    def handle_text_changed(self):
+        """Handles text changes in editors: updates char count and resets token label."""
+        self.update_char_count_for_active_tab()
+        self.reset_token_label() # 텍스트 변경 시 토큰 레이블 리셋
 
     def calculate_and_display_tokens(self, text: str):
         """Calculates tokens for the given text and updates the status bar. Called on button click."""
         # 초기화 중이거나 MainWindow가 없으면 실행하지 않음
         if not hasattr(self.mw, '_initialized') or not self.mw._initialized:
             print("Token calculation skipped: MainWindow not initialized.")
-            self.mw.token_count_label.setText("토큰 계산: -") # 초기 상태 표시
+            self.reset_token_label() # 초기 상태 표시
             return
 
         char_count = calculate_char_count(text)
@@ -108,6 +118,7 @@ class MainController:
 
         token_count = None
         token_text = "토큰 계산: -" # 기본 메시지
+        self.last_token_count = None # 계산 시작 전 초기화
 
         # 텍스트가 비어 있으면 계산하지 않음
         if not text:
@@ -117,23 +128,28 @@ class MainController:
 
         selected_llm = self.mw.llm_combo.currentText()
         model_name = self.mw.model_name_input.text().strip()
-        token_text = f"{selected_llm} 토큰 계산 중..."
-        self.mw.token_count_label.setText(token_text) # Show calculating message
-        QApplication.processEvents() # Allow UI update
 
         if not model_name:
             token_text = f"{selected_llm} 모델명을 입력하세요."
             print("Token calculation skipped: Model name is empty.")
-        else:
-            print(f"Calling token_service.calculate_tokens for {selected_llm}, {model_name}...")
-            token_count = self.token_service.calculate_tokens(selected_llm, model_name, text)
-            print(f"Token calculation result: {token_count}") # 디버깅 로그 추가
+            self.mw.token_count_label.setText(token_text)
+            return
 
-            if token_count is not None:
-                token_text = f"Calculated Total Token ({selected_llm}): {token_count:,}"
-            else:
-                token_text = f"{selected_llm} 토큰 계산 오류"
-                print(f"Token calculation failed for {selected_llm}, {model_name}.") # 실패 로그 추가
+        # 계산 중 메시지 표시
+        token_text = f"{selected_llm} 토큰 계산 중..."
+        self.mw.token_count_label.setText(token_text)
+        QApplication.processEvents() # Allow UI update
+
+        print(f"Calling token_service.calculate_tokens for {selected_llm}, {model_name}...")
+        token_count = self.token_service.calculate_tokens(selected_llm, model_name, text)
+        print(f"Token calculation result: {token_count}") # 디버깅 로그 추가
+
+        if token_count is not None:
+            token_text = f"Calculated Total Token ({selected_llm}): {token_count:,}"
+            self.last_token_count = token_count # 성공 시 값 저장
+        else:
+            token_text = f"{selected_llm} 토큰 계산 오류"
+            print(f"Token calculation failed for {selected_llm}, {model_name}.") # 실패 로그 추가
 
         print(f"Updating token label to: {token_text}") # 최종 업데이트 전 로그 추가
         self.mw.token_count_label.setText(token_text)
@@ -147,9 +163,9 @@ class MainController:
         default_model = self.config_service.get_default_model_name(selected_llm)
         self.mw.model_name_input.setText(default_model)
 
-        # Reset token count label, calculation will happen on button press
-        self.mw.token_count_label.setText("토큰 계산: -")
-        # Update character count for the active tab (doesn't trigger token calculation)
+        # Reset token count label
+        self.reset_token_label()
+        # Update character count for the active tab
         self.update_char_count_for_active_tab()
 
 

@@ -20,6 +20,8 @@ from .widgets.custom_text_edit import CustomTextEdit
 from .widgets.custom_tab_bar import CustomTabBar
 # get_resource_path import
 from utils.helpers import get_resource_path
+# CheckBoxDelegate import 추가
+from .widgets.check_box_delegate import CheckBoxDelegate
 
 def create_menu_bar(mw: 'MainWindow'):
     """Creates the main menu bar."""
@@ -121,6 +123,12 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection) # Allow multi-selection
     mw.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
     mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers) # Disable editing item names directly
+
+    # --- CheckBoxDelegate 적용 ---
+    # Delegate 생성 시 부모 위젯 전달 (스타일 접근 등에 필요할 수 있음)
+    # CheckBoxDelegate를 mw.tree_view의 자식으로 생성하여 스타일 상속 및 관리 용이
+    mw.tree_view.setItemDelegateForColumn(0, CheckBoxDelegate(mw.tree_view)) # 0번 컬럼에 Delegate 설정
+
     # 파일 트리 폰트 설정 (선택적)
     # mw.tree_view.setFont(default_font)
 
