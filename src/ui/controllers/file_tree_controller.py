@@ -34,19 +34,22 @@ class FileTreeController:
         folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", start_dir)
 
         if folder:
-            self.mw.reset_state() # MainWindow 상태 초기화
+            # 폴더 선택 시 상태 초기화 (UI 및 내부 변수)
+            self.mw.reset_state() # MainWindow 상태 초기화 (트리 리셋 포함)
             self.mw.current_project_folder = folder
             folder_name = os.path.basename(folder)
             self.mw.project_folder_label.setText(f"현재 프로젝트 폴더: {folder}")
 
             self.load_gitignore_settings() # gitignore 로드 및 필터 설정
 
+            # 모델에 루트 경로 설정 및 트리뷰 업데이트
             if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
                 idx = self.mw.dir_model.setRootPathFiltered(folder)
                 root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
-                self.mw.tree_view.setRootIndex(root_proxy_index)
+                self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 루트 인덱스 설정
                 self.mw.status_bar.showMessage(f"Project Folder: {folder}")
 
+                # 루트 폴더 자동 체크 (선택적)
                 if root_proxy_index.isValid():
                     self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
 
@@ -118,13 +121,19 @@ class FileTreeController:
              self.mw.checkable_proxy.set_ignore_patterns(default_patterns)
 
     def reset_file_tree(self):
-        """Resets the file tree view to the home directory."""
-        home_path = os.path.expanduser("~")
+        """Resets the file tree view to an empty state."""
+        # home_path = os.path.expanduser("~") # 더 이상 홈 디렉토리 표시 안 함
         if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            idx = self.mw.dir_model.setRootPathFiltered(home_path)
-            self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
-            self.mw.checkable_proxy.checked_files_dict.clear() # 체크 상태 초기화
+            # 모델의 루트 경로를 빈 문자열로 설정하여 드라이브 목록 등도 안 보이게 함
+            idx = self.mw.dir_model.setRootPath("")
+            # 트리 뷰의 루트 인덱스를 유효하지 않은 인덱스로 설정
+            self.mw.tree_view.setRootIndex(QModelIndex())
+            # 체크 상태 초기화
+            self.mw.checkable_proxy.checked_files_dict.clear()
+            # 트리 축소 (선택적)
             self.mw.tree_view.collapseAll()
+            print("File tree reset to empty state.")
+
 
     def generate_directory_tree_structure(self):
         """Generates the directory tree structure based on checked items."""
@@ -230,8 +239,13 @@ class FileTreeController:
             # 트리 확장 상태 저장/복원 로직은 현재 미구현
             idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
             # 필터 갱신은 setRootPathFiltered 또는 set_ignore_patterns 호출 시 처리됨
-            self.mw.tree_view.setRootIndex(self.mw.checkable_proxy.mapFromSource(idx))
+            root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
+            self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 루트 인덱스 설정
             self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
+            # 루트 폴더 자동 체크 (선택적)
+            if root_proxy_index.isValid():
+                self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
+
 
     def handle_selection_change(self, selected: QItemSelection, deselected: QItemSelection):
         """Handles selection changes in the file tree view to toggle check state."""
@@ -263,5 +277,5 @@ class FileTreeController:
                 except Exception:
                     pass # 오류 무시
             # 상태바 등에 정보 표시 (선택적)
-            # self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
-            pass # 현재는 특별한 동작 없음
+            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
+            

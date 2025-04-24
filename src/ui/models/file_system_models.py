@@ -3,8 +3,6 @@ import fnmatch
 from PyQt5.QtCore import QSortFilterProxyModel, Qt, QModelIndex
 from PyQt5.QtWidgets import QFileSystemModel, QTreeView
 from typing import Callable, Optional, Set
-
-# FilesystemService import
 from core.services.filesystem_service import FilesystemService
 
 class FilteredFileSystemModel(QFileSystemModel):
