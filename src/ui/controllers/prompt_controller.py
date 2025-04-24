@@ -18,7 +18,7 @@ class PromptController:
         self.prompt_service = prompt_service
 
     def generate_prompt(self):
-        """Generates the prompt for the Code Enhancer mode."""
+        """Generates the prompt for the Code Enhancer mode and calculates tokens."""
         if self.mw.mode == "Meta Prompt Builder":
             return self.generate_meta_prompt() # Meta 모드면 해당 함수 호출
 
@@ -68,13 +68,13 @@ class PromptController:
         self.mw.last_generated_prompt = final_prompt
         self.mw.prompt_output_tab.setText(final_prompt)
         # Calculate tokens for the generated prompt
-        self.mw.main_controller.calculate_and_display_tokens(final_prompt)
+        self.mw.main_controller.calculate_and_display_tokens(final_prompt) # <<< Token calculation here
         self.mw.status_bar.showMessage(f"Prompt generated! Length: {len(final_prompt):,} chars")
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         return True
 
     def generate_meta_prompt(self):
-        """Generates the intermediate meta prompt."""
+        """Generates the intermediate meta prompt and calculates tokens."""
         system_text = self.mw.system_tab.toPlainText() # 메타 템플릿
         user_text = self.mw.user_tab.toPlainText() # 메타 사용자 입력
 
@@ -86,13 +86,13 @@ class PromptController:
         self.mw.prompt_output_tab.setText(final_output) # 메타 프롬프트 출력 탭
         self.mw.last_generated_prompt = final_output
         # Calculate tokens for the generated meta prompt
-        self.mw.main_controller.calculate_and_display_tokens(final_output)
+        self.mw.main_controller.calculate_and_display_tokens(final_output) # <<< Token calculation here
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         self.mw.status_bar.showMessage("META Prompt generated!")
         return True
 
     def generate_final_meta_prompt(self):
-        """Generates the final prompt by replacing variables in the meta prompt."""
+        """Generates the final prompt by replacing variables in the meta prompt and calculates tokens."""
         meta_prompt_content = ""
         user_prompt_content = ""
         if hasattr(self.mw, 'meta_prompt_tab'):
@@ -120,7 +120,7 @@ class PromptController:
             self.mw.final_prompt_tab.setText(final_prompt)
             self.mw.last_generated_prompt = final_prompt
             # Calculate tokens for the generated final prompt
-            self.mw.main_controller.calculate_and_display_tokens(final_prompt)
+            self.mw.main_controller.calculate_and_display_tokens(final_prompt) # <<< Token calculation here
             self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
             self.mw.status_bar.showMessage("Final Prompt generated!")
         else:
@@ -167,10 +167,12 @@ class PromptController:
         if not tree_success: return
 
         # 자신의 프롬프트 생성 메서드 호출 (내부에서 토큰 계산 포함)
-        prompt_success = self.generate_prompt()
+        prompt_success = self.generate_prompt() # This already calls calculate_and_display_tokens
         if not prompt_success: return
 
         # 자신의 클립보드 복사 메서드 호출
         copy_success = self.copy_to_clipboard()
         if copy_success:
             self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성, 토큰 계산 및 복사 완료!")
+
+            

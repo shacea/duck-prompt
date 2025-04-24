@@ -18,21 +18,23 @@ def connect_signals(mw: 'MainWindow'):
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
-    # Click event is now handled by the view/model interaction for checking (setData)
+    # REMOVED: Connect the clicked signal to the new handler in MainWindow for toggling check state
+    # mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # MainWindow
+    # Data changes (like check state) are handled by the model signal
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
 
     # 실행 버튼
     if mw.mode != "Meta Prompt Builder":
         mw.generate_tree_btn.clicked.connect(mw.file_tree_controller.generate_directory_tree_structure) # FileTreeController
-        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_prompt) # PromptController
+        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_prompt) # PromptController (Calculates tokens)
         mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
         mw.run_xml_parser_btn.clicked.connect(mw.xml_controller.run_xml_parser) # XmlController
-        mw.generate_all_btn.clicked.connect(mw.prompt_controller.generate_all_and_copy) # PromptController
+        mw.generate_all_btn.clicked.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens via generate_prompt)
     else:
-        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_meta_prompt) # PromptController
+        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_meta_prompt) # PromptController (Calculates tokens)
         mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
         if hasattr(mw, "generate_final_prompt_btn"):
-            mw.generate_final_prompt_btn.clicked.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController
+            mw.generate_final_prompt_btn.clicked.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController (Calculates tokens)
 
     # 리소스 관리
     mw.resource_mode_combo.currentIndexChanged.connect(mw.resource_controller.load_templates_list) # ResourceController
@@ -48,11 +50,11 @@ def connect_signals(mw: 'MainWindow'):
     # mw.save_gitignore_btn.clicked.connect(mw.file_tree_controller.save_gitignore_settings) # FileTreeController
 
     # 상태바 & 모델 선택
-    mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController
+    mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController (Resets token label)
 
-    # 텍스트 변경 시 문자 수만 업데이트 (현재 활성 탭 기준)
-    mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts when tab changes
-    # Connect textChanged for all relevant text edit widgets to update char count
+    # 텍스트 변경 시 문자 수 업데이트 및 토큰 레이블 리셋 (현재 활성 탭 기준)
+    mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts and reset token label when tab changes
+    # Connect textChanged for all relevant text edit widgets to update char count and reset token label
     mw.system_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     mw.user_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
     mw.prompt_output_tab.textChanged.connect(mw.main_controller.update_char_count_for_active_tab)
@@ -80,13 +82,19 @@ def connect_signals(mw: 'MainWindow'):
     shortcut_generate = QAction(mw)
     shortcut_generate.setShortcut(QKeySequence("Ctrl+Return"))
     if mw.mode == "Meta Prompt Builder":
-         shortcut_generate.triggered.connect(mw.prompt_controller.generate_meta_prompt) # PromptController
+         # Connect to generate_final_meta_prompt if it exists, otherwise generate_meta_prompt
+         if hasattr(mw, "generate_final_prompt_btn"):
+             shortcut_generate.triggered.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController (Calculates tokens)
+         else:
+             shortcut_generate.triggered.connect(mw.prompt_controller.generate_meta_prompt) # PromptController (Calculates tokens)
     else:
          # Connect to generate_all_and_copy for Ctrl+Return in Code Enhancer mode
-         shortcut_generate.triggered.connect(mw.prompt_controller.generate_all_and_copy) # PromptController
+         shortcut_generate.triggered.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens)
     mw.addAction(shortcut_generate)
 
     shortcut_copy = QAction(mw)
     shortcut_copy.setShortcut(QKeySequence("Ctrl+C"))
     shortcut_copy.triggered.connect(mw.on_copy_shortcut) # MainWindow
     mw.addAction(shortcut_copy)
+
+            

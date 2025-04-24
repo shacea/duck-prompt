@@ -120,96 +120,126 @@ class CheckableProxyModel(QSortFilterProxyModel):
         """Returns item flags, adding ItemIsUserCheckable."""
         flags = super().flags(index)
         if index.column() == 0:
-            # Ensure the item is enabled to be checkable
-            flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
+            # Ensure the item is enabled to be checkable and selectable
+            flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
         return flags
 
     def setData(self, index: QModelIndex, value: any, role: int = Qt.EditRole) -> bool:
         """Sets data for the item, handling check state changes, including multi-select and folder recursion."""
         if self._is_setting_data: # 재귀 호출 방지
+            # print(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
             return False
         if index.column() != 0 or role != Qt.CheckStateRole:
             return super().setData(index, value, role)
 
+        # print(f"setData called for index: {self.get_file_path_from_index(index)}, value: {value}")
         self._is_setting_data = True # 플래그 설정
         try:
             selection_model = self.tree_view.selectionModel()
+            # QItemSelectionModel.selectedIndexes() returns a list of QModelIndex
             selected_indexes = [idx for idx in selection_model.selectedIndexes() if idx.column() == 0]
             is_multi_select = len(selected_indexes) > 1
             clicked_is_selected = index in selected_indexes
 
-            target_indexes = []
+            target_indexes_to_process = []
+            # If multiple items are selected AND the clicked item is one of them, process all selected items.
             if is_multi_select and clicked_is_selected:
-                target_indexes = selected_indexes
+                target_indexes_to_process = selected_indexes
+                # print(f"Multi-select detected. Processing {len(target_indexes_to_process)} items.")
+            # Otherwise, just process the clicked item.
             else:
-                target_indexes = [index]
+                target_indexes_to_process = [index]
+                # print(f"Single-select or non-selected click. Processing 1 item.")
 
             new_check_state = value # The desired state (Qt.Checked or Qt.Unchecked)
             is_checked = (new_check_state == Qt.Checked)
 
-            processed_paths = set()
+            processed_paths = set() # Avoid processing the same path multiple times in one go
             items_to_update_signal = [] # Collect indices for batch signal emission
 
-            for target_index in target_indexes:
+            for target_index in target_indexes_to_process:
                 if not target_index.isValid(): continue
 
                 file_path = self.get_file_path_from_index(target_index)
-                if file_path and file_path not in processed_paths:
-                    processed_paths.add(file_path)
+                if not file_path or file_path in processed_paths:
+                    continue # Skip if path invalid or already processed
 
-                    current_state_in_dict = self.checked_files_dict.get(file_path, False)
-                    needs_update = (is_checked != current_state_in_dict)
+                processed_paths.add(file_path)
+                # print(f"Processing target: {file_path}, desired state: {is_checked}")
 
-                    if needs_update:
-                        if is_checked:
-                            self.checked_files_dict[file_path] = True
-                        elif file_path in self.checked_files_dict:
-                            del self.checked_files_dict[file_path]
+                # Update the state for the current target index itself
+                current_state_in_dict = self.checked_files_dict.get(file_path, False)
+                needs_update = (is_checked != current_state_in_dict)
 
-                        items_to_update_signal.append(target_index)
+                if needs_update:
+                    if is_checked:
+                        self.checked_files_dict[file_path] = True
+                    elif file_path in self.checked_files_dict:
+                        del self.checked_files_dict[file_path]
+                    items_to_update_signal.append(target_index)
+                    # print(f"  State changed for {file_path}. Added to signal list.")
 
-                        src_index = self.mapToSource(target_index)
-                        if src_index.isValid() and self.fs_model.isDir(src_index):
-                            self.ensure_loaded(src_index)
-                            child_indices_to_update = self.check_all_children(src_index, is_checked)
-                            items_to_update_signal.extend(child_indices_to_update)
-                            if is_checked:
-                                self.expand_index_recursively(target_index)
+                # If it's a directory, recursively update children AND expand if checking
+                src_index = self.mapToSource(target_index)
+                if src_index.isValid() and self.fs_model.isDir(src_index):
+                    # print(f"  {file_path} is a directory. Checking children...")
+                    self.ensure_loaded(src_index) # Ensure children are loaded in the source model
+                    child_indices_to_update = self.check_all_children(src_index, is_checked)
+                    items_to_update_signal.extend(child_indices_to_update)
+                    # print(f"  Finished checking children for {file_path}. Total signals needed: {len(items_to_update_signal)}")
 
+                    # Expand the folder recursively if it was just checked
+                    if is_checked and needs_update: # Only expand if state actually changed to checked
+                        # print(f"  Recursively expanding folder: {file_path}")
+                        self.expand_index_recursively(target_index) # Use recursive expand
+
+
+            # Emit dataChanged signals only once after all processing is done
             if items_to_update_signal:
-                unique_indices_to_signal = list({idx.row(): idx for idx in items_to_update_signal if idx.isValid()}.values())
+                # Use a set to ensure unique indices before emitting signals
+                unique_indices_to_signal = {idx for idx in items_to_update_signal if idx.isValid()}
+                # print(f"Emitting dataChanged for {len(unique_indices_to_signal)} unique indices.")
                 for idx_to_signal in unique_indices_to_signal:
+                    # print(f"  Emitting for: {self.get_file_path_from_index(idx_to_signal)}")
                     self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.CheckStateRole])
 
             return True # Indicate success
 
         finally:
+            # print("setData finished. Releasing flag.")
             self._is_setting_data = False # 플래그 해제
 
 
     def ensure_loaded(self, parent_src_index: QModelIndex):
         """Ensures all children under the parent source index are loaded."""
         if parent_src_index.isValid() and hasattr(self.fs_model, '_fetch_all_recursively'):
+            # print(f"Ensuring children are loaded for source index: {self.fs_model.filePath(parent_src_index)}")
             self.fs_model._fetch_all_recursively(parent_src_index)
 
     def check_all_children(self, parent_src_index: QModelIndex, checked: bool) -> list[QModelIndex]:
         """
         Recursively updates check state for all visible children based on the 'checked' parameter.
-        Returns a list of proxy indices whose state was changed and need a signal update.
+        Updates the internal dictionary and returns a list of *proxy* indices whose state was changed.
         """
         indices_changed = []
         row_count = self.fs_model.rowCount(parent_src_index)
+        # print(f"  check_all_children for {self.fs_model.filePath(parent_src_index)}, checked={checked}, children={row_count}")
 
         for row in range(row_count):
             child_src_index = self.fs_model.index(row, 0, parent_src_index)
             if not child_src_index.isValid(): continue
 
+            # Map to proxy index *before* checking visibility or processing
             child_proxy_index = self.mapFromSource(child_src_index)
 
+            # IMPORTANT: Only process children that are *visible* in the proxy model
+            # This check implicitly handles the .gitignore filtering
             if not child_proxy_index.isValid():
+                # print(f"    Skipping child (not visible in proxy): {self.fs_model.filePath(child_src_index)}")
                 continue
 
             file_path = self.fs_model.filePath(child_src_index)
+            # print(f"    Processing child: {file_path}")
             current_state_in_dict = self.checked_files_dict.get(file_path, False)
             needs_update = (checked != current_state_in_dict)
 
@@ -218,14 +248,17 @@ class CheckableProxyModel(QSortFilterProxyModel):
                     self.checked_files_dict[file_path] = True
                 elif file_path in self.checked_files_dict:
                     del self.checked_files_dict[file_path]
-
+                # Add the *proxy* index to the list of changed items
                 indices_changed.append(child_proxy_index)
+                # print(f"      State changed for {file_path}. Added proxy index to list.")
 
-                if self.fs_model.isDir(child_src_index):
-                    self.ensure_loaded(child_src_index)
-                    grandchildren_indices = self.check_all_children(child_src_index, checked)
-                    indices_changed.extend(grandchildren_indices)
+            # If it's a directory, recurse further
+            if self.fs_model.isDir(child_src_index):
+                self.ensure_loaded(child_src_index) # Ensure grandchildren are loaded
+                grandchildren_indices = self.check_all_children(child_src_index, checked)
+                indices_changed.extend(grandchildren_indices)
 
+        # print(f"  Finished check_all_children for {self.fs_model.filePath(parent_src_index)}. Returning {len(indices_changed)} changed indices.")
         return indices_changed
 
 
@@ -239,6 +272,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
             child_proxy_idx = self.index(row, 0, proxy_index)
             if child_proxy_idx.isValid():
                  child_src_idx = self.mapToSource(child_proxy_idx)
+                 # Only recurse into directories that are visible in the proxy
                  if self.fs_model.isDir(child_src_idx):
                       self.expand_index_recursively(child_proxy_idx)
 
@@ -252,8 +286,12 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def get_all_checked_paths(self) -> list[str]:
         """Returns a list of all paths currently marked as checked."""
-        return list(self.checked_files_dict.keys())
+        # Return only keys where value is True, just in case False entries exist temporarily
+        return [path for path, checked in self.checked_files_dict.items() if checked]
+
 
     def get_checked_files(self) -> list[str]:
         """Returns a list of checked paths that correspond to actual files."""
         return [path for path, checked in self.checked_files_dict.items() if checked and os.path.isfile(path)]
+
+            

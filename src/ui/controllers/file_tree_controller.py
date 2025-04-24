@@ -231,7 +231,7 @@ class FileTreeController:
 
 
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
-        """Handles updates when data in the CheckableProxyModel changes."""
+        """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
         if Qt.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'):
             checked_files = self.mw.checkable_proxy.get_checked_files()
             self.mw.selected_files_data = []
@@ -244,4 +244,7 @@ class FileTreeController:
                 except Exception:
                     pass # 오류 무시
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
-            # 토큰 계산은 텍스트 변경 시에만 수행되도록 변경됨
+            # 토큰 계산은 버튼 클릭 시에만 수행되도록 변경됨
+            # self.mw.main_controller.update_char_count_for_active_tab() # Trigger update based on active tab
+
+            

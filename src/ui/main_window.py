@@ -28,7 +28,7 @@ from ui.controllers.resource_controller import ResourceController
 from ui.controllers.prompt_controller import PromptController
 from ui.controllers.xml_controller import XmlController
 from ui.controllers.file_tree_controller import FileTreeController
-from ui.controllers.system_prompt_controller import apply_default_system_prompt # select_default_system_prompt 제거
+from ui.controllers.system_prompt_controller import apply_default_system_prompt
 
 # UI 및 시그널 설정 함수 import
 from .main_window_setup_ui import create_menu_bar, create_widgets, create_layout, create_status_bar
@@ -109,10 +109,6 @@ class MainWindow(QMainWindow):
 
         self._initialized = True # 초기화 완료
 
-
-    # UI 생성 및 시그널 연결 함수는 외부 파일로 이동됨
-    # _create_menu_bar, _create_widgets, _create_layout, _create_status_bar, _connect_signals
-
     def _apply_initial_settings(self):
         """Applies initial settings like default system prompt and model names."""
         apply_default_system_prompt(self) # 기본 시스템 프롬프트 로드
@@ -180,14 +176,10 @@ class MainWindow(QMainWindow):
             # 4. 토큰 서비스 재초기화 (API 키 변경 시)
             self.token_service._init_gemini()
             self.token_service._init_anthropic()
-            # 5. 상태바 업데이트 (토큰 계산 등) - 현재 탭 내용으로 재계산
+            # 5. 상태바 업데이트 (토큰 계산 등) - 토큰 계산은 하지 않고 레이블만 리셋
             if self._initialized: # 초기화 완료 후 실행
-                 current_widget = self.build_tabs.currentWidget()
-                 if hasattr(current_widget, 'toPlainText'):
-                     self.main_controller.calculate_and_display_tokens(current_widget.toPlainText())
-                 else:
-                     self.main_controller.update_char_count_for_active_tab() # 문자수만 업데이트
-                     self.token_count_label.setText("토큰 계산: -")
+                 self.main_controller.update_char_count_for_active_tab() # 문자수만 업데이트
+                 self.token_count_label.setText("토큰 계산: -") # 토큰 레이블 리셋
 
             self.status_bar.showMessage("Settings applied.")
         else:
@@ -321,11 +313,9 @@ class MainWindow(QMainWindow):
 
         self._initialized = True # 상태 로드 완료 후 플래그 설정
         self.status_bar.showMessage("State loaded successfully!")
-        # 상태 로드 후 현재 탭 기준으로 문자 수/토큰 수 업데이트
+        # 상태 로드 후 현재 탭 기준으로 문자 수 업데이트 및 토큰 레이블 리셋
         self.main_controller.update_char_count_for_active_tab()
-        current_widget = self.build_tabs.currentWidget()
-        if hasattr(current_widget, 'toPlainText'):
-            self.main_controller.calculate_and_display_tokens(current_widget.toPlainText())
+        self.token_count_label.setText("토큰 계산: -") # 토큰 레이블 리셋
 
 
     def uncheck_all_files(self):
@@ -388,7 +378,7 @@ class MainWindow(QMainWindow):
             else:
                  self.build_tabs.addTab(new_tab, new_name)
                  self.build_tabs.setCurrentIndex(self.build_tabs.count() - 1)
-            # 새 탭 추가 시 문자 수 업데이트 연결
+            # 새 탭 추가 시 문자 수 업데이트 및 토큰 리셋 연결
             new_tab.textChanged.connect(self.main_controller.update_char_count_for_active_tab)
 
         elif ok:
@@ -430,3 +420,5 @@ class MainWindow(QMainWindow):
     def on_selection_changed_handler(self, selected: QItemSelection, deselected: QItemSelection):
         """Handles selection changes in the file tree view to toggle check state."""
         pass
+
+            

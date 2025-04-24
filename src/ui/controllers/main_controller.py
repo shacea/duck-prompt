@@ -81,13 +81,13 @@ class MainController:
         self.mw.char_count_label.setText(f"Chars: {char_count:,}")
 
     def update_char_count_for_active_tab(self):
-        """Updates the character count based on the currently active text edit tab."""
+        """Updates the character count based on the currently active text edit tab and resets token label."""
         current_widget = self.mw.build_tabs.currentWidget()
         if hasattr(current_widget, 'toPlainText'):
             self.update_char_count(current_widget.toPlainText())
-            # 문자 수 업데이트 시 토큰 계산도 트리거 (초기화 완료 시)
+            # 토큰 계산은 버튼 클릭 시에만 수행되므로 여기서는 레이블만 리셋
             if self.mw._initialized:
-                self.calculate_and_display_tokens(current_widget.toPlainText())
+                self.mw.token_count_label.setText("토큰 계산: -")
         else:
             # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화
             self.mw.char_count_label.setText("Chars: 0")
@@ -95,10 +95,9 @@ class MainController:
 
 
     def calculate_and_display_tokens(self, text: str):
-        """Calculates tokens for the given text and updates the status bar."""
+        """Calculates tokens for the given text and updates the status bar. Called on button click."""
         # 초기화 중이거나 MainWindow가 없으면 실행하지 않음
         if not hasattr(self.mw, '_initialized') or not self.mw._initialized:
-            # print("Skipping token calculation: Not initialized.")
             self.mw.token_count_label.setText("토큰 계산: -") # 초기 상태 표시
             return
 
@@ -132,14 +131,15 @@ class MainController:
 
 
     def on_llm_selected(self):
-        """Handles the selection change in the LLM dropdown."""
+        """Handles the selection change in the LLM dropdown. Updates model name and resets token label."""
         selected_llm = self.mw.llm_combo.currentText()
         # Load the default model name for the selected LLM from config
         default_model = self.config_service.get_default_model_name(selected_llm)
         self.mw.model_name_input.setText(default_model)
 
-        # Trigger character count update for the currently active tab's text
-        # This will also trigger token calculation if initialized
+        # Reset token count label, calculation will happen on button press
+        self.mw.token_count_label.setText("토큰 계산: -")
+        # Update character count for the active tab (doesn't trigger token calculation)
         self.update_char_count_for_active_tab()
 
 
@@ -147,3 +147,5 @@ class MainController:
 
     # 참고: 이전 MainController의 다른 메서드들은
     # ResourceController, PromptController, XmlController, FileTreeController로 이동되었습니다.
+
+            

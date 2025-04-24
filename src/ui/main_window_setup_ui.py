@@ -28,11 +28,6 @@ def create_menu_bar(mw: 'MainWindow'):
     mw.settings_action = QAction("환경 설정...", mw) # 설정 액션 추가
     file_menu.addAction(mw.settings_action)
     file_menu.addSeparator()
-    # TODO: Add Exit action if needed
-    # exit_action = QAction("종료", mw)
-    # exit_action.triggered.connect(mw.close)
-    # file_menu.addAction(exit_action)
-
 
     # 모드 메뉴
     mode_menu = mw.menubar.addMenu("모드")
@@ -83,12 +78,11 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setModel(mw.checkable_proxy)
     mw.tree_view.setColumnWidth(0, 250)
     mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
-    mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection)
+    mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection) # Allow multi-selection
     mw.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
-    mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
-    mw.tree_view.clicked.connect(lambda index: mw.checkable_proxy.setData(index,
-                                                                          Qt.Checked if mw.checkable_proxy.data(index, Qt.CheckStateRole) == Qt.Unchecked else Qt.Unchecked,
-                                                                          Qt.CheckStateRole))
+    mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers) # Disable editing item names directly
+    # REMOVED: Redundant clicked signal connection previously here (was commented out).
+    # The default view behavior handles clicking the checkbox indicator.
 
     # --- 리소스 관리 (왼쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리") # GroupBox로 감싸기
@@ -187,19 +181,13 @@ def create_widgets(mw: 'MainWindow'):
         mw.generate_final_prompt_btn = QPushButton("🚀 최종 프롬프트 생성")
         mw.run_buttons = [mw.generate_btn, mw.copy_btn, mw.generate_final_prompt_btn]
 
-    # --- .gitignore 뷰어/편집기 (제거됨) ---
-    # mw.gitignore_tabwidget = QTabWidget()
-    # mw.gitignore_edit = CustomTextEdit()
-    # mw.gitignore_edit.setPlaceholderText(".gitignore 내용...")
-    # mw.save_gitignore_btn = QPushButton("💾 .gitignore 저장")
-
     # --- 상태 표시줄 위젯 (create_status_bar에서 사용) ---
     mw.char_count_label = QLabel("Chars: 0")
     mw.token_count_label = QLabel("토큰 계산: -")
     mw.llm_combo = QComboBox()
     mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
     mw.model_name_input = QLineEdit()
-    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-1.5-pro-latest)")
+    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-2.5-pro-latest)")
 
 
 def create_layout(mw: 'MainWindow'):
@@ -207,8 +195,9 @@ def create_layout(mw: 'MainWindow'):
     central_widget = QWidget()
     mw.setCentralWidget(central_widget)
     main_layout = QVBoxLayout(central_widget)
-    main_layout.setContentsMargins(5, 5, 5, 5) # Main layout margins
-    main_layout.setSpacing(2) # Main layout spacing 줄임 (5 -> 2)
+    # Main layout margins 줄임 (상단 여백)
+    main_layout.setContentsMargins(5, 2, 5, 5)
+    main_layout.setSpacing(2) # Main layout spacing
 
     # --- 상단 레이아웃 ---
     top_button_container = QWidget()
@@ -221,11 +210,12 @@ def create_layout(mw: 'MainWindow'):
     top_button_layout.addStretch(1)
 
     top_layout_wrapper = QVBoxLayout()
-    top_layout_wrapper.setSpacing(2) # Spacing between button container and label 줄임 (5 -> 2)
+    top_layout_wrapper.setSpacing(2) # Spacing between button container and label
     top_layout_wrapper.setContentsMargins(0, 0, 0, 0) # Wrapper margins
     top_layout_wrapper.addWidget(top_button_container)
     top_layout_wrapper.addWidget(mw.project_folder_label)
-    main_layout.addLayout(top_layout_wrapper) # Add the wrapper to the main layout
+    # Add the wrapper to the main layout with stretch factor 0
+    main_layout.addLayout(top_layout_wrapper, 0)
 
     # --- 중앙 스플리터 (왼쪽 영역 | 오른쪽 영역) ---
     mw.center_splitter = QSplitter(Qt.Horizontal)
@@ -262,12 +252,8 @@ def create_layout(mw: 'MainWindow'):
     right_side_layout.addWidget(mw.build_tabs) # 탭 위젯이 남은 공간 모두 차지
     mw.center_splitter.addWidget(right_side_widget)
 
-    main_layout.addWidget(mw.center_splitter) # 중앙 스플리터 추가
-
-    # --- 하단 스플리터 및 .gitignore 관련 위젯 제거 ---
-    # mw.bottom_splitter = QSplitter(Qt.Horizontal)
-    # ... (template_manager_frame, gitignore_frame 등 제거) ...
-    # main_layout.addWidget(mw.bottom_splitter, stretch=2) # 제거
+    # 중앙 스플리터를 메인 레이아웃에 추가 (stretch=1로 설정하여 남은 공간 차지)
+    main_layout.addWidget(mw.center_splitter, 1)
 
     # 초기 스플리터 크기 설정 (비율 조정)
     mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
