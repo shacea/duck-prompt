@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator, FilePath, DirectoryPath # FilePath, DirectoryPath 추가 (선택적)
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Set, Any, Optional
 
 class ConfigSettings(BaseModel):
@@ -14,20 +14,7 @@ class ConfigSettings(BaseModel):
         ".gitignore",
         ".windsurfrules",
         ".cursorrules"
-        # .env는 제거됨
     ])
-    # 추가 설정 필드 정의 가능
-    # e.g., default_theme: str = "Fusion"
-
-    # 경로 유효성 검사기 (선택적)
-    # @field_validator('default_system_prompt')
-    # @classmethod
-    # def check_prompt_path(cls, v: Optional[str]):
-    #     if v is not None and not os.path.exists(v): # 실제 파일 존재 여부 확인 (로드 시점에 하는 것이 더 나을 수 있음)
-    #         # 경고 로깅 또는 예외 발생
-    #         print(f"Warning: Default system prompt path does not exist: {v}")
-    #         # raise ValueError(f"Default system prompt path does not exist: {v}")
-    #     return v
 
     @field_validator('allowed_extensions', 'excluded_dirs', mode='before')
     @classmethod

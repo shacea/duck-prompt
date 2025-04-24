@@ -1,21 +1,13 @@
 import sys
 import os
 import ctypes
-# from dotenv import load_dotenv # .env 사용 안 함
-
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QIcon
 from PyQt5.QtCore import Qt
-
-# 변경된 경로에서 import
 from ui.main_window import MainWindow
 from utils.helpers import init_utils, get_resource_path
 
 def main():
-    # .env 로드 제거
-    # dotenv_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
-    # load_dotenv(dotenv_path=dotenv_path)
-
     if sys.platform.startswith("win"):
         try:
             # DPI 인식 설정 (Windows)
@@ -32,9 +24,7 @@ def main():
 
     app = QApplication(sys.argv)
 
-    # 아이콘 경로 설정 (get_resource_path 사용)
     try:
-        # get_resource_path는 resources 폴더 기준이므로 파일명만 전달
         icon_path = get_resource_path("rubber_duck.ico")
         if os.path.exists(icon_path):
             app_icon = QIcon(icon_path)
@@ -49,8 +39,3 @@ def main():
     window = MainWindow(mode="Code Enhancer Prompt Builder") # 기본 모드 설정
     window.show()
     sys.exit(app.exec_())
-
-# 이 파일이 직접 실행될 때 main 함수 호출 (기존 방식 유지)
-# if __name__ == '__main__':
-#     main()
-# 위 방식 대신 main.py에서 app.main()을 호출하도록 변경됨

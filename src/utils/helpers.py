@@ -46,8 +46,7 @@ def get_project_root() -> Path:
         return Path(sys._MEIPASS)
     else:
         # 개발 환경 (main.py 또는 src/app.py에서 실행 가정)
-        # helpers.py 위치 기준: src/utils/helpers.py
-        # src 폴더 찾기: helpers.py -> utils -> src
+
         src_dir = Path(__file__).parent.parent.resolve()
         # 프로젝트 루트는 src 폴더의 부모
         return src_dir.parent
@@ -80,9 +79,3 @@ def calculate_token_count(text: str) -> Optional[int]:
     except Exception as e:
         print(f"Error calculating tokens: {str(e)}")
         return None
-
-# 사용 예시:
-# init_utils() # 앱 시작 시 호출
-# icon_path = get_resource_path("rubber_duck.ico")
-# char_count = calculate_char_count("some text")
-# token_count = calculate_token_count("some text")

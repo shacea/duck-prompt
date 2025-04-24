@@ -3,7 +3,6 @@ import yaml
 from pydantic import ValidationError
 from typing import Optional
 
-# 변경된 경로에서 import
 from core.pydantic_models.config_settings import ConfigSettings
 from utils.helpers import get_project_root # 프로젝트 루트 경로 함수 사용
 
@@ -72,9 +71,5 @@ class ConfigService:
             print("Configuration updated successfully.")
         except ValidationError as e:
             print(f"Configuration update validation error: {e}")
-            # 업데이트 실패 시 롤백 또는 사용자 알림 필요
         except Exception as e:
             print(f"Error updating configuration: {e}")
-
-# 전역 인스턴스 또는 DI 컨테이너를 통해 서비스 제공 고려
-# 예시: config_service = ConfigService()

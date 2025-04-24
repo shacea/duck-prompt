@@ -178,7 +178,7 @@ class FileTreeController:
                  return
 
             try:
-                # TODO: FilesystemService에 rename 기능 추가 고려
+                # TODO: FilesystemService에 rename 기능 추가
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
                 # 체크 상태 업데이트
@@ -207,7 +207,7 @@ class FileTreeController:
 
         if reply == QMessageBox.Yes:
             try:
-                # TODO: FilesystemService에 delete 기능 추가 고려
+                # TODO: FilesystemService에 delete 기능 추가
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path)
                 else:

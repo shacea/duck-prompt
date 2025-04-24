@@ -17,9 +17,6 @@ class XmlController:
     def __init__(self, main_window: 'MainWindow', xml_service: XmlService):
         self.mw = main_window
         self.xml_service = xml_service
-        # FileTreeController 참조 (refresh_tree 호출용)
-        # self.file_tree_controller: 'FileTreeController' = self.mw.file_tree_controller
-
     def run_xml_parser(self):
         """Parses XML input and applies changes to the project files."""
         if self.mw.mode == "Meta Prompt Builder":
@@ -37,14 +34,6 @@ class XmlController:
         if not project_dir or not os.path.isdir(project_dir):
             QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return
-
-        # 사용자 확인 메시지 제거
-        # reply = QMessageBox.question(self.mw, "XML 변경 적용 확인",
-        #                              f"XML 내용에 따라 프로젝트 파일을 변경합니다:\n{project_dir}\n\n계속하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-        #                              QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        # if reply == QMessageBox.No:
-        #     self.mw.status_bar.showMessage("XML 파싱 취소됨.")
-        #     return
 
         try:
             result = self.xml_service.apply_changes_from_xml(xml_str, project_dir)

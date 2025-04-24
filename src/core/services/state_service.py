@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import ValidationError
 
-# 변경된 경로에서 import
 from core.pydantic_models.app_state import AppState
 from utils.helpers import get_resource_path # 리소스 경로 함수 사용
 
@@ -177,12 +176,3 @@ class StateService:
         except Exception as e:
             print(f"Error restoring states from {backup_path}: {str(e)}")
             return False
-
-# 사용 예시 (Controller에서):
-# state_service = StateService()
-# current_state = AppState(...) # UI에서 상태 가져와 모델 생성
-# state_service.save_state(current_state, "my_session")
-# loaded_state = state_service.load_state("my_session")
-# if loaded_state:
-#     # UI 업데이트
-#     pass

@@ -47,7 +47,6 @@ class PromptService:
         self,
         meta_template: str,
         meta_user_input: str
-        # TODO: Add support for variable replacement if needed later
     ) -> str:
         """Generates the prompt for the Meta Prompt Builder mode."""
         # 단순 치환 방식
@@ -70,8 +69,3 @@ class PromptService:
 
         return final_prompt
 
-# 사용 예시 (Controller에서):
-# prompt_service = PromptService()
-# final_prompt = prompt_service.generate_code_enhancer_prompt(...)
-# meta_prompt = prompt_service.generate_meta_prompt(...)
-# final_meta = prompt_service.generate_final_meta_prompt(...)

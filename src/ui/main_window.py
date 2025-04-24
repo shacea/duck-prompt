@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         self.tree_generated: bool = False # 파일 트리 생성 여부
 
         # --- 서비스 인스턴스 생성 ---
-        # TODO: 서비스 인스턴스를 app.py 등에서 생성하고 주입하는 방식 고려
+        # TODO: 서비스 인스턴스를 app.py 등에서 생성하고 주입하는 방식
         self.config_service = ConfigService()
         self.state_service = StateService()
         self.template_service = TemplateService()
@@ -572,13 +572,6 @@ class MainWindow(QMainWindow):
         if current_state == Qt.Checked:
             self.checkable_proxy.setData(proxy_index, Qt.Unchecked, Qt.CheckStateRole) # setData 호출 시 하위 항목 처리됨
 
-        # 자식 항목 재귀 호출 (setData에서 이미 처리되므로 불필요할 수 있음)
-        # child_count = self.checkable_proxy.rowCount(proxy_index)
-        # for row in range(child_count):
-        #     child_proxy_idx = self.checkable_proxy.index(row, 0, proxy_index)
-        #     self._recursive_uncheck(child_proxy_idx)
-
-
     def create_tree_item(self, text, parent=None) -> QTreeWidgetItem:
         """Helper method to create items in the template/state tree."""
         if parent is None:
@@ -637,9 +630,6 @@ class MainWindow(QMainWindow):
             elif current_widget == self.prompt_output_tab or \
                  (hasattr(self, 'final_prompt_tab') and current_widget == self.final_prompt_tab):
                 self.prompt_controller.copy_to_clipboard() # PromptController의 복사 메서드 사용
-            # 그 외의 경우 기본 copy 동작 (아무것도 안 할 수 있음)
-            # else:
-            #     current_widget.copy()
 
 
     def on_tree_view_context_menu(self, position):

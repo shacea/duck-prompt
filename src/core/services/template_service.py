@@ -6,9 +6,7 @@ from utils.helpers import get_resource_path
 
 class TemplateService:
     def __init__(self, base_resource_path: str = "resources"):
-        # 기본 리소스 경로 설정 (get_resource_path 내부에서 처리될 수 있음)
-        # self.base_path = get_resource_path(base_resource_path)
-        pass # get_resource_path를 각 메소드에서 직접 사용
+        pass
 
     def _get_full_path(self, relative_path: str) -> str:
         """Constructs the full path using get_resource_path."""
@@ -76,10 +74,3 @@ class TemplateService:
         else:
             print(f"Template file not found for deletion: {full_file_path}")
             return False
-
-# 사용 예시 (Controller에서):
-# template_service = TemplateService()
-# system_templates = template_service.list_templates("prompts/system")
-# content = template_service.load_template("prompts/system/example.md")
-# template_service.save_template("prompts/user/new.md", "...")
-# template_service.delete_template("prompts/user/old.md")

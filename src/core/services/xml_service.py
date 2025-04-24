@@ -74,10 +74,9 @@ class XmlService:
                         continue
 
                     # 파일 코드 앞뒤 공백/개행 제거 (필요에 따라 조정)
-                    # file_code = file_code.strip()
+                    file_code = file_code.strip()
                     # 첫 줄 공백 방지를 위해 선행 개행만 제거
-                    file_code = file_code.lstrip('\r\n')
-
+                    # file_code = file_code.lstrip('\r\n')
 
                     # 디렉토리 생성
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
@@ -104,7 +103,6 @@ class XmlService:
                     else:
                         # 삭제할 파일이 없는 경우, 오류보다는 경고 또는 무시가 나을 수 있음
                         print(f"File not found for deletion (ignored): {target_path}")
-                        # result["errors"].append(f"File not found for deletion: {target_path}")
 
                 elif operation == "NONE":
                     # 수정 없음 처리 (로그 또는 아무 작업 안 함)
@@ -120,10 +118,3 @@ class XmlService:
                 result["errors"].append(f"Unexpected error during {operation} for '{relative_path}': {str(e)}")
 
         return result
-
-# 사용 예시 (Controller에서):
-# xml_service = XmlService()
-# xml_content = "<code_changes>...</code_changes>"
-# project_dir = "/path/to/project"
-# change_summary = xml_service.apply_changes_from_xml(xml_content, project_dir)
-# print(change_summary)

@@ -132,10 +132,3 @@ class FilesystemService:
         root_lines.extend(print_tree(tree, project_root, 1))
 
         return "\n".join(root_lines)
-
-# 사용 예시 (Controller에서):
-# config_service = ConfigService()
-# fs_service = FilesystemService(config_service)
-# ignore_patterns = fs_service.load_gitignore_patterns(project_folder)
-# should_ignore = fs_service.should_ignore(file_path, project_folder, ignore_patterns, is_dir)
-# tree_string = fs_service.get_directory_tree(checked_paths, project_folder)

@@ -11,16 +11,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
 
-# .env 파일 경로 관련 코드 제거
-# PROJECT_ROOT = get_project_root()
-# DOTENV_PATH = PROJECT_ROOT / '.env'
-# print(f"Using .env path: {DOTENV_PATH}")
-
-# ConfigService 인스턴스를 컨트롤러 생성 시 주입받도록 변경
-# def __init__(self, main_window: 'MainWindow', config_service: ConfigService):
-#     self.mw = main_window
-#     self.config_service = config_service
-
 # 함수 형태로 유지 (MainWindow에서 직접 호출)
 def apply_default_system_prompt(main_window: 'MainWindow'):
     """

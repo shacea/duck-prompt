@@ -4,7 +4,7 @@ from PyQt5.QtCore import QSortFilterProxyModel, Qt, QModelIndex
 from PyQt5.QtWidgets import QFileSystemModel, QTreeView
 from typing import Callable, Optional, Set
 
-# TODO: FilesystemService를 주입받아 필터링 로직 위임 고려
+# TODO: FilesystemService를 주입받아 필터링 로직 위임
 
 class FilteredFileSystemModel(QFileSystemModel):
     """
@@ -12,7 +12,6 @@ class FilteredFileSystemModel(QFileSystemModel):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        # self.config = config # 제거됨. 설정은 외부(Controller/Service)에서 관리
 
     def setRootPathFiltered(self, path: str) -> QModelIndex:
         """Sets the root path and immediately fetches all children."""
@@ -35,8 +34,6 @@ class FilteredFileSystemModel(QFileSystemModel):
         for row in range(row_count):
             child_index = self.index(row, 0, parent_index)
             if child_index.isValid() and self.isDir(child_index):
-                # Check if we can fetch more for the child directory
-                # if self.canFetchMore(child_index): # 이 조건 제거해야 깊은 탐색 가능
                 self._fetch_all_recursively(child_index)
 
 
@@ -140,8 +137,6 @@ class CheckableProxyModel(QSortFilterProxyModel):
             # 체크 상태 반환 (dict에 없으면 Unchecked)
             return Qt.Checked if self.checked_files_dict.get(file_path, False) else Qt.Unchecked
         # 파일 이름 표시 (기본값)
-        # if index.column() == 0 and role == Qt.DisplayRole:
-        #     return self.fs_model.fileName(self.mapToSource(index))
         return super().data(index, role)
 
     def flags(self, index):
