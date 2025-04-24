@@ -40,16 +40,19 @@ class MainController:
 
     def reset_program(self):
         """Resets the application to its initial state."""
+        self.mw._initialized = False # 리셋 시작 시 플래그 해제
+
         # UI 초기화 (MainWindow 메서드 호출)
-        self.mw.reset_state()
+        self.mw.reset_state() # reset_state 내부에서 _initialized=True 설정됨
+        self.mw._initialized = False # reset_state 후 다시 False로 설정
+
         self.mw.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
         self.mw.system_tab.clear()
         self.mw.user_tab.clear()
         if hasattr(self.mw, "dir_structure_tab"): self.mw.dir_structure_tab.clear()
         if hasattr(self.mw, "xml_input_tab"): self.mw.xml_input_tab.clear()
         if hasattr(self.mw, "prompt_output_tab"): self.mw.prompt_output_tab.clear()
-        self.mw.gitignore_edit.clear()
-        # self.mw.tree_generated = False # MainWindow의 reset_state에서 처리
+        # self.mw.gitignore_edit.clear() # gitignore 편집기는 설정 다이얼로그로 이동
 
         # 설정 및 필터 초기화 (FileTreeController에게 위임)
         self.mw.file_tree_controller.reset_gitignore_and_filter()
@@ -59,7 +62,8 @@ class MainController:
 
         # 모델 선택 UI 초기화
         self.mw.llm_combo.setCurrentIndex(self.mw.llm_combo.findText("Gemini")) # 기본값 Gemini
-        self.on_llm_selected() # 모델명 업데이트
+        self.on_llm_selected() # 모델명 업데이트 (토큰 계산은 안 함)
+
         # 리셋 후에는 텍스트가 비어있으므로 update_active_tab_counts 호출해도 계산 안 함
         self.update_char_count_for_active_tab() # 문자 수만 업데이트
         self.mw.token_count_label.setText("토큰 계산: -") # 토큰 카운트 리셋
@@ -67,6 +71,8 @@ class MainController:
         # 윈도우 제목 리셋
         self.mw.update_window_title()
         self.mw.status_bar.showMessage("프로그램 리셋 완료.")
+
+        self.mw._initialized = True # 리셋 완료 후 플래그 설정
         QMessageBox.information(self.mw, "Info", "프로그램이 초기 상태로 리셋되었습니다.")
 
     def update_char_count(self, text: str):
@@ -79,12 +85,23 @@ class MainController:
         current_widget = self.mw.build_tabs.currentWidget()
         if hasattr(current_widget, 'toPlainText'):
             self.update_char_count(current_widget.toPlainText())
+            # 문자 수 업데이트 시 토큰 계산도 트리거 (초기화 완료 시)
+            if self.mw._initialized:
+                self.calculate_and_display_tokens(current_widget.toPlainText())
         else:
             # 현재 탭이 텍스트 편집기가 아니면 카운트 초기화
             self.mw.char_count_label.setText("Chars: 0")
+            self.mw.token_count_label.setText("토큰 계산: -")
+
 
     def calculate_and_display_tokens(self, text: str):
         """Calculates tokens for the given text and updates the status bar."""
+        # 초기화 중이거나 MainWindow가 없으면 실행하지 않음
+        if not hasattr(self.mw, '_initialized') or not self.mw._initialized:
+            # print("Skipping token calculation: Not initialized.")
+            self.mw.token_count_label.setText("토큰 계산: -") # 초기 상태 표시
+            return
+
         char_count = calculate_char_count(text)
         self.mw.char_count_label.setText(f"Chars: {char_count:,}")
 
@@ -120,28 +137,10 @@ class MainController:
         # Load the default model name for the selected LLM from config
         default_model = self.config_service.get_default_model_name(selected_llm)
         self.mw.model_name_input.setText(default_model)
-        # Trigger only character count update for the currently active tab's text
+
+        # Trigger character count update for the currently active tab's text
+        # This will also trigger token calculation if initialized
         self.update_char_count_for_active_tab()
-        # Reset token count display when LLM changes
-        self.mw.token_count_label.setText("토큰 계산: -")
-
-
-    def save_model_config(self):
-        """Saves the current model name for the selected LLM to config.yml."""
-        selected_llm = self.mw.llm_combo.currentText()
-        model_name = self.mw.model_name_input.text().strip()
-
-        if not model_name:
-            QMessageBox.warning(self.mw, "저장 오류", "모델 이름은 비워둘 수 없습니다.")
-            return
-
-        try:
-            self.config_service.save_default_model_name(selected_llm, model_name)
-            QMessageBox.information(self.mw, "저장 완료", f"{selected_llm}의 기본 모델 이름이 '{model_name}'(으)로 저장되었습니다.")
-            self.mw.status_bar.showMessage(f"{selected_llm} 모델 설정 저장됨.")
-        except Exception as e:
-            QMessageBox.critical(self.mw, "저장 실패", f"모델 설정을 저장하는 중 오류 발생:\n{e}")
-            self.mw.status_bar.showMessage("모델 설정 저장 실패.")
 
 
     # on_mode_changed는 MainWindow에서 처리 (_toggle_mode -> _restart_with_mode)

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
 
 # 컨트롤러 import (함수 호출용)
-from .controllers.system_prompt_controller import select_default_system_prompt
+# from .controllers.system_prompt_controller import select_default_system_prompt # 이제 MainWindow에서 직접 호출 안 함
 
 def connect_signals(mw: 'MainWindow'):
     """Connects widget signals to controller slots."""
@@ -15,12 +15,10 @@ def connect_signals(mw: 'MainWindow'):
     mw.mode_toggle_btn.clicked.connect(mw._toggle_mode)
     mw.reset_program_btn.clicked.connect(mw.main_controller.reset_program) # MainController
     mw.select_project_btn.clicked.connect(mw.file_tree_controller.select_project_folder) # FileTreeController
-    mw.select_default_prompt_btn.clicked.connect(lambda: select_default_system_prompt(mw)) # SystemPromptController (함수 직접 호출)
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
     # Click event is now handled by the view/model interaction for checking (setData)
-    # mw.tree_view.selectionModel().selectionChanged.connect(mw.on_selection_changed_handler) # Removed
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
 
     # 실행 버튼
@@ -46,14 +44,11 @@ def connect_signals(mw: 'MainWindow'):
     mw.restore_button.clicked.connect(mw.resource_controller.restore_states_from_backup_action) # ResourceController
     mw.template_tree.itemDoubleClicked.connect(mw.resource_controller.load_selected_item) # ResourceController
 
-    # .gitignore
-    mw.save_gitignore_btn.clicked.connect(mw.file_tree_controller.save_gitignore_settings) # FileTreeController
+    # .gitignore (제거됨)
+    # mw.save_gitignore_btn.clicked.connect(mw.file_tree_controller.save_gitignore_settings) # FileTreeController
 
     # 상태바 & 모델 선택
-    # mw.auto_token_calc_check.stateChanged.connect(mw.main_controller.update_active_tab_counts) # Removed
     mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController
-    # mw.model_name_input.textChanged.connect(mw.main_controller.update_active_tab_counts) # Removed - No auto update
-    mw.save_model_config_btn.clicked.connect(mw.main_controller.save_model_config) # MainController
 
     # 텍스트 변경 시 문자 수만 업데이트 (현재 활성 탭 기준)
     mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts when tab changes
@@ -75,6 +70,7 @@ def connect_signals(mw: 'MainWindow'):
 
 
     # 메뉴 액션
+    mw.settings_action.triggered.connect(mw.open_settings_dialog) # 설정 메뉴 연결
     mw.save_state_action.triggered.connect(mw.resource_controller.save_state_to_default) # ResourceController
     mw.load_state_action.triggered.connect(mw.resource_controller.load_state_from_default) # ResourceController
     mw.export_state_action.triggered.connect(mw.resource_controller.export_state_to_file) # ResourceController

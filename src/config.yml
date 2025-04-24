@@ -1,56 +1,30 @@
-# DuckPrompt 설정 파일 (YAML 형식)
-
-# 기본 시스템 프롬프트 파일 경로 (프로젝트 루트 기준 상대 경로 또는 절대 경로).
-# null 또는 비어 있으면, 프로그램 시작 시 기본 프롬프트가 자동으로 로드되지 않습니다.
-# 예시: "resources/prompts/system/My_Default_Prompt.md"
-default_system_prompt: "resources/prompts/system/XML_Prompt_Guide.md"
-
-# 처리할 파일 확장자 목록.
-# 비어 있거나 없으면, 제외 목록 처리 후 모든 파일이 허용됩니다.
-# 예시: [".py", ".txt", ".md"]
-allowed_extensions: []
-
-# 파일 트리 및 처리에서 제외할 디렉토리 또는 파일 패턴 목록.
-# .gitignore 패턴 매칭 규칙을 사용합니다.
-# 이 목록은 프로젝트의 .gitignore 파일(존재하는 경우) 및 아래 default_ignore_list와 결합됩니다.
-excluded_dirs:
-  - ".DS_Store"
-  - "*.log"
-  - "node_modules/"
-  - ".venv/"
-  - "__pycache__/"
-  - ".git/"
-  - ".gitignore"
-  - ".vscode/"
-  - ".idea/"
-  - "build/"
-  - "dist/"
-  # 여기에 사용자 정의 제외 패턴 추가
-
-# 항상 적용되는 기본 무시 패턴 목록.
-# 이 패턴들은 항상 제외 로직에 포함됩니다.
+default_system_prompt: resources/prompts/system/XML_Prompt_Guide.md
+allowed_extensions: !!set {}
+excluded_dirs: !!set
+  .git/: null
+  .gitignore: null
+  '*.log': null
+  .venv/: null
+  node_modules/: null
+  .vscode/: null
+  build/: null
+  __pycache__/: null
+  .DS_Store: null
+  dist/: null
+  .idea/: null
 default_ignore_list:
-  - "__pycache__/"
-  - ".git/"
-  - ".gitignore"
-  - ".vscode/"
-  - ".idea/"
-  - "build/"
-  - "dist/"
-  - "*.pyc"
-  - "*.egg-info/"
-  - ".windsurfrules"
-  - ".cursorrules"
-
-# 토큰 계산을 위한 기본 모델 이름
-# UI에서 재정의하고 이 파일에 다시 저장할 수 있습니다.
-gemini_default_model: "gemini-2.5-flash-preview-04-17"
-claude_default_model: "claude-3-7-sonnet-20250219"
-# API 키 설정
-# API를 통해 Gemini/Claude 토큰 계산을 사용하려면 해당 API 키를 입력하세요.
-anthropic_api_key: "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"
-gemini_api_key: "AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE"
-# 기타 잠재적 설정:
-# default_theme: "Fusion" # 기본 테마
-# max_file_size_mb: 10 # 처리할 최대 파일 크기 (MB)
-# log_level: "INFO" # 로깅 레벨 (DEBUG, INFO, WARNING, ERROR)
+- '*.egg-info/'
+- '*.pyc'
+- .cursorrules
+- .git/
+- .gitignore
+- .idea/
+- .vscode/
+- .windsurfrules
+- __pycache__/
+- build/
+- dist/
+gemini_default_model: gemini-2.5-flash-preview-04-17
+claude_default_model: claude-3-7-sonnet-20250219
+anthropic_api_key: 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
+gemini_api_key: AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE

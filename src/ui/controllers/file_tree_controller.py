@@ -57,81 +57,52 @@ class FileTreeController:
             self.mw.update_window_title(folder_name)
 
     def load_gitignore_settings(self):
-        """Loads .gitignore patterns and updates the UI and filter model."""
+        """Loads .gitignore patterns and updates the filter model."""
         self.gitignore_path = None
         patterns: Set[str] = set()
-        lines_for_ui: List[str] = []
 
         settings = self.config_service.get_settings()
         patterns.update(settings.default_ignore_list)
-        lines_for_ui.extend(sorted(list(settings.default_ignore_list))) # 기본값 먼저 표시
 
         if self.mw.current_project_folder:
             possible_path = os.path.join(self.mw.current_project_folder, ".gitignore")
             if os.path.isfile(possible_path):
                 self.gitignore_path = possible_path
                 try:
-                    # FilesystemService를 사용하여 .gitignore 로드 (선택적)
-                    # gitignore_patterns = self.fs_service.load_gitignore_patterns(self.mw.current_project_folder)
-                    # patterns.update(gitignore_patterns) # 서비스가 반환한 패턴 사용
-
-                    # 또는 직접 로드
                     with open(self.gitignore_path, 'r', encoding='utf-8') as f:
                         lines = f.read().splitlines()
                     gitignore_lines = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith('#')]
                     patterns.update(gitignore_lines)
-                    lines_for_ui = gitignore_lines # .gitignore 있으면 UI 내용 교체
-
                 except Exception as e:
                     QMessageBox.warning(self.mw, "Error", f".gitignore 로드 중 오류: {str(e)}")
 
         # config.yml의 excluded_dirs 추가
         patterns.update(settings.excluded_dirs)
 
-        # UI 업데이트
-        self.mw.gitignore_edit.setText("\n".join(lines_for_ui))
-
         # 필터 모델에 패턴 설정
         if hasattr(self.mw, 'checkable_proxy'):
              self.mw.checkable_proxy.set_ignore_patterns(patterns)
+             # 필터가 변경되었으므로 트리 뷰를 새로 고쳐야 할 수 있음
+             self.refresh_tree() # 필터 적용 후 트리 새로고침
 
     def save_gitignore_settings(self):
-        """Saves the content of the gitignore editor to the .gitignore file."""
-        if not self.mw.current_project_folder:
-            QMessageBox.warning(self.mw, "Error", "프로젝트 폴더가 설정되지 않았습니다.")
-            return
-
-        lines = self.mw.gitignore_edit.toPlainText().splitlines()
-        lines_to_save = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith('#')]
-        target_path = os.path.join(self.mw.current_project_folder, ".gitignore")
-
-        try:
-            with open(target_path, 'w', encoding='utf-8') as f:
-                f.write("\n".join(lines_to_save) + "\n")
-            QMessageBox.information(self.mw, "Info", f".gitignore가 저장되었습니다: {target_path}")
-            self.load_gitignore_settings() # 저장 후 다시 로드
-        except Exception as e:
-            QMessageBox.warning(self.mw, "Error", f".gitignore 저장 중 오류: {str(e)}")
+        """Saves the content of the gitignore editor to the .gitignore file. (Moved to SettingsDialog)"""
+        QMessageBox.information(self.mw, "정보", ".gitignore 저장은 환경 설정 메뉴에서 수행해주세요.")
 
     def reset_gitignore_and_filter(self):
-        """Resets gitignore settings and filter to defaults."""
+        """Resets gitignore filter to defaults based on config.yml."""
         default_settings = self.config_service.get_settings()
         default_patterns = set(default_settings.default_ignore_list).union(default_settings.excluded_dirs)
-        self.mw.gitignore_edit.setText("\n".join(sorted(list(default_patterns))))
         if hasattr(self.mw, 'checkable_proxy'):
              self.mw.checkable_proxy.set_ignore_patterns(default_patterns)
+             self.refresh_tree() # 필터 리셋 후 트리 새로고침
 
     def reset_file_tree(self):
         """Resets the file tree view to an empty state."""
-        # home_path = os.path.expanduser("~") # 더 이상 홈 디렉토리 표시 안 함
         if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            # 모델의 루트 경로를 빈 문자열로 설정하여 드라이브 목록 등도 안 보이게 함
             idx = self.mw.dir_model.setRootPath("")
-            # 트리 뷰의 루트 인덱스를 유효하지 않은 인덱스로 설정
             self.mw.tree_view.setRootIndex(QModelIndex())
-            # 체크 상태 초기화
             self.mw.checkable_proxy.checked_files_dict.clear()
-            # 트리 축소 (선택적)
             self.mw.tree_view.collapseAll()
             print("File tree reset to empty state.")
 
@@ -188,10 +159,8 @@ class FileTreeController:
                  return
 
             try:
-                # 실제 파일 시스템 작업 (컨트롤러 내에서 수행)
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
-                # 체크 상태 업데이트
                 if hasattr(self.mw, 'checkable_proxy'):
                     if file_path in self.mw.checkable_proxy.checked_files_dict:
                         is_checked = self.mw.checkable_proxy.checked_files_dict.pop(file_path)
@@ -217,15 +186,12 @@ class FileTreeController:
 
         if reply == QMessageBox.Yes:
             try:
-                # 실제 파일 시스템 작업 (컨트롤러 내에서 수행)
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path)
                 else:
                     os.remove(file_path)
                 self.mw.status_bar.showMessage(f"'{item_name}' 삭제 완료")
-                # 체크 상태 업데이트
                 if hasattr(self.mw, 'checkable_proxy'):
-                    # 삭제된 경로 및 하위 경로의 체크 상태 제거
                     paths_to_remove = [p for p in self.mw.checkable_proxy.checked_files_dict if p == file_path or p.startswith(file_path + os.sep)]
                     for p in paths_to_remove:
                         if p in self.mw.checkable_proxy.checked_files_dict:
@@ -237,34 +203,36 @@ class FileTreeController:
     def refresh_tree(self):
         """Refreshes the file explorer tree view."""
         if self.mw.current_project_folder and hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            # 트리 확장 상태 저장/복원 로직은 현재 미구현
+            self.mw.checkable_proxy.invalidateFilter()
             idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
-            # 필터 갱신은 setRootPathFiltered 또는 set_ignore_patterns 호출 시 처리됨
             root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
-            self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 루트 인덱스 설정
+            self.mw.tree_view.setRootIndex(root_proxy_index)
+            self._reapply_check_states(root_proxy_index)
             self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
-            # 루트 폴더 자동 체크 (선택적)
-            if root_proxy_index.isValid():
-                # Re-apply check state based on dict after refresh
-                root_path = self.mw.checkable_proxy.get_file_path_from_index(root_proxy_index)
-                if root_path and self.mw.checkable_proxy.checked_files_dict.get(root_path, False):
-                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
-                else:
-                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Unchecked, Qt.CheckStateRole)
 
 
-    # def handle_selection_change(self, selected: QItemSelection, deselected: QItemSelection):
-    #     """Handles selection changes in the file tree view. (No longer toggles check state)"""
-    #     # Selection change doesn't toggle check state anymore, click does.
-    #     # This handler might be used for other purposes if needed, like updating
-    #     # a preview pane based on selection.
-    #     pass
+    def _reapply_check_states(self, parent_proxy_index: QModelIndex):
+         """Recursively reapply check states based on the dictionary after a refresh."""
+         if not parent_proxy_index.isValid(): return
+
+         parent_path = self.mw.checkable_proxy.get_file_path_from_index(parent_proxy_index)
+         if parent_path:
+             is_checked = self.mw.checkable_proxy.checked_files_dict.get(parent_path, False)
+             current_state = self.mw.checkable_proxy.data(parent_proxy_index, Qt.CheckStateRole)
+             target_state = Qt.Checked if is_checked else Qt.Unchecked
+             if current_state != target_state:
+                 self.mw.checkable_proxy.setData(parent_proxy_index, target_state, Qt.CheckStateRole)
+
+         row_count = self.mw.checkable_proxy.rowCount(parent_proxy_index)
+         for row in range(row_count):
+             child_proxy_index = self.mw.checkable_proxy.index(row, 0, parent_proxy_index)
+             if child_proxy_index.isValid():
+                 self._reapply_check_states(child_proxy_index)
+
 
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes."""
-        # 체크 상태 변경 시 관련 UI 업데이트 (예: 선택된 파일 정보 업데이트)
         if Qt.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'):
-            # 선택된 파일 목록 및 크기 정보 업데이트 (선택적)
             checked_files = self.mw.checkable_proxy.get_checked_files()
             self.mw.selected_files_data = []
             total_size = 0
@@ -275,5 +243,5 @@ class FileTreeController:
                     total_size += size
                 except Exception:
                     pass # 오류 무시
-            # 상태바 등에 정보 표시 (선택적)
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
+            # 토큰 계산은 텍스트 변경 시에만 수행되도록 변경됨
