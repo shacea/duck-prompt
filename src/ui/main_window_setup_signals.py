@@ -43,6 +43,14 @@ def connect_signals(mw: 'MainWindow'):
     mw.restore_button.clicked.connect(mw.resource_controller.restore_states_from_backup_action) # ResourceController
     mw.template_tree.itemDoubleClicked.connect(mw.resource_controller.load_selected_item) # ResourceController
 
+    # 첨부 파일 관리 버튼 (추가)
+    if hasattr(mw, 'attach_file_btn'):
+        mw.attach_file_btn.clicked.connect(mw.main_controller.attach_files) # MainController
+    if hasattr(mw, 'paste_clipboard_btn'):
+        mw.paste_clipboard_btn.clicked.connect(mw.main_controller.paste_from_clipboard) # MainController
+    if hasattr(mw, 'remove_attachment_btn'):
+        mw.remove_attachment_btn.clicked.connect(mw.main_controller.remove_selected_attachment) # MainController
+
     # 상태바 & 모델 선택
     mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController (Resets token label)
 
@@ -88,13 +96,11 @@ def connect_signals(mw: 'MainWindow'):
     shortcut_generate = QAction(mw)
     shortcut_generate.setShortcut(QKeySequence("Ctrl+Return"))
     if mw.mode == "Meta Prompt Builder":
-         # Connect to generate_final_meta_prompt if it exists, otherwise generate_meta_prompt
          if hasattr(mw, "generate_final_prompt_btn"):
              shortcut_generate.triggered.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController (Calculates tokens)
          else:
              shortcut_generate.triggered.connect(mw.prompt_controller.generate_meta_prompt) # PromptController (Calculates tokens)
     else:
-         # Connect to generate_all_and_copy for Ctrl+Return in Code Enhancer mode
          shortcut_generate.triggered.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens)
     mw.addAction(shortcut_generate)
 

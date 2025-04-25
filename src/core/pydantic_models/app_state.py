@@ -1,6 +1,6 @@
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any # Dict, Any 추가
 
 class AppState(BaseModel):
     """
@@ -13,6 +13,7 @@ class AppState(BaseModel):
     checked_files: List[str] = Field(default_factory=list)
     selected_llm: str = "Gemini" # Default LLM for token calculation
     selected_model_name: str = "" # Specific model name, loaded from config initially
+    attached_items: List[Dict[str, Any]] = Field(default_factory=list) # 첨부 파일/이미지 목록 추가
 
     # Gemini 파라미터는 config.yml에서 관리하므로 AppState에서 제거
     # gemini_temperature: float = 0.0
