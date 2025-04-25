@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "pyqt5-qt5==5.15.2",
     "PyQt5",
-    "pyyaml", # Still needed by other libs? Keep for now.
+    "pyyaml",
     "tiktoken",
     "pydantic",
     "google-generativeai",

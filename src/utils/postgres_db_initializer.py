@@ -7,7 +7,6 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List # 타입 힌트 추가
 
 # --- Database Connection Details ---
-# !!! 보안 경고: 실제 애플리케이션에서는 비밀번호를 코드에 직접 넣지 마세요.
 # 환경 변수나 보안 관리 도구를 사용하는 것이 좋습니다.
 DB_HOST = "postgresdb.lab.miraker.me"
 DB_PORT = 5333

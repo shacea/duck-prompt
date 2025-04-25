@@ -4,6 +4,7 @@ import logging
 from typing import Optional, Dict, Any, List
 import json # JSON 직렬화/역직렬화를 위해 추가
 import datetime # 시간 관련 작업 위해 추가
+from decimal import Decimal # NUMERIC 타입 처리를 위해 추가
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,17 @@ class DbService:
                 self.connection.commit()
                 return result[0] if result else None
             elif fetch_one:
-                # SELECT single value
+                # SELECT single value or row
                 result = cursor.fetchone()
-                return result[0] if result else None
+                if result and cursor.description:
+                    # Return as dict if columns are available
+                    colnames = [desc[0] for desc in cursor.description]
+                    return dict(zip(colnames, result))
+                elif result:
+                    # Return single value if only one column
+                    return result[0]
+                else:
+                    return None # No result found
             elif fetch_all:
                  # SELECT multiple rows/columns
                 if cursor.description:
@@ -97,17 +106,14 @@ class DbService:
             SELECT * FROM application_config WHERE profile_name = %s;
         """
         try:
-            # Use fetch_all=True to get list of dicts
-            result = self._execute_query(query, (profile_name,), fetch_all=True)
-            if result and isinstance(result, list) and len(result) > 0:
+            # Use fetch_one=True as profile_name is unique
+            result = self._execute_query(query, (profile_name,), fetch_one=True)
+            if result and isinstance(result, dict):
                 logger.info(f"Application config loaded for profile '{profile_name}'.")
-                config_data = result[0]
-                if 'gemini_temperature' in config_data and config_data['gemini_temperature'] is not None:
-                    try:
-                        config_data['gemini_temperature'] = float(config_data['gemini_temperature'])
-                    except (ValueError, TypeError):
-                         logger.warning(f"Could not convert gemini_temperature '{config_data['gemini_temperature']}' to float. Using default.")
-                         config_data['gemini_temperature'] = 0.0 # Default fallback
+                config_data = result
+                # Convert NUMERIC from Decimal to float for Pydantic
+                if 'gemini_temperature' in config_data and isinstance(config_data['gemini_temperature'], Decimal):
+                    config_data['gemini_temperature'] = float(config_data['gemini_temperature'])
                 return config_data
             else:
                 logger.error(f"Application config not found for profile '{profile_name}'.")
@@ -115,6 +121,93 @@ class DbService:
         except psycopg2.Error as e:
              logger.error(f"Failed to get application config for profile '{profile_name}': {e}")
              return None # Return None on DB error
+
+    def save_application_config(self, profile_name: str, config_data: Dict[str, Any]) -> bool:
+        """
+        Inserts or updates the application configuration for a given profile.
+        Handles data type conversions for DB compatibility.
+        """
+        logger.info(f"Attempting to save application configuration for profile '{profile_name}'...")
+
+        # Prepare data for insertion/update, handling potential missing keys and types
+        # Convert sets/lists to lists for PostgreSQL TEXT[]
+        allowed_extensions = list(config_data.get('allowed_extensions', []))
+        excluded_dirs = list(config_data.get('excluded_dirs', []))
+        default_ignore_list = list(config_data.get('default_ignore_list', []))
+        gemini_available_models = list(config_data.get('gemini_available_models', []))
+        claude_available_models = list(config_data.get('claude_available_models', []))
+        gpt_available_models = list(config_data.get('gpt_available_models', []))
+
+        # Ensure boolean values are correctly interpreted
+        gemini_enable_thinking = bool(config_data.get('gemini_enable_thinking', True))
+        gemini_enable_search = bool(config_data.get('gemini_enable_search', True))
+
+        # Ensure numeric values are correctly interpreted, providing defaults
+        try:
+            gemini_temperature = float(config_data.get('gemini_temperature', 0.0))
+        except (ValueError, TypeError):
+            gemini_temperature = 0.0
+        try:
+            gemini_thinking_budget = int(config_data.get('gemini_thinking_budget', 24576))
+        except (ValueError, TypeError):
+            gemini_thinking_budget = 24576
+
+        # SQL query using ON CONFLICT for upsert
+        sql = """
+            INSERT INTO application_config (
+                profile_name, default_system_prompt, allowed_extensions, excluded_dirs,
+                default_ignore_list, gemini_default_model, claude_default_model, gpt_default_model,
+                gemini_available_models, claude_available_models, gpt_available_models,
+                gemini_temperature, gemini_enable_thinking, gemini_thinking_budget, gemini_enable_search
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (profile_name) DO UPDATE SET
+                default_system_prompt = EXCLUDED.default_system_prompt,
+                allowed_extensions = EXCLUDED.allowed_extensions,
+                excluded_dirs = EXCLUDED.excluded_dirs,
+                default_ignore_list = EXCLUDED.default_ignore_list,
+                gemini_default_model = EXCLUDED.gemini_default_model,
+                claude_default_model = EXCLUDED.claude_default_model,
+                gpt_default_model = EXCLUDED.gpt_default_model,
+                gemini_available_models = EXCLUDED.gemini_available_models,
+                claude_available_models = EXCLUDED.claude_available_models,
+                gpt_available_models = EXCLUDED.gpt_available_models,
+                gemini_temperature = EXCLUDED.gemini_temperature,
+                gemini_enable_thinking = EXCLUDED.gemini_enable_thinking,
+                gemini_thinking_budget = EXCLUDED.gemini_thinking_budget,
+                gemini_enable_search = EXCLUDED.gemini_enable_search,
+                updated_at = NOW();
+        """
+        params = (
+            profile_name,
+            config_data.get('default_system_prompt'),
+            allowed_extensions,
+            excluded_dirs,
+            default_ignore_list,
+            config_data.get('gemini_default_model'),
+            config_data.get('claude_default_model'),
+            config_data.get('gpt_default_model'),
+            gemini_available_models,
+            claude_available_models,
+            gpt_available_models,
+            gemini_temperature,
+            gemini_enable_thinking,
+            gemini_thinking_budget,
+            gemini_enable_search
+        )
+
+        try:
+            affected_rows = self._execute_query(sql, params)
+            logger.info(f"Application configuration for profile '{profile_name}' saved successfully. Rows affected: {affected_rows}")
+            return True
+        except psycopg2.Error as e:
+            logger.error(f"Error saving application configuration for profile '{profile_name}': {e}")
+            return False
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during config save for profile '{profile_name}': {e}")
+            return False
+
 
     def get_active_api_key(self, provider: str) -> Optional[str]:
         """Fetches the first active API key for a given provider."""
@@ -125,10 +218,11 @@ class DbService:
             LIMIT 1;
         """
         try:
-            result = self._execute_query(query, (provider,), fetch_one=True)
-            if result:
+            # Use fetch_one=True, but expect single value (api_key)
+            result_dict = self._execute_query(query, (provider,), fetch_one=True)
+            if result_dict and 'api_key' in result_dict:
                 logger.info(f"Active API key found for provider '{provider}'.")
-                return result
+                return result_dict['api_key']
             else:
                 logger.warning(f"No active API key found for provider '{provider}'.")
                 return None
@@ -142,12 +236,15 @@ class DbService:
             return None
         query = "SELECT id FROM api_keys WHERE api_key = %s;"
         try:
-            key_id = self._execute_query(query, (api_key_string,), fetch_one=True)
-            if key_id:
+            # Use fetch_one=True, expect single value (id)
+            result_dict = self._execute_query(query, (api_key_string,), fetch_one=True)
+            if result_dict and 'id' in result_dict:
+                key_id = result_dict['id']
                 logger.debug(f"Found API key ID for the provided key.")
+                return key_id
             else:
                 logger.warning(f"API key string not found in the database.")
-            return key_id
+                return None
         except psycopg2.Error as e:
             logger.error(f"Failed to get API key ID: {e}")
             return None
@@ -234,13 +331,15 @@ class DbService:
             logger.error(f"Failed to clean up old Gemini logs: {e}")
 
 
-    # --- Methods for potential future use (Rate Limiting, Saving Config) ---
+    # --- Methods for potential future use (Rate Limiting, API Key CRUD) ---
     # def get_model_rate_limit(self, model_name: str) -> Optional[Dict[str, Any]]: ...
     # def get_api_key_usage(self, api_key_id: int) -> Optional[Dict[str, Any]]: ...
     # def update_api_key_usage(...) -> bool: ...
-    # def save_application_config(self, profile_name: str, config_data: Dict[str, Any]) -> bool: ...
+    # def add_api_key(...) -> Optional[int]: ...
+    # def update_api_key(...) -> bool: ...
+    # def delete_api_key(...) -> bool: ...
+    # def list_api_keys(...) -> List[Dict[str, Any]]: ...
 
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
-            

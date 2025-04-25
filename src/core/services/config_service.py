@@ -59,32 +59,51 @@ class ConfigService:
             logger.critical(f"Unexpected error loading config from database: {e}", exc_info=True)
             raise ValueError(f"Failed to load configuration from database: {e}")
 
-    # --- Saving/Updating configuration to DB is NOT implemented in this version ---
-    # def _save_config(self, settings: ConfigSettings):
-    #     """Saves the current configuration to the database (Not Implemented)."""
-    #     logger.warning("Saving configuration to database is not implemented in this version.")
-    #     # Implementation would involve calling db_service.save_application_config
-    #     pass
+    def update_settings(self, updated_settings: ConfigSettings) -> bool:
+        """
+        Updates the application configuration in the database and in memory.
 
-    # def update_settings(self, **kwargs):
-    #     """Updates specific configuration settings and saves them (Not Implemented)."""
-    #     logger.warning("Updating configuration in database is not implemented in this version.")
-    #     # Implementation would involve updating self._settings and calling _save_config
-    #     # For now, just update the in-memory settings if needed, but they won't persist
-    #     try:
-    #         updated_data = self._settings.model_copy(update=kwargs).model_dump()
-    #         self._settings = ConfigSettings(**updated_data) # Update in-memory only
-    #         print("In-memory configuration updated (database not modified).")
-    #     except ValidationError as e:
-    #         print(f"Configuration update validation error: {e}")
-    #     except Exception as e:
-    #         print(f"Error updating in-memory configuration: {e}")
-    # --- End of Non-Implemented Saving Logic ---
+        Args:
+            updated_settings: A ConfigSettings object with the updated values.
+
+        Returns:
+            True if the update was successful, False otherwise.
+        """
+        logger.info(f"Attempting to update configuration in database for profile '{self.profile_name}'...")
+        try:
+            # Convert Pydantic model to dictionary for DB service
+            # Exclude API keys as they are managed separately (or not updated via this method)
+            config_dict_to_save = updated_settings.model_dump(exclude={'gemini_api_key', 'anthropic_api_key'})
+
+            # Call DbService to save the configuration
+            success = self.db_service.save_application_config(self.profile_name, config_dict_to_save)
+
+            if success:
+                # Update in-memory settings only if DB save was successful
+                # Reload from DB to ensure consistency or update directly? Update directly for now.
+                # Need to re-add API keys to the in-memory object
+                current_gemini_key = self._settings.gemini_api_key
+                current_anthropic_key = self._settings.anthropic_api_key
+                self._settings = updated_settings.model_copy() # Create a fresh copy
+                self._settings.gemini_api_key = current_gemini_key
+                self._settings.anthropic_api_key = current_anthropic_key
+                logger.info(f"Configuration updated successfully in database and memory for profile '{self.profile_name}'.")
+                return True
+            else:
+                logger.error(f"Failed to save configuration update to database for profile '{self.profile_name}'.")
+                return False
+
+        except ValidationError as e:
+            logger.error(f"Configuration update validation error: {e}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error updating configuration: {e}", exc_info=True)
+            return False
 
     def get_settings(self) -> ConfigSettings:
         """Returns the current configuration settings loaded from the database."""
         # If settings need to be refreshed frequently, call _load_config() here.
-        # For now, return the settings loaded at initialization.
+        # For now, return the settings loaded at initialization or after update.
         if not self._settings:
              logger.error("Configuration settings are not loaded.")
              # Attempt to reload or raise error
@@ -120,21 +139,5 @@ class ConfigService:
         # Ensure it returns a list even if the DB field was null/empty
         return models if models is not None else []
 
-    # --- Saving default model name is NOT implemented for DB ---
-    # def save_default_model_name(self, llm_type: str, model_name: str):
-    #     """Saves the default model name for a given LLM type to settings (Not Implemented for DB)."""
-    #     logger.warning("Saving default model name to database is not implemented.")
-    #     # update_dict = {}
-    #     # if llm_type == "Gemini":
-    #     #     update_dict["gemini_default_model"] = model_name
-    #     # elif llm_type == "Claude":
-    #     #     update_dict["claude_default_model"] = model_name
-    #     # elif llm_type == "GPT":
-    #     #     update_dict["gpt_default_model"] = model_name
-    #     #
-    #     # if update_dict:
-    #     #     self.update_settings(**update_dict) # This would need DB update logic
-    #     # else:
-    #     #     print(f"Warning: Cannot save default model for unknown LLM type: {llm_type}")
-    # --- End of Non-Implemented Saving Logic ---
-
+    # --- Saving default model name is handled by update_settings ---
+    # def save_default_model_name(self, llm_type: str, model_name: str): ...
