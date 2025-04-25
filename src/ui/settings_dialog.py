@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (
     QSplitter, QSizePolicy # QSizePolicy 추가
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor, QIcon # QColor, QIcon 추가
 from typing import Optional, Set, List, Dict, Any # Dict, Any 추가
 from pydantic import ValidationError
 import logging # 로깅 추가
@@ -31,7 +32,7 @@ class SettingsDialog(QDialog):
     .gitignore 파일 편집/저장 기능도 유지합니다.
     API 키 필드는 일반 텍스트로 표시됩니다. (저장 로직은 별도 관리)
     사용 가능 LLM 모델 목록 및 API 키를 관리하는 기능이 추가되었습니다.
-    API 키 목록에 잔여 사용량 정보를 표시합니다.
+    API 키 목록에 잔여 사용량 정보를 표시하고, 현재 사용 중인 키를 강조하며, 새로고침 및 키 값 확인 기능을 제공합니다.
     """
     def __init__(self, main_window: 'MainWindow', parent=None):
         super().__init__(parent)
@@ -70,13 +71,20 @@ class SettingsDialog(QDialog):
         self.api_key_management_group = QGroupBox("API 키 관리")
         api_key_management_layout = QVBoxLayout()
 
-        # API 키 목록 표시
+        # API 키 목록 표시 및 새로고침 버튼
+        api_list_layout = QHBoxLayout()
         self.api_keys_list = QListWidget()
         self.api_keys_list.setSelectionMode(QAbstractItemView.SingleSelection)
         self.api_keys_list.setMinimumHeight(100) # 최소 높이 증가
         self.api_keys_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
-        api_key_management_layout.addWidget(QLabel("등록된 API 키 (잔여량은 기본 Gemini 모델 기준):")) # 라벨 수정
-        api_key_management_layout.addWidget(self.api_keys_list)
+        self.refresh_api_usage_btn = QPushButton("🔄") # 새로고침 버튼 추가
+        self.refresh_api_usage_btn.setToolTip("API 키 사용량 새로고침")
+        self.refresh_api_usage_btn.setFixedWidth(30) # 버튼 크기 고정
+        api_list_layout.addWidget(self.api_keys_list)
+        api_list_layout.addWidget(self.refresh_api_usage_btn)
+
+        api_key_management_layout.addWidget(QLabel("등록된 API 키 (🟢: 활성/현재 사용, 🟡: 활성, 🔴: 비활성 / 잔여량은 기본 Gemini 모델 기준):")) # 라벨 수정
+        api_key_management_layout.addLayout(api_list_layout) # 목록과 새로고침 버튼 레이아웃 추가
 
         # API 키 추가/제거 버튼
         api_key_buttons_layout = QHBoxLayout()
@@ -255,6 +263,8 @@ class SettingsDialog(QDialog):
         # API 키 관리 버튼 시그널
         self.add_api_key_btn.clicked.connect(self.add_api_key)
         self.remove_api_key_btn.clicked.connect(self.remove_api_key)
+        self.refresh_api_usage_btn.clicked.connect(self.load_api_keys_list) # 새로고침 버튼 연결
+        self.api_keys_list.itemDoubleClicked.connect(self.show_api_key_value) # 더블클릭 시그널 연결
 
         # 사용 가능 모델 추가/제거 버튼 시그널 연결
         self.add_gemini_model_btn.clicked.connect(lambda: self.add_model_to_list(self.gemini_models_list, "Gemini"))
@@ -301,7 +311,7 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "로드 오류", f"설정을 로드하는 중 오류 발생:\n{e}")
 
     def load_api_keys_list(self):
-        """DB에서 API 키 목록을 로드하여 리스트 위젯에 표시하고 잔여 사용량을 계산합니다."""
+        """DB에서 API 키 목록을 로드하여 리스트 위젯에 표시하고 잔여 사용량 및 현재 사용 키를 강조합니다."""
         self.api_keys_list.clear()
         try:
             api_keys = self.db_service.list_api_keys()
@@ -311,6 +321,10 @@ class SettingsDialog(QDialog):
                 return
 
             self.api_keys_list.setEnabled(True)
+
+            # 현재 ConfigService에서 사용 중인 Gemini 키 ID 가져오기
+            current_gemini_key_id = self.config_service.get_current_gemini_key_id()
+            logger.info(f"Currently used Gemini Key ID in ConfigService: {current_gemini_key_id}")
 
             # 기본 Gemini 모델 및 Rate Limit 정보 가져오기 (잔여량 계산 기준)
             default_gemini_model = self.config_service.get_default_model_name('Gemini')
@@ -325,14 +339,26 @@ class SettingsDialog(QDialog):
                 key_id = key_info['id']
                 provider = key_info.get('provider', 'N/A')
                 description = key_info.get('description', '')
-                api_key_display = key_info.get('api_key', '')
+                api_key_value = key_info.get('api_key', '') # 실제 키 값
+                api_key_display = api_key_value
                 if len(api_key_display) > 8:
                      api_key_display = f"{api_key_display[:4]}...{api_key_display[-4:]}"
                 else:
                      api_key_display = f"{api_key_display[:4]}..."
 
                 is_active = key_info.get('is_active', False)
-                active_status = "🟢" if is_active else "🔴"
+                is_currently_used = (provider == 'google' and key_id == current_gemini_key_id)
+
+                # 상태 아이콘 및 색상 결정
+                if is_currently_used:
+                    status_icon = "🟢" # 현재 사용 중 (활성 상태)
+                    item_color = QColor("lightgreen") # 연한 녹색 배경
+                elif is_active:
+                    status_icon = "🟡" # 활성 상태 (현재 사용 안 함)
+                    item_color = QColor("lightyellow") # 연한 노란색 배경
+                else:
+                    status_icon = "🔴" # 비활성 상태
+                    item_color = QColor("lightcoral") # 연한 산호색 배경
 
                 # --- 잔여 사용량 계산 (Gemini 키에 대해서만) ---
                 remaining_rpm_str = "N/A"
@@ -374,15 +400,18 @@ class SettingsDialog(QDialog):
                     logger.warning(f"Rate limit info not found for default model '{default_gemini_model}'. Cannot calculate remaining usage for key ID {key_id}.")
 
                 # --- 표시 텍스트 및 툴팁 업데이트 ---
-                display_text = f"{active_status} [{provider.upper()}] {description or api_key_display}"
+                display_text = f"{status_icon} [{provider.upper()}] {description or api_key_display}"
                 if provider == 'google':
                     display_text += f" (RPM: {remaining_rpm_str}, Daily: {remaining_daily_str})"
 
                 item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, key_id)
+                item.setData(Qt.UserRole, key_id) # 키 ID 저장
+                item.setData(Qt.UserRole + 1, api_key_value) # 실제 키 값 저장 (숨김 데이터)
+                item.setBackground(item_color) # 배경색 설정
 
                 tooltip_text = (
                     f"ID: {key_id}\nProvider: {provider}\nKey: {api_key_display}\nActive: {is_active}"
+                    f"\nCurrently Used (Gemini): {'Yes' if is_currently_used else 'No'}"
                 )
                 if provider == 'google':
                     tooltip_text += f"\nRemaining RPM (vs {default_gemini_model}): {tooltip_rpm}\nRemaining Daily (vs {default_gemini_model}): {tooltip_daily}"
@@ -440,6 +469,17 @@ class SettingsDialog(QDialog):
                 QMessageBox.warning(self, "실패", "API 키 제거 중 오류가 발생했습니다.")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"API 키 제거 중 예외 발생:\n{e}")
+
+    def show_api_key_value(self, item: QListWidgetItem):
+        """더블클릭된 API 키의 실제 값을 메시지 박스로 보여줍니다."""
+        api_key_value = item.data(Qt.UserRole + 1)
+        if api_key_value:
+            QMessageBox.information(self, "API 키 값 확인",
+                                    f"선택한 API 키 값:\n\n{api_key_value}\n\n"
+                                    "주의: 이 키는 민감한 정보이므로 안전하게 관리하세요.",
+                                    QMessageBox.Ok)
+        else:
+            QMessageBox.warning(self, "오류", "API 키 값을 가져올 수 없습니다.")
 
 
     def browse_default_prompt(self):
@@ -578,4 +618,4 @@ class SettingsDialog(QDialog):
                 self.mw.file_tree_controller.load_gitignore_settings()
         except Exception as e:
             QMessageBox.critical(self, "오류", f".gitignore 파일을 저장하는 중 오류 발생:\n{e}")
-            
+
