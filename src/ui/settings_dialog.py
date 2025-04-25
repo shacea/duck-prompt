@@ -3,7 +3,7 @@ import os
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
-    QCheckBox, QApplication
+    QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog
 )
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List
@@ -24,7 +24,8 @@ class SettingsDialog(QDialog):
     환경 설정을 표시하고 수정하는 다이얼로그 창.
     DB에서 로드된 설정을 보여주고, 수정 후 DB에 저장합니다.
     .gitignore 파일 편집/저장 기능도 유지합니다.
-    API 키는 읽기 전용으로 표시됩니다.
+    API 키 필드는 쓰기 가능하게 변경되었습니다. (저장 로직은 별도 관리 필요)
+    사용 가능 LLM 모델 목록을 관리하는 기능이 추가되었습니다.
     """
     def __init__(self, main_window: 'MainWindow', parent=None):
         super().__init__(parent)
@@ -33,7 +34,7 @@ class SettingsDialog(QDialog):
         self.settings: Optional[ConfigSettings] = None # Load in load_config_settings
 
         self.setWindowTitle("환경 설정") # Title updated
-        self.setMinimumWidth(600)
+        self.setMinimumWidth(700) # 너비 증가
 
         # --- UI 요소 생성 ---
         # 기본 시스템 프롬프트
@@ -57,18 +58,70 @@ class SettingsDialog(QDialog):
         llm_model_layout.addRow("GPT 기본 모델:", self.gpt_default_model_edit)
         self.llm_model_group.setLayout(llm_model_layout)
 
-        # API 키 (Read-only, masked)
-        self.api_key_group = QGroupBox("API 키 (DB 설정 - 읽기 전용)")
+        # API 키 (쓰기 가능, 마스크됨)
+        self.api_key_group = QGroupBox("API 키 (DB 설정 - 편집 가능, 저장은 별도 관리)") # 그룹 제목 변경
         api_key_layout = QFormLayout()
         self.gemini_api_key_edit = QLineEdit()
         self.gemini_api_key_edit.setEchoMode(QLineEdit.Password)
-        self.gemini_api_key_edit.setReadOnly(True)
+        # self.gemini_api_key_edit.setReadOnly(True) # 읽기 전용 해제
         self.anthropic_api_key_edit = QLineEdit()
         self.anthropic_api_key_edit.setEchoMode(QLineEdit.Password)
-        self.anthropic_api_key_edit.setReadOnly(True)
+        # self.anthropic_api_key_edit.setReadOnly(True) # 읽기 전용 해제
         api_key_layout.addRow("Gemini API Key:", self.gemini_api_key_edit)
         api_key_layout.addRow("Anthropic API Key:", self.anthropic_api_key_edit)
         self.api_key_group.setLayout(api_key_layout)
+
+        # 사용 가능 LLM 모델 관리 (신규 추가)
+        self.available_models_group = QGroupBox("사용 가능 LLM 모델 목록 관리")
+        available_models_main_layout = QHBoxLayout()
+
+        # Gemini 모델 목록
+        gemini_model_widget = QWidget()
+        gemini_model_layout = QVBoxLayout(gemini_model_widget)
+        gemini_model_layout.addWidget(QLabel("Gemini 모델:"))
+        self.gemini_models_list = QListWidget()
+        self.gemini_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        gemini_model_buttons = QHBoxLayout()
+        self.add_gemini_model_btn = QPushButton("추가")
+        self.remove_gemini_model_btn = QPushButton("제거")
+        gemini_model_buttons.addWidget(self.add_gemini_model_btn)
+        gemini_model_buttons.addWidget(self.remove_gemini_model_btn)
+        gemini_model_layout.addWidget(self.gemini_models_list)
+        gemini_model_layout.addLayout(gemini_model_buttons)
+
+        # Claude 모델 목록
+        claude_model_widget = QWidget()
+        claude_model_layout = QVBoxLayout(claude_model_widget)
+        claude_model_layout.addWidget(QLabel("Claude 모델:"))
+        self.claude_models_list = QListWidget()
+        self.claude_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        claude_model_buttons = QHBoxLayout()
+        self.add_claude_model_btn = QPushButton("추가")
+        self.remove_claude_model_btn = QPushButton("제거")
+        claude_model_buttons.addWidget(self.add_claude_model_btn)
+        claude_model_buttons.addWidget(self.remove_claude_model_btn)
+        claude_model_layout.addWidget(self.claude_models_list)
+        claude_model_layout.addLayout(claude_model_buttons)
+
+        # GPT 모델 목록
+        gpt_model_widget = QWidget()
+        gpt_model_layout = QVBoxLayout(gpt_model_widget)
+        gpt_model_layout.addWidget(QLabel("GPT 모델:"))
+        self.gpt_models_list = QListWidget()
+        self.gpt_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        gpt_model_buttons = QHBoxLayout()
+        self.add_gpt_model_btn = QPushButton("추가")
+        self.remove_gpt_model_btn = QPushButton("제거")
+        gpt_model_buttons.addWidget(self.add_gpt_model_btn)
+        gpt_model_buttons.addWidget(self.remove_gpt_model_btn)
+        gpt_model_layout.addWidget(self.gpt_models_list)
+        gpt_model_layout.addLayout(gpt_model_buttons)
+
+        available_models_main_layout.addWidget(gemini_model_widget)
+        available_models_main_layout.addWidget(claude_model_widget)
+        available_models_main_layout.addWidget(gpt_model_widget)
+        self.available_models_group.setLayout(available_models_main_layout)
+
 
         # 파일 필터링
         self.filtering_group = QGroupBox("파일 필터링")
@@ -123,6 +176,7 @@ class SettingsDialog(QDialog):
         main_layout.addWidget(self.default_prompt_group)
         main_layout.addWidget(self.llm_model_group)
         main_layout.addWidget(self.api_key_group)
+        main_layout.addWidget(self.available_models_group) # 사용 가능 모델 그룹 추가
         main_layout.addWidget(self.filtering_group)
         main_layout.addWidget(self.gemini_group) # Gemini 파라미터 그룹 추가
         main_layout.addWidget(self.gitignore_group)
@@ -134,6 +188,15 @@ class SettingsDialog(QDialog):
         self.save_gitignore_button.clicked.connect(self.save_gitignore) # .gitignore save remains
         self.button_box.accepted.connect(self.save_config_settings) # Save button uses accept
         self.button_box.rejected.connect(self.reject) # Close button uses reject
+
+        # 사용 가능 모델 추가/제거 버튼 시그널 연결
+        self.add_gemini_model_btn.clicked.connect(lambda: self.add_model_to_list(self.gemini_models_list, "Gemini"))
+        self.remove_gemini_model_btn.clicked.connect(lambda: self.remove_model_from_list(self.gemini_models_list))
+        self.add_claude_model_btn.clicked.connect(lambda: self.add_model_to_list(self.claude_models_list, "Claude"))
+        self.remove_claude_model_btn.clicked.connect(lambda: self.remove_model_from_list(self.claude_models_list))
+        self.add_gpt_model_btn.clicked.connect(lambda: self.add_model_to_list(self.gpt_models_list, "GPT"))
+        self.remove_gpt_model_btn.clicked.connect(lambda: self.remove_model_from_list(self.gpt_models_list))
+
 
         # --- 초기 설정값 로드 ---
         self.load_config_settings()
@@ -156,6 +219,11 @@ class SettingsDialog(QDialog):
             self.gemini_api_key_edit.setText(self.settings.gemini_api_key or "")
             self.anthropic_api_key_edit.setText(self.settings.anthropic_api_key or "")
 
+            # 사용 가능 모델 목록 로드
+            self.gemini_models_list.clear(); self.gemini_models_list.addItems(self.settings.gemini_available_models or [])
+            self.claude_models_list.clear(); self.claude_models_list.addItems(self.settings.claude_available_models or [])
+            self.gpt_models_list.clear(); self.gpt_models_list.addItems(self.settings.gpt_available_models or [])
+
             # Set<str> -> str (UI 표시용)
             self.allowed_extensions_edit.setText(", ".join(sorted(list(self.settings.allowed_extensions or set()))))
             # List<str> -> str (UI 표시용)
@@ -177,6 +245,30 @@ class SettingsDialog(QDialog):
         if selected_path is not None: # Allow empty path selection to clear
             self.default_prompt_path_edit.setText(selected_path)
 
+    def add_model_to_list(self, list_widget: QListWidget, model_type: str):
+        """리스트 위젯에 새 모델 이름을 추가합니다."""
+        model_name, ok = QInputDialog.getText(self, f"{model_type} 모델 추가", "추가할 모델 이름을 입력하세요:")
+        if ok and model_name and model_name.strip():
+            name_stripped = model_name.strip()
+            # 중복 체크
+            items = [list_widget.item(i).text() for i in range(list_widget.count())]
+            if name_stripped in items:
+                QMessageBox.warning(self, "중복", f"'{name_stripped}' 모델이 이미 목록에 있습니다.")
+                return
+            list_widget.addItem(name_stripped)
+        elif ok:
+            QMessageBox.warning(self, "입력 오류", "모델 이름은 비워둘 수 없습니다.")
+
+    def remove_model_from_list(self, list_widget: QListWidget):
+        """리스트 위젯에서 선택된 모델 이름을 제거합니다."""
+        selected_items = list_widget.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "선택 오류", "제거할 모델을 목록에서 선택하세요.")
+            return
+        for item in selected_items:
+            list_widget.takeItem(list_widget.row(item))
+
+
     def save_config_settings(self):
         """UI에서 설정값을 읽어 ConfigSettings 모델을 업데이트하고 DB에 저장합니다."""
         if not self.settings:
@@ -189,6 +281,11 @@ class SettingsDialog(QDialog):
             gemini_model = self.gemini_default_model_edit.text().strip()
             claude_model = self.claude_default_model_edit.text().strip()
             gpt_model = self.gpt_default_model_edit.text().strip()
+
+            # 사용 가능 모델 목록 읽기
+            gemini_available = [self.gemini_models_list.item(i).text() for i in range(self.gemini_models_list.count())]
+            claude_available = [self.claude_models_list.item(i).text() for i in range(self.claude_models_list.count())]
+            gpt_available = [self.gpt_models_list.item(i).text() for i in range(self.gpt_models_list.count())]
 
             # 확장자: 쉼표 또는 공백으로 구분된 문자열 -> Set[str]
             allowed_ext_str = self.allowed_extensions_edit.text().strip()
@@ -216,14 +313,18 @@ class SettingsDialog(QDialog):
             update_data.allowed_extensions = allowed_extensions
             update_data.excluded_dirs = set(excluded_dirs) # Pydantic 모델은 Set을 기대
             update_data.default_ignore_list = default_ignore
-            # 사용 가능한 모델 목록은 여기서 수정하지 않음 (보통 외부 요인에 의해 결정됨)
-            # update_data.gemini_available_models = ...
-            # update_data.claude_available_models = ...
-            # update_data.gpt_available_models = ...
+            # 사용 가능한 모델 목록 업데이트
+            update_data.gemini_available_models = gemini_available
+            update_data.claude_available_models = claude_available
+            update_data.gpt_available_models = gpt_available
             update_data.gemini_temperature = gemini_temp
             update_data.gemini_enable_thinking = gemini_thinking
             update_data.gemini_thinking_budget = gemini_budget
             update_data.gemini_enable_search = gemini_search
+
+            # API 키는 여기서 업데이트하지 않음 (읽기 전용 해제만 함)
+            # update_data.gemini_api_key = self.gemini_api_key_edit.text().strip()
+            # update_data.anthropic_api_key = self.anthropic_api_key_edit.text().strip()
 
             # --- Pydantic 유효성 검사 ---
             validated_settings = ConfigSettings(**update_data.model_dump())
@@ -286,3 +387,4 @@ class SettingsDialog(QDialog):
                 self.mw.file_tree_controller.load_gitignore_settings()
         except Exception as e:
             QMessageBox.critical(self, "오류", f".gitignore 파일을 저장하는 중 오류 발생:\n{e}")
+            

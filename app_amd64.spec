@@ -39,9 +39,6 @@ a = Analysis(
     # hiddenimports에 pkg_resources 추가 (setuptools 관련 hook에서 필요할 수 있음)
     hiddenimports=[
         'pkg_resources',
-        'tzdata',        # 시간대 데이터 포함 (필요시)
-        'sip',           # PyQt 관련 도구 포함 (필요시)
-        # Pillow, langgraph 등은 보통 자동 감지됨
     ],
     hookspath=[],
     hooksconfig={},
