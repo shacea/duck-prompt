@@ -105,7 +105,7 @@ def create_widgets(mw: 'MainWindow'):
     font_lbl.setPointSize(10); font_lbl.setBold(True)
     mw.project_folder_label.setFont(font_lbl)
 
-    # --- 파일 탐색기 (왼쪽 상단) ---
+    # --- 파일 탐색기 (왼쪽) ---
     mw.dir_model = FilteredFileSystemModel()
     mw.tree_view = QTreeView()
     project_folder_getter = lambda: mw.current_project_folder
@@ -119,7 +119,7 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
     mw.tree_view.setItemDelegateForColumn(0, CheckBoxDelegate(mw.tree_view))
 
-    # --- 리소스 관리 (왼쪽 중간) ---
+    # --- 리소스 관리 (오른쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리")
     resource_manager_layout = QVBoxLayout()
     resource_manager_layout.setContentsMargins(5, 5, 5, 5); resource_manager_layout.setSpacing(5)
@@ -145,7 +145,7 @@ def create_widgets(mw: 'MainWindow'):
     resource_manager_layout.addLayout(tm_button_layout)
     mw.resource_manager_group.setLayout(resource_manager_layout)
 
-    # --- 첨부 파일 관리 (왼쪽 하단) ---
+    # --- 첨부 파일 관리 (왼쪽 하단으로 이동) ---
     mw.attachment_group = QGroupBox("첨부 파일")
     attachment_layout = QVBoxLayout()
     attachment_layout.setContentsMargins(5, 5, 5, 5); attachment_layout.setSpacing(5)
@@ -166,7 +166,7 @@ def create_widgets(mw: 'MainWindow'):
     mw.attachment_group.setVisible(mw.mode == "Code Enhancer Prompt Builder")
 
 
-    # --- 탭 위젯 (오른쪽) ---
+    # --- 탭 위젯 (오른쪽 상단) ---
     mw.build_tabs = QTabWidget()
     custom_tab_bar = CustomTabBar(mw.build_tabs, mw)
     mw.build_tabs.setTabBar(custom_tab_bar)
@@ -209,7 +209,7 @@ def create_widgets(mw: 'MainWindow'):
     mw.token_count_label = QLabel("토큰 계산: -")
     mw.api_time_label = QLabel("API 시간: -") # API 시간 표시 라벨 추가
 
-    # --- LLM 관련 위젯 (상단으로 이동 예정) ---
+    # --- LLM 관련 위젯 (상단) ---
     mw.llm_combo = QComboBox(); mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
     mw.model_name_combo = QComboBox(); mw.model_name_combo.setEditable(True); mw.model_name_combo.setInsertPolicy(QComboBox.NoInsert)
     mw.gemini_temp_label = QLabel("Temp:")
@@ -275,33 +275,68 @@ def create_layout(mw: 'MainWindow'):
     # --- 중앙 스플리터 ---
     mw.center_splitter = QSplitter(Qt.Horizontal)
 
-    # --- 왼쪽 영역 (파일 트리 + 리소스 관리 + 첨부 파일) ---
-    left_side_widget = QWidget()
-    left_side_layout = QVBoxLayout(left_side_widget)
+    # --- 왼쪽 영역 (파일 트리 + 첨부 파일) ---
+    left_side_widget = QWidget() # 컨테이너 위젯
+    left_side_layout = QVBoxLayout(left_side_widget) # 메인 레이아웃
     left_side_layout.setContentsMargins(2, 2, 2, 2); left_side_layout.setSpacing(5)
-    left_side_layout.addWidget(mw.tree_view, 3) # 파일 트리 (비율 3)
-    left_side_layout.addWidget(mw.resource_manager_group, 2) # 리소스 관리 (비율 2)
-    left_side_layout.addWidget(mw.attachment_group, 1) # 첨부 파일 (비율 1)
+
+    # 세로 스플리터 생성
+    left_splitter = QSplitter(Qt.Vertical)
+    left_splitter.addWidget(mw.tree_view) # 파일 트리 추가
+    left_splitter.addWidget(mw.attachment_group) # 첨부 파일 그룹 추가
+    left_splitter.setSizes([400, 200]) # 초기 크기 설정 (조정 가능)
+
+    left_side_layout.addWidget(left_splitter) # 스플리터를 레이아웃에 추가
+
     mw.center_splitter.addWidget(left_side_widget)
 
-    # --- 오른쪽 영역 (실행 버튼 + 탭 위젯) ---
+    # --- 오른쪽 영역 (실행 버튼 + 상하 분할 영역) ---
     right_side_widget = QWidget()
     right_side_layout = QVBoxLayout(right_side_widget)
     right_side_layout.setContentsMargins(0, 0, 0, 0); right_side_layout.setSpacing(0)
+
+    # 실행 버튼 컨테이너
     run_buttons_container = QWidget()
     run_layout = QHBoxLayout(run_buttons_container)
     run_layout.setContentsMargins(5, 5, 5, 5); run_layout.setSpacing(10); run_layout.setAlignment(Qt.AlignLeft)
     for btn in mw.run_buttons: run_layout.addWidget(btn)
     run_layout.addStretch(1)
-    line_frame = QFrame(); line_frame.setFrameShape(QFrame.HLine); line_frame.setFrameShadow(QFrame.Sunken)
     right_side_layout.addWidget(run_buttons_container)
+
+    # 구분선
+    line_frame = QFrame(); line_frame.setFrameShape(QFrame.HLine); line_frame.setFrameShadow(QFrame.Sunken)
     right_side_layout.addWidget(line_frame)
-    right_side_layout.addWidget(mw.build_tabs)
+
+    # 오른쪽 상하 분할 스플리터
+    right_content_splitter = QSplitter(Qt.Vertical)
+
+    # 오른쪽 상단: 탭 위젯
+    right_content_splitter.addWidget(mw.build_tabs)
+
+    # 오른쪽 하단: 리소스 관리만
+    bottom_right_widget = QWidget()
+    bottom_right_layout = QVBoxLayout(bottom_right_widget)
+    bottom_right_layout.setContentsMargins(0, 5, 0, 0) # 상단 여백 추가
+    bottom_right_layout.setSpacing(5)
+    bottom_right_layout.addWidget(mw.resource_manager_group) # 리소스 관리 그룹만 추가
+    right_content_splitter.addWidget(bottom_right_widget)
+
+    # 오른쪽 상하 스플리터 크기 비율 설정 (예: 2:1)
+    right_content_splitter.setSizes([400, 200]) # 초기 높이 설정 (조정 가능)
+
+    # 오른쪽 레이아웃에 상하 스플리터 추가
+    right_side_layout.addWidget(right_content_splitter)
+
+    # 중앙 스플리터에 오른쪽 영역 추가
     mw.center_splitter.addWidget(right_side_widget)
 
-    main_layout.addWidget(mw.center_splitter, 1)
+    # 중앙 스플리터 크기 비율 설정 (예: 1:3)
     mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
     mw.center_splitter.setStretchFactor(1, 3) # 오른쪽 영역 비율
+
+    # 메인 레이아웃에 중앙 스플리터 추가
+    main_layout.addWidget(mw.center_splitter, 1)
+
 
 def create_status_bar(mw: 'MainWindow'):
     """Creates the status bar."""
