@@ -1,6 +1,6 @@
-
 from PyQt5.QtWidgets import QAction
 from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import Qt
 
 # MainWindow 타입 힌트
 from typing import TYPE_CHECKING

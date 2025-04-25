@@ -26,6 +26,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     'types.Part' 오류를 피하기 위해 contents를 문자열과 딕셔너리 리스트로 구성합니다.
     API 키 및 파라미터는 ConfigService를 통해 로드합니다.
     API 호출 시작 시간과 경과 시간을 로깅하고, DB에 로그를 기록합니다.
+    API 호출 성공 시 사용량 정보를 DB에 기록합니다.
     """
     print("--- Calling Gemini API (Multimodal) ---")
     logger.info("Calling Gemini API node (Multimodal)")
@@ -98,6 +99,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     effective_model_name = ""
     gemini_response_text = "" # 응답 텍스트 초기화
     api_error_message: Optional[str] = None # API 호출 결과 오류 메시지
+    api_call_successful = False # API 호출 성공 여부 플래그
 
     try:
         # API 키 설정 (호출 시마다 설정하는 것이 안전할 수 있음)
@@ -265,9 +267,18 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
 
         else:
             logger.info("--- Gemini Response Received Successfully ---")
+            api_call_successful = True # API 호출 성공 플래그 설정
             default_return_state["gemini_response"] = gemini_response_text
             default_return_state["error_message"] = None # 성공 시 오류 없음
             # DB 로그 업데이트 (성공) - finally 블록에서 처리
+
+        # --- API 호출 성공 시 사용량 업데이트 ---
+        if api_call_successful and db_service and api_key_id is not None:
+            try:
+                db_service.update_api_key_usage(api_key_id)
+            except Exception as usage_err:
+                logger.error(f"Failed to update API key usage for key ID {api_key_id}: {usage_err}", exc_info=True)
+        # --- 사용량 업데이트 완료 ---
 
         return default_return_state
 
@@ -434,4 +445,3 @@ def build_gemini_graph(config_service: ConfigService) -> StateGraph:
     app = workflow.compile()
     logger.info("Gemini LangGraph compiled successfully.")
     return app
-            

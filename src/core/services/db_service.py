@@ -330,11 +330,64 @@ class DbService:
         except psycopg2.Error as e:
             logger.error(f"Failed to clean up old Gemini logs: {e}")
 
+    def update_api_key_usage(self, api_key_id: int):
+        """
+        Updates the usage statistics for a given API key ID.
+        Handles minute and daily rate limit counters using UPSERT.
+        """
+        if api_key_id is None:
+            logger.warning("Cannot update API key usage: api_key_id is None.")
+            return
+
+        logger.info(f"Updating API key usage for key ID: {api_key_id}")
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        # UPSERT query to handle both insert and update logic
+        query = """
+            INSERT INTO api_key_usage (
+                api_key_id,
+                last_api_call_timestamp,
+                minute_start_timestamp,
+                calls_this_minute,
+                day_start_timestamp,
+                calls_this_day
+            ) VALUES (
+                %s, %s, date_trunc('minute', %s), 1, date_trunc('day', %s), 1
+            )
+            ON CONFLICT (api_key_id) DO UPDATE SET
+                last_api_call_timestamp = EXCLUDED.last_api_call_timestamp,
+                calls_this_minute = CASE
+                    WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN 1
+                    ELSE api_key_usage.calls_this_minute + 1
+                END,
+                minute_start_timestamp = CASE
+                    WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN date_trunc('minute', EXCLUDED.last_api_call_timestamp)
+                    ELSE api_key_usage.minute_start_timestamp
+                END,
+                calls_this_day = CASE
+                    WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN 1
+                    ELSE api_key_usage.calls_this_day + 1
+                END,
+                day_start_timestamp = CASE
+                    WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN date_trunc('day', EXCLUDED.last_api_call_timestamp)
+                    ELSE api_key_usage.day_start_timestamp
+                END,
+                updated_at = NOW();
+        """
+        params = (api_key_id, now, now, now) # Pass 'now' multiple times for clarity
+
+        try:
+            affected_rows = self._execute_query(query, params)
+            logger.info(f"API key usage updated successfully for key ID: {api_key_id}. Rows affected: {affected_rows}")
+        except psycopg2.Error as e:
+            logger.error(f"Failed to update API key usage for key ID {api_key_id}: {e}")
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during API key usage update for key ID {api_key_id}: {e}")
+
 
     # --- Methods for potential future use (Rate Limiting, API Key CRUD) ---
     # def get_model_rate_limit(self, model_name: str) -> Optional[Dict[str, Any]]: ...
     # def get_api_key_usage(self, api_key_id: int) -> Optional[Dict[str, Any]]: ...
-    # def update_api_key_usage(...) -> bool: ...
     # def add_api_key(...) -> Optional[int]: ...
     # def update_api_key(...) -> bool: ...
     # def delete_api_key(...) -> bool: ...
