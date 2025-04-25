@@ -51,9 +51,9 @@ class MainController:
 
     def reset_program(self):
         """Resets the application to its initial state."""
-        self.mw._initialized = False
+        self._initialized = False
         self.mw.reset_state()
-        self.mw._initialized = False
+        self._initialized = False
 
         self.mw.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
         self.mw.system_tab.clear()
@@ -72,11 +72,13 @@ class MainController:
 
         self.update_char_count_for_active_tab()
         self.reset_token_label()
+        if hasattr(self.mw, 'api_time_label'): # API 시간 라벨 초기화 추가
+            self.mw.api_time_label.setText("API 시간: -")
 
         self.mw.update_window_title()
         self.mw.status_bar.showMessage("프로그램 리셋 완료.")
 
-        self.mw._initialized = True
+        self._initialized = True
         QMessageBox.information(self.mw, "Info", "프로그램이 초기 상태로 리셋되었습니다.")
 
     def update_char_count(self, text: str):
@@ -143,7 +145,7 @@ class MainController:
         print(f"Token calculation result: {token_count}")
 
         if token_count is not None:
-            token_text = f"Calculated Total Token ({selected_llm}): {token_count:,}"
+            token_text = f"Total Token ({selected_llm}): {token_count:,}" # "Calculated" 제거
             self.last_token_count = token_count
         else:
             token_text = f"{selected_llm} 토큰 계산 오류"

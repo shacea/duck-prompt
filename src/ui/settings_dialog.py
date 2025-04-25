@@ -1,9 +1,8 @@
-
 import os
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
-    QCheckBox
+    QCheckBox, QApplication
 )
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List

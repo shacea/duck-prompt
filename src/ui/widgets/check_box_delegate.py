@@ -41,5 +41,3 @@ class CheckBoxDelegate(QStyledItemDelegate):
 
         # 다른 이벤트는 기본 처리
         return super().editorEvent(event, model, option, index)
-
-    # paint 메서드는 오버라이드할 필요 없음 (기본 Delegate가 체크박스를 그림)

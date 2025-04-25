@@ -2,6 +2,7 @@
 import os
 import io
 import logging # 로깅 추가
+import datetime # datetime 추가
 from typing import Optional, List, Dict, Any
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -100,6 +101,7 @@ class MainWindow(QMainWindow):
         self.tree_generated: bool = False
         self._is_saving_gemini_settings = False # Still needed to prevent signal loops
         self.attached_items: List[Dict[str, Any]] = []
+        self.api_call_start_time: Optional[datetime.datetime] = None # API 호출 시작 시간 저장
 
         # --- 서비스 인스턴스 생성 ---
         try:
@@ -220,12 +222,14 @@ class MainWindow(QMainWindow):
         self.selected_files_data = []
         self.tree_generated = False
         self.attached_items = []
+        self.api_call_start_time = None # API 시작 시간 초기화
         if hasattr(self, 'checkable_proxy'): self.checkable_proxy.checked_files_dict.clear()
         if hasattr(self, 'attachment_list_widget'): self.attachment_list_widget.clear()
         self.update_window_title()
         if hasattr(self, 'file_tree_controller'): self.file_tree_controller.reset_file_tree()
         if hasattr(self, 'main_controller'): self.main_controller.on_llm_selected()
         if hasattr(self, 'summary_tab'): self.summary_tab.clear()
+        if hasattr(self, 'api_time_label'): self.api_time_label.setText("API 시간: -") # API 시간 라벨 초기화
         self.load_gemini_settings_to_ui() # Reload settings from DB
         self._initialized = True
 
@@ -348,6 +352,7 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("State loaded successfully!")
         self.main_controller.update_char_count_for_active_tab()
         self.token_count_label.setText("토큰 계산: -")
+        if hasattr(self, 'api_time_label'): self.api_time_label.setText("API 시간: -") # API 시간 라벨 초기화
 
     def uncheck_all_files(self):
         """Unchecks all items in the file tree view."""
@@ -462,6 +467,11 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(False)
         self.status_bar.showMessage("Gemini API 호출 중...")
+        # API 호출 시작 시간 기록 및 표시
+        self.api_call_start_time = datetime.datetime.now()
+        start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
+        if hasattr(self, 'api_time_label'):
+            self.api_time_label.setText(f"API 시작: {start_time_str}")
         QApplication.processEvents()
 
         if self.gemini_thread and self.gemini_thread.isRunning():
@@ -505,6 +515,15 @@ class MainWindow(QMainWindow):
             self.summary_tab.setPlainText(summary_result)
             print(f"Summary Output Length: {len(summary_result)}")
             self.build_tabs.setCurrentWidget(self.summary_tab)
+
+        # API 경과 시간 계산 및 표시
+        if self.api_call_start_time and hasattr(self, 'api_time_label'):
+            end_time = datetime.datetime.now()
+            elapsed_time = end_time - self.api_call_start_time
+            elapsed_str = str(elapsed_time).split('.')[0] # HH:MM:SS 형식
+            start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
+            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: {elapsed_str}")
+
         self.status_bar.showMessage("Gemini 응답 처리 완료.")
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(True)
 
@@ -512,6 +531,14 @@ class MainWindow(QMainWindow):
         """ Handles Gemini error, showing user-friendly message for specific API response issues. """
         print(f"--- Handling Gemini Error: {error_msg} ---")
         logger.error(f"Gemini Error Received: {error_msg}")
+
+        # API 경과 시간 계산 및 표시 (오류 시에도)
+        if self.api_call_start_time and hasattr(self, 'api_time_label'):
+            end_time = datetime.datetime.now()
+            elapsed_time = end_time - self.api_call_start_time
+            elapsed_str = str(elapsed_time).split('.')[0] # HH:MM:SS 형식
+            start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
+            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: {elapsed_str} (오류)")
 
         user_display_error = error_msg
         if "Gemini API 응답 처리 오류" in error_msg or "Gemini API 응답 문제 발생" in error_msg:
@@ -623,4 +650,3 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'db_service'):
             self.db_service.disconnect()
         super().closeEvent(event)
-

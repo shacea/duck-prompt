@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
-    QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy, QListWidget # QListWidget 추가
+    QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy, QListWidget
 )
 from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtCore import Qt
@@ -202,6 +202,9 @@ def create_widgets(mw: 'MainWindow'):
     # --- 상태 표시줄 위젯 ---
     mw.char_count_label = QLabel("Chars: 0")
     mw.token_count_label = QLabel("토큰 계산: -")
+    mw.api_time_label = QLabel("API 시간: -") # API 시간 표시 라벨 추가
+
+    # --- LLM 관련 위젯 (상단으로 이동 예정) ---
     mw.llm_combo = QComboBox(); mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
     mw.model_name_combo = QComboBox(); mw.model_name_combo.setEditable(True); mw.model_name_combo.setInsertPolicy(QComboBox.NoInsert)
     mw.gemini_temp_label = QLabel("Temp:")
@@ -212,6 +215,19 @@ def create_widgets(mw: 'MainWindow'):
     mw.gemini_budget_edit = QLineEdit(); mw.gemini_budget_edit.setFixedWidth(60); mw.gemini_budget_edit.setPlaceholderText("24576")
     mw.gemini_search_label = QLabel("Search:")
     mw.gemini_search_checkbox = QCheckBox()
+    # Gemini 파라미터 위젯 그룹화 (상단 이동용)
+    mw.gemini_param_widget = QWidget()
+    gemini_param_layout = QHBoxLayout(mw.gemini_param_widget)
+    gemini_param_layout.setContentsMargins(0, 0, 0, 0); gemini_param_layout.setSpacing(5)
+    gemini_param_layout.addWidget(mw.gemini_temp_label); gemini_param_layout.addWidget(mw.gemini_temp_edit)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addWidget(mw.gemini_thinking_label); gemini_param_layout.addWidget(mw.gemini_thinking_checkbox)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addWidget(mw.gemini_search_label); gemini_param_layout.addWidget(mw.gemini_search_checkbox)
+    mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
+
 
 def create_layout(mw: 'MainWindow'):
     """Creates the layout and arranges widgets."""
@@ -220,7 +236,10 @@ def create_layout(mw: 'MainWindow'):
     main_layout = QVBoxLayout(central_widget)
     main_layout.setContentsMargins(5, 2, 5, 5); main_layout.setSpacing(2)
 
-    # --- 상단 레이아웃 ---
+    # --- 상단 레이아웃 (버튼 + 프로젝트 경로 + LLM 컨트롤) ---
+    top_layout_wrapper = QVBoxLayout(); top_layout_wrapper.setSpacing(2); top_layout_wrapper.setContentsMargins(0, 0, 0, 0)
+
+    # 상단 버튼 행
     top_button_container = QWidget()
     top_button_layout = QHBoxLayout(top_button_container)
     top_button_layout.setSpacing(10); top_button_layout.setContentsMargins(0, 0, 0, 0)
@@ -228,10 +247,23 @@ def create_layout(mw: 'MainWindow'):
     top_button_layout.addWidget(mw.reset_program_btn)
     top_button_layout.addWidget(mw.select_project_btn)
     top_button_layout.addStretch(1)
-    top_layout_wrapper = QVBoxLayout(); top_layout_wrapper.setSpacing(2); top_layout_wrapper.setContentsMargins(0, 0, 0, 0)
     top_layout_wrapper.addWidget(top_button_container)
+
+    # 프로젝트 경로 행
     top_layout_wrapper.addWidget(mw.project_folder_label)
-    main_layout.addLayout(top_layout_wrapper, 0)
+
+    # LLM 컨트롤 행 (새로 추가)
+    llm_controls_container = QWidget()
+    llm_controls_layout = QHBoxLayout(llm_controls_container)
+    llm_controls_layout.setContentsMargins(0, 5, 0, 5); llm_controls_layout.setSpacing(10) # 상하 여백 추가
+    llm_controls_layout.addWidget(QLabel("Model:"))
+    llm_controls_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
+    llm_controls_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
+    llm_controls_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
+    llm_controls_layout.addStretch(1)
+    top_layout_wrapper.addWidget(llm_controls_container)
+
+    main_layout.addLayout(top_layout_wrapper, 0) # 상단 전체 레이아웃 추가
 
     # --- 중앙 스플리터 ---
     mw.center_splitter = QSplitter(Qt.Horizontal)
@@ -271,25 +303,20 @@ def create_status_bar(mw: 'MainWindow'):
     status_widget = QWidget()
     status_layout = QHBoxLayout(status_widget)
     status_layout.setContentsMargins(5, 2, 5, 2); status_layout.setSpacing(10)
+
+    # 문자 수와 토큰 계산 라벨을 붙여서 추가
     status_layout.addWidget(mw.char_count_label)
+    status_layout.addWidget(mw.token_count_label) # 토큰 계산 라벨 위치 변경
+
+    # API 시간 표시 라벨 추가
     status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
-    status_layout.addWidget(QLabel("Model:"))
-    status_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
-    status_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
-    status_layout.addWidget(mw.token_count_label)
-    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
-    gemini_param_widget = QWidget()
-    gemini_param_layout = QHBoxLayout(gemini_param_widget)
-    gemini_param_layout.setContentsMargins(0, 0, 0, 0); gemini_param_layout.setSpacing(5)
-    gemini_param_layout.addWidget(mw.gemini_temp_label); gemini_param_layout.addWidget(mw.gemini_temp_edit)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
-    gemini_param_layout.addWidget(mw.gemini_thinking_label); gemini_param_layout.addWidget(mw.gemini_thinking_checkbox)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
-    gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
-    gemini_param_layout.addWidget(mw.gemini_search_label); gemini_param_layout.addWidget(mw.gemini_search_checkbox)
-    status_layout.addWidget(gemini_param_widget)
-    gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini")
-    mw.gemini_param_widget = gemini_param_widget
+    status_layout.addWidget(mw.api_time_label)
+
+    # LLM 관련 위젯들은 상단으로 이동했으므로 여기서 제거
+    # status_layout.addWidget(QLabel("Model:"))
+    # status_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
+    # status_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
+    # status_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
+
     status_layout.addStretch(1)
     mw.status_bar.addPermanentWidget(status_widget)
