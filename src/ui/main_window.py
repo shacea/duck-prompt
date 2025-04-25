@@ -377,11 +377,15 @@ class MainWindow(QMainWindow):
                     except Exception as e:
                         logger.error(f"  Error processing checked file path '{fpath}': {e}")
 
-                # UI 업데이트 (dataChanged 시그널 발생)
-                logger.info(f"Emitting dataChanged for {len(items_to_check)} restored checked items.")
+                # UI 업데이트 (setData 호출)
+                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
+                # setData 호출 시 재귀 방지 플래그 고려 필요 (CheckableProxyModel의 setData 내부에서 처리됨)
                 for proxy_index in items_to_check:
-                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
-                # 트리 새로고침 대신 시그널 사용
+                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
+                    # CheckableProxyModel의 setData는 내부적으로 dataChanged 시그널을 발생시킴
+                    self.checkable_proxy.setData(proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
+                # 트리 새로고침 불필요
 
             # 부분 로드 시 다른 UI 요소는 변경하지 않음
             self.status_bar.showMessage("마지막 작업 상태 로드 완료.")
@@ -465,9 +469,12 @@ class MainWindow(QMainWindow):
                         else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
                     except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
 
-                logger.info(f"Emitting dataChanged for {len(items_to_check)} restored checked items.")
+                # UI 업데이트 (setData 호출)
+                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
                 for proxy_index in items_to_check:
-                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
+                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
+                    self.checkable_proxy.setData(proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
 
             self.file_tree_controller.load_gitignore_settings() # gitignore 로드
             self.update_window_title(folder_name)

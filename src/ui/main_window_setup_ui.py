@@ -5,7 +5,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
-    QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy, QListWidget
+    QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy, QListWidget,
+    QGridLayout # QGridLayout 추가
 )
 from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtCore import Qt
@@ -137,12 +138,27 @@ def create_widgets(mw: 'MainWindow'):
     resource_manager_layout.addWidget(mw.resource_mode_combo)
     resource_manager_layout.addWidget(QLabel("아래에서 로드/저장할 리소스 선택:"))
     resource_manager_layout.addWidget(mw.template_tree, 1)
-    tm_button_layout = QVBoxLayout(); tm_button_layout.setSpacing(5)
-    first_row = QHBoxLayout(); first_row.addWidget(mw.load_selected_template_btn); tm_button_layout.addLayout(first_row)
-    second_row = QHBoxLayout(); second_row.addWidget(mw.template_type_label); second_row.addWidget(mw.template_type_combo); second_row.addWidget(mw.save_as_template_btn); tm_button_layout.addLayout(second_row)
-    third_row = QHBoxLayout(); third_row.addWidget(mw.delete_template_btn); third_row.addWidget(mw.update_template_btn); tm_button_layout.addLayout(third_row)
-    fourth_row = QHBoxLayout(); fourth_row.addWidget(mw.backup_button); fourth_row.addWidget(mw.restore_button); tm_button_layout.addLayout(fourth_row)
-    resource_manager_layout.addLayout(tm_button_layout)
+
+    # --- 버튼 레이아웃 수정 (QVBoxLayout -> QGridLayout) ---
+    tm_button_layout = QGridLayout() # QVBoxLayout 대신 QGridLayout 사용
+    tm_button_layout.setSpacing(5)
+
+    # 저장 타입 + 저장 버튼 레이아웃
+    save_layout = QHBoxLayout()
+    save_layout.addWidget(mw.template_type_label)
+    save_layout.addWidget(mw.template_type_combo)
+    save_layout.addWidget(mw.save_as_template_btn)
+    save_layout.setContentsMargins(0, 0, 0, 0) # 내부 여백 제거
+
+    # 그리드에 위젯 추가
+    tm_button_layout.addWidget(mw.load_selected_template_btn, 0, 0) # 불러오기 (0, 0)
+    tm_button_layout.addLayout(save_layout, 0, 1)                  # 저장 타입 + 저장 (0, 1)
+    tm_button_layout.addWidget(mw.delete_template_btn, 1, 0)       # 삭제 (1, 0)
+    tm_button_layout.addWidget(mw.update_template_btn, 1, 1)       # 업데이트 (1, 1)
+    tm_button_layout.addWidget(mw.backup_button, 2, 0)             # 백업 (2, 0)
+    tm_button_layout.addWidget(mw.restore_button, 2, 1)            # 복원 (2, 1)
+
+    resource_manager_layout.addLayout(tm_button_layout) # 수정된 그리드 레이아웃 추가
     mw.resource_manager_group.setLayout(resource_manager_layout)
 
     # --- 첨부 파일 관리 (왼쪽 하단으로 이동) ---
