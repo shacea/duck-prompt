@@ -43,8 +43,8 @@ def create_menu_bar(mw: 'MainWindow'):
     mode_menu.addAction(switch_to_meta_action)
 
     state_menu = mw.menubar.addMenu("상태")
-    mw.save_state_action = QAction("상태 저장(기본)", mw)
-    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "이전 작업 불러오기" 버튼과 기능 중복 가능성 있음
+    mw.save_state_action = QAction("상태 저장(기본)", mw) # "작업 저장" 버튼과 기능 동일
+    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "이전 작업 불러오기" 버튼과 기능 동일
     mw.export_state_action = QAction("상태 내보내기", mw)
     mw.import_state_action = QAction("상태 가져오기", mw)
     state_menu.addAction(mw.save_state_action)
@@ -95,9 +95,10 @@ def create_widgets(mw: 'MainWindow'):
     # --- 상단 버튼 및 레이블 ---
     mw.mode_toggle_btn = QPushButton("🔄 모드 전환")
     mw.reset_program_btn = QPushButton("🗑️ 전체 프로그램 리셋")
-    mw.load_previous_work_btn = QPushButton("⏪ 이전 작업 불러오기") # 새 버튼 추가
+    mw.load_previous_work_btn = QPushButton("⏪ 이전 작업 불러오기")
+    mw.save_current_work_btn = QPushButton("💾 현재 작업 저장") # 작업 저장 버튼 추가
     mw.select_project_btn = QPushButton("📁 프로젝트 폴더 선택")
-    for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.load_previous_work_btn, mw.select_project_btn]: # 새 버튼 포함
+    for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.load_previous_work_btn, mw.save_current_work_btn, mw.select_project_btn]: # 새 버튼 포함
         btn.setFixedHeight(30)
     mw.project_folder_label = QLabel("현재 프로젝트 폴더: (선택 안 됨)")
     font_lbl = mw.project_folder_label.font()
@@ -249,7 +250,8 @@ def create_layout(mw: 'MainWindow'):
     top_button_layout.setSpacing(10); top_button_layout.setContentsMargins(0, 0, 0, 0)
     top_button_layout.addWidget(mw.mode_toggle_btn)
     top_button_layout.addWidget(mw.reset_program_btn)
-    top_button_layout.addWidget(mw.load_previous_work_btn) # 새 버튼 추가
+    top_button_layout.addWidget(mw.load_previous_work_btn)
+    top_button_layout.addWidget(mw.save_current_work_btn) # 작업 저장 버튼 추가
     top_button_layout.addWidget(mw.select_project_btn)
     top_button_layout.addStretch(1)
     top_layout_wrapper.addWidget(top_button_container)
@@ -325,3 +327,4 @@ def create_status_bar(mw: 'MainWindow'):
 
     status_layout.addStretch(1)
     mw.status_bar.addPermanentWidget(status_widget)
+

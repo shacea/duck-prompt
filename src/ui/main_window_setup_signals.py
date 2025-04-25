@@ -13,12 +13,16 @@ def connect_signals(mw: 'MainWindow'):
     # 상단 버튼
     mw.mode_toggle_btn.clicked.connect(mw._toggle_mode)
     mw.reset_program_btn.clicked.connect(mw.main_controller.reset_program) # MainController
-    mw.load_previous_work_btn.clicked.connect(mw.resource_controller.load_state_from_default) # 새 버튼 연결 (ResourceController)
+    mw.load_previous_work_btn.clicked.connect(mw.resource_controller.load_state_from_default) # ResourceController (partial load)
+    mw.save_current_work_btn.clicked.connect(mw.resource_controller.save_state_to_default) # ResourceController (save default)
     mw.select_project_btn.clicked.connect(mw.file_tree_controller.select_project_folder) # FileTreeController
 
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
+    # 파일 체크 상태 변경 시 MainWindow의 상태 변경 시그널 발생
+    mw.checkable_proxy.dataChanged.connect(lambda topLeft, bottomRight, roles: mw.state_changed_signal.emit() if Qt.CheckStateRole in roles else None)
+
 
     # 실행 버튼
     if mw.mode != "Meta Prompt Builder":
@@ -54,6 +58,10 @@ def connect_signals(mw: 'MainWindow'):
 
     # 상태바 & 모델 선택
     mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController (Resets token label)
+    # 모델명 변경 시 상태 변경 시그널 발생
+    mw.model_name_combo.currentIndexChanged.connect(lambda: mw.state_changed_signal.emit())
+    mw.model_name_combo.lineEdit().editingFinished.connect(lambda: mw.state_changed_signal.emit())
+
 
     # --- Gemini 파라미터 변경 시그널 연결 제거 (DB 저장 비활성화) ---
     # mw.gemini_temp_edit.textChanged.connect(mw.save_gemini_settings)
@@ -89,7 +97,7 @@ def connect_signals(mw: 'MainWindow'):
     # 메뉴 액션
     mw.settings_action.triggered.connect(mw.open_settings_dialog) # 설정 메뉴 연결
     mw.save_state_action.triggered.connect(mw.resource_controller.save_state_to_default) # ResourceController
-    mw.load_state_action.triggered.connect(mw.resource_controller.load_state_from_default) # ResourceController
+    mw.load_state_action.triggered.connect(mw.resource_controller.load_state_from_default) # ResourceController (partial load)
     mw.export_state_action.triggered.connect(mw.resource_controller.export_state_to_file) # ResourceController
     mw.import_state_action.triggered.connect(mw.resource_controller.import_state_from_file) # ResourceController
 
@@ -109,3 +117,4 @@ def connect_signals(mw: 'MainWindow'):
     shortcut_copy.setShortcut(QKeySequence("Ctrl+C"))
     shortcut_copy.triggered.connect(mw.on_copy_shortcut) # MainWindow
     mw.addAction(shortcut_copy)
+

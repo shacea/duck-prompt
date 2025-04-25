@@ -1,3 +1,4 @@
+
 import os
 import shutil
 from typing import Optional, List, Set
@@ -55,6 +56,8 @@ class FileTreeController:
                     self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
 
             self.mw.update_window_title(folder_name)
+            # 프로젝트 폴더 변경 시 상태 변경 시그널 발생
+            self.mw.state_changed_signal.emit()
 
     def load_gitignore_settings(self):
         """Loads .gitignore patterns and updates the filter model."""
@@ -166,6 +169,7 @@ class FileTreeController:
                         is_checked = self.mw.checkable_proxy.checked_files_dict.pop(file_path)
                         self.mw.checkable_proxy.checked_files_dict[new_path] = is_checked
                 self.refresh_tree()
+                self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"이름 변경 중 오류 발생: {str(e)}")
         elif ok:
@@ -197,6 +201,7 @@ class FileTreeController:
                         if p in self.mw.checkable_proxy.checked_files_dict:
                             del self.mw.checkable_proxy.checked_files_dict[p]
                 self.refresh_tree()
+                self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"삭제 중 오류 발생: {str(e)}")
 
@@ -246,5 +251,5 @@ class FileTreeController:
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
             # 토큰 계산은 버튼 클릭 시에만 수행되도록 변경됨
             # self.mw.main_controller.update_char_count_for_active_tab() # Trigger update based on active tab
+            # 파일 체크 상태 변경 시 상태 변경 시그널 발생 (자동 저장용) -> 시그널 연결 파일에서 처리
 
-            

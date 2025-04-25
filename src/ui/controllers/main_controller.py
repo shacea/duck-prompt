@@ -116,6 +116,7 @@ class MainController:
 
         self._initialized = True
         QMessageBox.information(self.mw, "Info", "프로그램이 초기 상태로 리셋되었습니다.")
+        self.mw.state_changed_signal.emit() # 리셋 후 상태 변경 시그널 발생
 
     def update_char_count(self, text: str):
         """Updates character count in the status bar."""
@@ -142,6 +143,9 @@ class MainController:
         """Handles text changes in editors: updates char count and resets token label."""
         self.update_char_count_for_active_tab()
         self.reset_token_label()
+        # 텍스트 변경 시 상태 변경 시그널 발생 (자동 저장용)
+        self.mw.state_changed_signal.emit()
+
 
     def calculate_and_display_tokens(self, text: str, attachments: Optional[List[Dict[str, Any]]] = None):
         """
@@ -279,6 +283,9 @@ class MainController:
         if hasattr(self.mw, 'gemini_param_widget'):
             self.mw.gemini_param_widget.setVisible(is_gemini_selected)
 
+        # LLM 또는 모델 변경 시 상태 변경 시그널 발생
+        self.mw.state_changed_signal.emit()
+
     # --- Attachment Handling ---
     def attach_files(self):
         """Opens a file dialog to select multiple files for attachment."""
@@ -324,6 +331,7 @@ class MainController:
                 self.mw._update_attachment_list_ui() # UI 업데이트
                 self.mw.status_bar.showMessage(f"{added_count}개 파일 첨부 완료.")
                 self.reset_token_label() # 첨부 변경 시 토큰 리셋
+                self.mw.state_changed_signal.emit() # 상태 변경 시그널 발생
             else:
                 self.mw.status_bar.showMessage("선택한 파일이 이미 첨부되어 있거나 유효하지 않습니다.")
 
@@ -432,6 +440,7 @@ class MainController:
             self.mw._update_attachment_list_ui()
             self.mw.status_bar.showMessage(f"{added_count}개 항목 클립보드에서 첨부 완료.")
             self.reset_token_label() # 첨부 변경 시 토큰 리셋
+            self.mw.state_changed_signal.emit() # 상태 변경 시그널 발생
         else:
             self.mw.status_bar.showMessage("클립보드에 첨부할 수 있는 이미지나 파일 경로가 없습니다.")
 
@@ -458,6 +467,7 @@ class MainController:
         if removed_count > 0:
             self.mw.status_bar.showMessage(f"{removed_count}개 첨부 파일 제거 완료.")
             self.reset_token_label() # 첨부 변경 시 토큰 리셋
+            self.mw.state_changed_signal.emit() # 상태 변경 시그널 발생
         else:
              self.mw.status_bar.showMessage("첨부 파일 제거 중 오류 발생.")
 

@@ -1,3 +1,4 @@
+
 import os
 from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
@@ -74,7 +75,8 @@ class ResourceController:
             fname_no_ext = os.path.splitext(filename)[0]
             loaded_state = self.state_service.load_state(fname_no_ext)
             if loaded_state:
-                self.mw.set_current_state(loaded_state)
+                # 상태 로드 시 전체 로드로 간주 (partial_load=False)
+                self.mw.set_current_state(loaded_state, partial_load=False)
             else:
                 QMessageBox.warning(self.mw, "오류", "상태 파일을 불러오는 데 실패했습니다.")
 
@@ -198,20 +200,27 @@ class ResourceController:
             QMessageBox.warning(self.mw, "오류", f"'{filename}' 업데이트 중 오류가 발생했습니다.")
 
     def save_state_to_default(self):
-        """Saves the current state to the default state file."""
+        """Saves the current state to the default state file ('default.json')."""
         state = self.mw.get_current_state()
         if self.state_service.save_state(state, "default"):
-            self.mw.status_bar.showMessage("기본 상태 저장 완료!")
+            self.mw.status_bar.showMessage("현재 작업 자동 저장 완료!")
         else:
-            QMessageBox.warning(self.mw, "오류", "기본 상태 저장 중 오류가 발생했습니다.")
+            # 자동 저장은 사용자에게 오류 메시지를 띄우지 않음 (로그로 대체 가능)
+            print("Error: Failed to auto-save state to default.json")
+            # QMessageBox.warning(self.mw, "오류", "기본 상태 저장 중 오류가 발생했습니다.")
 
     def load_state_from_default(self):
-        """Loads the state from the default state file."""
+        """
+        Loads the state from the default state file ('default.json').
+        Uses partial_load=True to only load specific fields.
+        """
         state = self.state_service.load_state("default")
         if state:
-            self.mw.set_current_state(state)
+            # 부분 로드 플래그를 True로 설정하여 set_current_state 호출
+            self.mw.set_current_state(state, partial_load=True)
         else:
-             QMessageBox.warning(self.mw, "오류", "기본 상태 파일을 불러오는 데 실패했습니다.")
+             # 파일이 없거나 로드 실패 시 사용자에게 알림 (최초 실행 등)
+             QMessageBox.information(self.mw, "정보", "저장된 이전 작업 상태 파일을 찾을 수 없습니다.")
 
     def export_state_to_file(self):
         """Exports the current state to a user-selected file."""
@@ -229,7 +238,8 @@ class ResourceController:
         if path:
             state = self.state_service.import_state_from_file(path)
             if state:
-                self.mw.set_current_state(state)
+                # 상태 가져오기는 전체 로드로 간주 (partial_load=False)
+                self.mw.set_current_state(state, partial_load=False)
             else:
                  QMessageBox.warning(self.mw, "오류", "상태 가져오기 중 오류가 발생했거나 파일 내용이 유효하지 않습니다.")
 
@@ -273,3 +283,4 @@ class ResourceController:
 
         self.mw.template_type_combo.setVisible(is_prompt_mode)
         self.mw.template_type_label.setVisible(is_prompt_mode)
+
