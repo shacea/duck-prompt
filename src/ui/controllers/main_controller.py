@@ -192,13 +192,16 @@ class MainController:
         self.token_thread.started.connect(self.token_worker.run)
         self.token_worker.finished.connect(self._handle_token_result)
         self.token_worker.error.connect(self._handle_token_error)
-        # 스레드 종료 및 객체 정리 연결
+        # 스레드 종료 및 객체 정리 연결 (QThread.finished 사용)
+        self.token_thread.finished.connect(self._cleanup_token_thread) # 스레드 완료 시 정리 함수 호출
+        self.token_worker.finished.connect(self.token_worker.deleteLater) # 워커 완료 시 deleteLater
+        self.token_worker.error.connect(self.token_worker.deleteLater) # 워커 오류 시 deleteLater
+        # 워커 완료/오류 시 스레드 종료 요청
         self.token_worker.finished.connect(self.token_thread.quit)
         self.token_worker.error.connect(self.token_thread.quit)
-        self.token_worker.finished.connect(self.token_worker.deleteLater)
-        self.token_worker.error.connect(self.token_worker.deleteLater)
+        # 스레드 종료 시 deleteLater (메모리 누수 방지)
         self.token_thread.finished.connect(self.token_thread.deleteLater)
-        self.token_thread.finished.connect(self._cleanup_token_thread) # 정리 함수 연결
+
 
         # 스레드 시작
         self.token_thread.start()
@@ -210,7 +213,7 @@ class MainController:
         self.last_token_count = token_count
         logger.info(f"Token calculation successful. Updating label to: {token_text}")
         self.mw.token_count_label.setText(token_text)
-        self._cleanup_token_thread() # 스레드 정리
+        # self._cleanup_token_thread() # 스레드 정리는 thread.finished 시그널에서 처리
 
     def _handle_token_error(self, error_msg: str):
         """Handles the error signal from the TokenWorker."""
@@ -221,23 +224,30 @@ class MainController:
         self.mw.token_count_label.setText(token_text)
         # Optionally show a more detailed error in status bar or tooltip
         self.mw.status_bar.showMessage(f"토큰 계산 오류: {error_msg}", 5000) # 5초간 표시
-        self._cleanup_token_thread() # 스레드 정리
+        # self._cleanup_token_thread() # 스레드 정리는 thread.finished 시그널에서 처리
 
     def _stop_token_calculation_thread(self):
         """Stops the currently running token calculation thread, if any."""
         if self.token_thread and self.token_thread.isRunning():
             logger.info("Stopping previous token calculation thread...")
-            self.token_thread.quit()
-            self.token_thread.wait(1000) # 최대 1초 대기
-            if self.token_thread.isRunning(): # 강제 종료 (권장하지 않음)
-                logger.warning("Token calculation thread did not quit gracefully, terminating.")
-                self.token_thread.terminate()
-                self.token_thread.wait()
-            self._cleanup_token_thread()
+            self.token_thread.quit() # 종료 요청
+            # wait() 호출 - 지정된 시간(ms) 동안 스레드가 종료되기를 기다림
+            if not self.token_thread.wait(1000): # 최대 1초 대기
+                # 스레드가 제 시간 안에 종료되지 않은 경우
+                logger.warning("Token calculation thread did not quit gracefully within 1 second.")
+                # terminate() 사용 제거: 강제 종료는 리소스 누수나 불안정성을 야기할 수 있음
+                # self.token_thread.terminate()
+                # self.token_thread.wait() # terminate 후에도 wait는 필요할 수 있음
+            else:
+                logger.info("Previous token calculation thread finished gracefully.")
+            # 스레드 종료 후 정리 함수 호출 (시그널 핸들러에서 자동으로 호출되도록 변경됨)
+            # self._cleanup_token_thread() # 여기서 직접 호출하지 않음
+
 
     def _cleanup_token_thread(self):
         """Cleans up the token thread and worker objects."""
-        # print("Cleaning up token thread and worker") # 디버깅용
+        logger.debug("Cleaning up token thread and worker objects.") # 디버그 레벨로 변경
+        # 스레드 객체 참조 해제 (이미 deleteLater 연결됨)
         self.token_thread = None
         self.token_worker = None
 
@@ -450,3 +460,4 @@ class MainController:
             self.reset_token_label() # 첨부 변경 시 토큰 리셋
         else:
              self.mw.status_bar.showMessage("첨부 파일 제거 중 오류 발생.")
+
