@@ -315,6 +315,142 @@ ALTER SEQUENCE public.application_config_id_seq OWNED BY public.application_conf
 
 
 --
+-- Name: gemini_api_logs; Type: TABLE; Schema: public; Owner: shacea
+--
+
+CREATE TABLE public.gemini_api_logs (
+    id integer NOT NULL,
+    request_timestamp timestamp with time zone DEFAULT now() NOT NULL,
+    response_timestamp timestamp with time zone,
+    model_name text,
+    request_prompt text,
+    request_attachments jsonb,
+    response_text text,
+    response_xml text,
+    response_summary text,
+    error_message text,
+    elapsed_time_ms integer,
+    token_count integer,
+    api_key_id integer
+);
+
+
+ALTER TABLE public.gemini_api_logs OWNER TO shacea;
+
+--
+-- Name: TABLE gemini_api_logs; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON TABLE public.gemini_api_logs IS 'Stores logs of requests and responses to the Gemini API.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.request_timestamp; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.request_timestamp IS 'Timestamp when the request was initiated.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.response_timestamp; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.response_timestamp IS 'Timestamp when the response was received.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.model_name; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.model_name IS 'The specific Gemini model used for the request.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.request_prompt; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.request_prompt IS 'The text prompt sent to the API.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.request_attachments; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.request_attachments IS 'JSONB data containing metadata about attached files/images (e.g., name, type, path).';
+
+
+--
+-- Name: COLUMN gemini_api_logs.response_text; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.response_text IS 'The raw text response from the Gemini API.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.response_xml; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.response_xml IS 'The parsed XML part of the response, if applicable.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.response_summary; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.response_summary IS 'The parsed summary part of the response, if applicable.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.error_message; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.error_message IS 'Error message if the API call failed.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.elapsed_time_ms; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.elapsed_time_ms IS 'Total time taken for the API call in milliseconds.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.token_count; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.token_count IS 'Calculated token count for the request/response.';
+
+
+--
+-- Name: COLUMN gemini_api_logs.api_key_id; Type: COMMENT; Schema: public; Owner: shacea
+--
+
+COMMENT ON COLUMN public.gemini_api_logs.api_key_id IS 'Foreign key referencing the api_key used for the request.';
+
+
+--
+-- Name: gemini_api_logs_id_seq; Type: SEQUENCE; Schema: public; Owner: shacea
+--
+
+CREATE SEQUENCE public.gemini_api_logs_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.gemini_api_logs_id_seq OWNER TO shacea;
+
+--
+-- Name: gemini_api_logs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: shacea
+--
+
+ALTER SEQUENCE public.gemini_api_logs_id_seq OWNED BY public.gemini_api_logs.id;
+
+
+--
 -- Name: model_rate_limits; Type: TABLE; Schema: public; Owner: shacea
 --
 
@@ -404,6 +540,13 @@ ALTER TABLE ONLY public.application_config ALTER COLUMN id SET DEFAULT nextval('
 
 
 --
+-- Name: gemini_api_logs id; Type: DEFAULT; Schema: public; Owner: shacea
+--
+
+ALTER TABLE ONLY public.gemini_api_logs ALTER COLUMN id SET DEFAULT nextval('public.gemini_api_logs_id_seq'::regclass);
+
+
+--
 -- Name: model_rate_limits id; Type: DEFAULT; Schema: public; Owner: shacea
 --
 
@@ -415,8 +558,6 @@ ALTER TABLE ONLY public.model_rate_limits ALTER COLUMN id SET DEFAULT nextval('p
 --
 
 COPY public.api_key_usage (id, api_key_id, last_api_call_timestamp, calls_this_minute, minute_start_timestamp, calls_this_day, day_start_timestamp, created_at, updated_at) FROM stdin;
-1	1	\N	0	2025-04-25 02:20:18.113973+00	0	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
-2	2	\N	0	2025-04-25 02:20:18.113973+00	0	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
 \.
 
 
@@ -425,8 +566,8 @@ COPY public.api_key_usage (id, api_key_id, last_api_call_timestamp, calls_this_m
 --
 
 COPY public.api_keys (id, api_key, provider, description, is_active, created_at, updated_at) FROM stdin;
-1	AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE	google	Default Gemini Key from config.yml	t	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
-2	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	anthropic	Default Anthropic Key from config.yml	t	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
+1	AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE	google	\N	t	2025-04-25 03:12:15.567062+00	2025-04-25 03:12:15.567062+00
+2	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	anthropic	\N	t	2025-04-25 03:12:15.580406+00	2025-04-25 03:12:15.580406+00
 \.
 
 
@@ -435,7 +576,15 @@ COPY public.api_keys (id, api_key, provider, description, is_active, created_at,
 --
 
 COPY public.application_config (id, profile_name, default_system_prompt, allowed_extensions, excluded_dirs, default_ignore_list, gemini_default_model, claude_default_model, gpt_default_model, gemini_available_models, claude_available_models, gpt_available_models, gemini_temperature, gemini_enable_thinking, gemini_thinking_budget, gemini_enable_search, created_at, updated_at) FROM stdin;
-1	default	resources/prompts/system/xml_prompt_guide_python_en.md	{}	{.venv/,__pycache__/,*.log,.vscode/,.git/,node_modules/,.DS_Store,.gitignore,.idea/,dist/,build/}	{*.egg-info/,*.pyc,.cursorrules,.git/,.gitignore,.idea/,.vscode/,.windsurfrules,__pycache__/,build/,dist/}	gemini-2.5-pro-preview-03-25	claude-3-7-sonnet-20250219	gpt-4o	{gemini-2.5-pro-preview-03-25,gemini-2.5-flash-preview-04-17}	{claude-3-7-sonnet-20250219}	{gpt-4o,gpt-4-turbo,gpt-3.5-turbo}	0.00	f	0	f	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
+1	default	resources/prompts/system/xml_prompt_guide_python_en.md	{}	{.gitignore,__pycache__/,*.log,.venv/,dist/,.vscode/,node_modules/,.DS_Store,build/,.idea/,.git/}	{*.egg-info/,*.pyc,.cursorrules,.git/,.gitignore,.idea/,.vscode/,.windsurfrules,__pycache__/,build/,dist/}	gemini-2.5-pro-preview-03-25	claude-3-7-sonnet-20250219	gpt-4o	{gemini-2.5-pro-preview-03-25,gemini-2.5-flash-preview-04-17}	{claude-3-7-sonnet-20250219}	{gpt-4o,gpt-4-turbo,gpt-3.5-turbo}	0.00	f	0	f	2025-04-25 03:12:15.553225+00	2025-04-25 03:12:15.553225+00
+\.
+
+
+--
+-- Data for Name: gemini_api_logs; Type: TABLE DATA; Schema: public; Owner: shacea
+--
+
+COPY public.gemini_api_logs (id, request_timestamp, response_timestamp, model_name, request_prompt, request_attachments, response_text, response_xml, response_summary, error_message, elapsed_time_ms, token_count, api_key_id) FROM stdin;
 \.
 
 
@@ -444,8 +593,6 @@ COPY public.application_config (id, profile_name, default_system_prompt, allowed
 --
 
 COPY public.model_rate_limits (id, model_name, provider, rpm_limit, daily_limit, notes, created_at, updated_at) FROM stdin;
-1	gemini-2.5-pro-preview-03-25	google	5	25	Provided limit info	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
-2	gemini-2.5-flash-preview-04-17	google	10	500	Provided limit info	2025-04-25 02:20:18.113973+00	2025-04-25 02:20:18.113973+00
 \.
 
 
@@ -453,7 +600,7 @@ COPY public.model_rate_limits (id, model_name, provider, rpm_limit, daily_limit,
 -- Name: api_key_usage_id_seq; Type: SEQUENCE SET; Schema: public; Owner: shacea
 --
 
-SELECT pg_catalog.setval('public.api_key_usage_id_seq', 2, true);
+SELECT pg_catalog.setval('public.api_key_usage_id_seq', 1, false);
 
 
 --
@@ -471,10 +618,17 @@ SELECT pg_catalog.setval('public.application_config_id_seq', 1, true);
 
 
 --
+-- Name: gemini_api_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: shacea
+--
+
+SELECT pg_catalog.setval('public.gemini_api_logs_id_seq', 1, false);
+
+
+--
 -- Name: model_rate_limits_id_seq; Type: SEQUENCE SET; Schema: public; Owner: shacea
 --
 
-SELECT pg_catalog.setval('public.model_rate_limits_id_seq', 2, true);
+SELECT pg_catalog.setval('public.model_rate_limits_id_seq', 1, false);
 
 
 --
@@ -526,6 +680,14 @@ ALTER TABLE ONLY public.application_config
 
 
 --
+-- Name: gemini_api_logs gemini_api_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: shacea
+--
+
+ALTER TABLE ONLY public.gemini_api_logs
+    ADD CONSTRAINT gemini_api_logs_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: model_rate_limits model_rate_limits_model_name_key; Type: CONSTRAINT; Schema: public; Owner: shacea
 --
 
@@ -546,6 +708,20 @@ ALTER TABLE ONLY public.model_rate_limits
 --
 
 CREATE INDEX idx_api_key_usage_api_key_id ON public.api_key_usage USING btree (api_key_id);
+
+
+--
+-- Name: idx_gemini_api_logs_api_key_id; Type: INDEX; Schema: public; Owner: shacea
+--
+
+CREATE INDEX idx_gemini_api_logs_api_key_id ON public.gemini_api_logs USING btree (api_key_id);
+
+
+--
+-- Name: idx_gemini_api_logs_request_timestamp; Type: INDEX; Schema: public; Owner: shacea
+--
+
+CREATE INDEX idx_gemini_api_logs_request_timestamp ON public.gemini_api_logs USING btree (request_timestamp);
 
 
 --
@@ -582,6 +758,14 @@ CREATE TRIGGER set_model_rate_limits_timestamp BEFORE UPDATE ON public.model_rat
 
 ALTER TABLE ONLY public.api_key_usage
     ADD CONSTRAINT api_key_usage_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES public.api_keys(id) ON DELETE CASCADE;
+
+
+--
+-- Name: gemini_api_logs gemini_api_logs_api_key_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: shacea
+--
+
+ALTER TABLE ONLY public.gemini_api_logs
+    ADD CONSTRAINT gemini_api_logs_api_key_id_fkey FOREIGN KEY (api_key_id) REFERENCES public.api_keys(id) ON DELETE SET NULL;
 
 
 --
