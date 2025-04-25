@@ -125,12 +125,11 @@ class DbService:
     def save_application_config(self, profile_name: str, config_data: Dict[str, Any]) -> bool:
         """
         Inserts or updates the application configuration for a given profile.
-        Handles data type conversions for DB compatibility.
+        Handles data type conversions for DB compatibility. Excludes API keys.
         """
         logger.info(f"Attempting to save application configuration for profile '{profile_name}'...")
 
         # Prepare data for insertion/update, handling potential missing keys and types
-        # Convert sets/lists to lists for PostgreSQL TEXT[]
         allowed_extensions = list(config_data.get('allowed_extensions', []))
         excluded_dirs = list(config_data.get('excluded_dirs', []))
         default_ignore_list = list(config_data.get('default_ignore_list', []))
@@ -138,21 +137,15 @@ class DbService:
         claude_available_models = list(config_data.get('claude_available_models', []))
         gpt_available_models = list(config_data.get('gpt_available_models', []))
 
-        # Ensure boolean values are correctly interpreted
         gemini_enable_thinking = bool(config_data.get('gemini_enable_thinking', True))
         gemini_enable_search = bool(config_data.get('gemini_enable_search', True))
 
-        # Ensure numeric values are correctly interpreted, providing defaults
-        try:
-            gemini_temperature = float(config_data.get('gemini_temperature', 0.0))
-        except (ValueError, TypeError):
-            gemini_temperature = 0.0
-        try:
-            gemini_thinking_budget = int(config_data.get('gemini_thinking_budget', 24576))
-        except (ValueError, TypeError):
-            gemini_thinking_budget = 24576
+        try: gemini_temperature = float(config_data.get('gemini_temperature', 0.0))
+        except (ValueError, TypeError): gemini_temperature = 0.0
+        try: gemini_thinking_budget = int(config_data.get('gemini_thinking_budget', 24576))
+        except (ValueError, TypeError): gemini_thinking_budget = 24576
 
-        # SQL query using ON CONFLICT for upsert
+        # SQL query using ON CONFLICT for upsert (API keys excluded)
         sql = """
             INSERT INTO application_config (
                 profile_name, default_system_prompt, allowed_extensions, excluded_dirs,
@@ -180,20 +173,10 @@ class DbService:
                 updated_at = NOW();
         """
         params = (
-            profile_name,
-            config_data.get('default_system_prompt'),
-            allowed_extensions,
-            excluded_dirs,
-            default_ignore_list,
-            config_data.get('gemini_default_model'),
-            config_data.get('claude_default_model'),
-            config_data.get('gpt_default_model'),
-            gemini_available_models,
-            claude_available_models,
-            gpt_available_models,
-            gemini_temperature,
-            gemini_enable_thinking,
-            gemini_thinking_budget,
+            profile_name, config_data.get('default_system_prompt'), allowed_extensions, excluded_dirs,
+            default_ignore_list, config_data.get('gemini_default_model'), config_data.get('claude_default_model'),
+            config_data.get('gpt_default_model'), gemini_available_models, claude_available_models,
+            gpt_available_models, gemini_temperature, gemini_enable_thinking, gemini_thinking_budget,
             gemini_enable_search
         )
 
@@ -208,46 +191,131 @@ class DbService:
             logger.error(f"An unexpected error occurred during config save for profile '{profile_name}': {e}")
             return False
 
+    # --- API Key Management ---
 
     def get_active_api_key(self, provider: str) -> Optional[str]:
-        """Fetches the first active API key for a given provider."""
+        """Fetches the first active API key string for a given provider."""
+        keys = self.get_active_api_keys(provider)
+        return keys[0]['api_key'] if keys else None
+
+    def get_active_api_keys(self, provider: str) -> List[Dict[str, Any]]:
+        """Fetches all active API keys for a given provider, ordered by ID."""
         query = """
-            SELECT api_key FROM api_keys
+            SELECT id, api_key, description, is_active FROM api_keys
             WHERE provider = %s AND is_active = TRUE
-            ORDER BY id
-            LIMIT 1;
+            ORDER BY id;
         """
         try:
-            # Use fetch_one=True, but expect single value (api_key)
-            result_dict = self._execute_query(query, (provider,), fetch_one=True)
-            if result_dict and 'api_key' in result_dict:
-                logger.info(f"Active API key found for provider '{provider}'.")
-                return result_dict['api_key']
+            result = self._execute_query(query, (provider,), fetch_all=True)
+            if result:
+                logger.info(f"Found {len(result)} active API key(s) for provider '{provider}'.")
+                return result
             else:
-                logger.warning(f"No active API key found for provider '{provider}'.")
-                return None
+                logger.warning(f"No active API keys found for provider '{provider}'.")
+                return []
         except psycopg2.Error as e:
-             logger.error(f"Failed to get active API key for provider '{provider}': {e}")
-             return None # Return None on DB error
+             logger.error(f"Failed to get active API keys for provider '{provider}': {e}")
+             return []
+
+    def list_api_keys(self, provider: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lists all API keys, optionally filtered by provider."""
+        if provider:
+            query = "SELECT id, api_key, provider, description, is_active FROM api_keys WHERE provider = %s ORDER BY provider, id;"
+            params = (provider,)
+        else:
+            query = "SELECT id, api_key, provider, description, is_active FROM api_keys ORDER BY provider, id;"
+            params = None
+        try:
+            result = self._execute_query(query, params, fetch_all=True)
+            logger.info(f"Listed {len(result)} API keys" + (f" for provider '{provider}'." if provider else "."))
+            return result if result else []
+        except psycopg2.Error as e:
+            logger.error(f"Failed to list API keys: {e}")
+            return []
+
+    def add_api_key(self, provider: str, api_key: str, description: Optional[str] = None) -> Optional[int]:
+        """Adds a new API key to the database."""
+        if not provider or not api_key:
+            logger.error("Cannot add API key: Provider and API key string are required.")
+            return None
+        query = """
+            INSERT INTO api_keys (provider, api_key, description, is_active)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id;
+        """
+        params = (provider, api_key, description, True) # Add as active by default
+        try:
+            key_id = self._execute_query(query, params, return_id=True)
+            logger.info(f"Added new API key with ID: {key_id} for provider '{provider}'.")
+            return key_id
+        except psycopg2.IntegrityError as e:
+             logger.error(f"Failed to add API key for '{provider}': Key likely already exists. {e}")
+             return None
+        except psycopg2.Error as e:
+            logger.error(f"Failed to add API key for '{provider}': {e}")
+            return None
+
+    def update_api_key(self, key_id: int, description: Optional[str] = None, is_active: Optional[bool] = None) -> bool:
+        """Updates the description or active status of an API key."""
+        if description is None and is_active is None:
+            logger.warning(f"No update provided for API key ID {key_id}.")
+            return False
+
+        set_clauses = []
+        params = []
+        if description is not None:
+            set_clauses.append("description = %s")
+            params.append(description)
+        if is_active is not None:
+            set_clauses.append("is_active = %s")
+            params.append(is_active)
+
+        query = f"""
+            UPDATE api_keys
+            SET {', '.join(set_clauses)}, updated_at = NOW()
+            WHERE id = %s;
+        """
+        params.append(key_id)
+
+        try:
+            affected_rows = self._execute_query(query, tuple(params))
+            if affected_rows == 1:
+                logger.info(f"API key ID {key_id} updated successfully.")
+                return True
+            else:
+                logger.warning(f"API key ID {key_id} not found or no changes made.")
+                return False
+        except psycopg2.Error as e:
+            logger.error(f"Failed to update API key ID {key_id}: {e}")
+            return False
+
+    def delete_api_key(self, key_id: int) -> bool:
+        """Deletes an API key from the database."""
+        query = "DELETE FROM api_keys WHERE id = %s;"
+        try:
+            affected_rows = self._execute_query(query, (key_id,))
+            if affected_rows == 1:
+                logger.info(f"API key ID {key_id} deleted successfully.")
+                return True
+            else:
+                logger.warning(f"API key ID {key_id} not found for deletion.")
+                return False
+        except psycopg2.Error as e:
+            logger.error(f"Failed to delete API key ID {key_id}: {e}")
+            return False
 
     def get_api_key_id(self, api_key_string: str) -> Optional[int]:
         """Fetches the ID of a given API key string."""
-        if not api_key_string:
-            return None
+        if not api_key_string: return None
         query = "SELECT id FROM api_keys WHERE api_key = %s;"
         try:
-            # Use fetch_one=True, expect single value (id)
             result_dict = self._execute_query(query, (api_key_string,), fetch_one=True)
-            if result_dict and 'id' in result_dict:
-                key_id = result_dict['id']
-                logger.debug(f"Found API key ID for the provided key.")
-                return key_id
-            else:
-                logger.warning(f"API key string not found in the database.")
-                return None
+            return result_dict['id'] if result_dict and 'id' in result_dict else None
         except psycopg2.Error as e:
             logger.error(f"Failed to get API key ID: {e}")
             return None
+
+    # --- Gemini Log Management ---
 
     def log_gemini_request(self, model_name: str, request_prompt: str, request_attachments: Optional[List[Dict[str, Any]]], api_key_id: Optional[int]) -> Optional[int]:
         """Logs the initial Gemini API request details and returns the log ID."""
@@ -256,22 +324,15 @@ class DbService:
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id;
         """
-        # Serialize attachments metadata to JSON string
         attachments_json = None
         if request_attachments:
-            # Only keep metadata, remove large 'data' field
-            metadata_attachments = []
-            for att in request_attachments:
-                meta_att = {k: v for k, v in att.items() if k != 'data'}
-                metadata_attachments.append(meta_att)
-            try:
-                attachments_json = json.dumps(metadata_attachments)
+            metadata_attachments = [{k: v for k, v in att.items() if k != 'data'} for att in request_attachments]
+            try: attachments_json = json.dumps(metadata_attachments)
             except TypeError as e:
                 logger.error(f"Failed to serialize attachments to JSON: {e}")
                 attachments_json = json.dumps([{"error": "Serialization failed"}])
 
-        request_timestamp = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware timestamp
-
+        request_timestamp = datetime.datetime.now(datetime.timezone.utc)
         params = (model_name, request_prompt, attachments_json, api_key_id, request_timestamp)
         try:
             log_id = self._execute_query(query, params, return_id=True)
@@ -281,32 +342,41 @@ class DbService:
             logger.error(f"Failed to log Gemini request: {e}")
             return None
 
-    def update_gemini_log(self, log_id: int, response_text: Optional[str], response_xml: Optional[str], response_summary: Optional[str], error_message: Optional[str], elapsed_time_ms: Optional[int], token_count: Optional[int]):
-        """Updates the Gemini API log record with response details."""
+    def update_gemini_log(self, log_id: int, response_text: Optional[str] = None, response_xml: Optional[str] = None, response_summary: Optional[str] = None, error_message: Optional[str] = None, elapsed_time_ms: Optional[int] = None, token_count: Optional[int] = None):
+        """Updates the Gemini API log record with response details. Only updates non-None fields."""
         if log_id is None:
             logger.error("Cannot update Gemini log: Invalid log_id provided.")
             return
 
-        query = """
+        update_fields = []
+        params = []
+
+        if response_text is not None: update_fields.append("response_text = %s"); params.append(response_text)
+        if response_xml is not None: update_fields.append("response_xml = %s"); params.append(response_xml)
+        if response_summary is not None: update_fields.append("response_summary = %s"); params.append(response_summary)
+        if error_message is not None: update_fields.append("error_message = %s"); params.append(error_message)
+        if elapsed_time_ms is not None: update_fields.append("elapsed_time_ms = %s"); params.append(elapsed_time_ms)
+        if token_count is not None: update_fields.append("token_count = %s"); params.append(token_count)
+
+        if not update_fields:
+            logger.info(f"No fields to update for Gemini log ID: {log_id}")
+            return
+
+        # Always update response_timestamp
+        update_fields.append("response_timestamp = %s")
+        params.append(datetime.datetime.now(datetime.timezone.utc))
+        params.append(log_id) # Add log_id for WHERE clause
+
+        query = f"""
             UPDATE gemini_api_logs
-            SET response_timestamp = %s,
-                response_text = %s,
-                response_xml = %s,
-                response_summary = %s,
-                error_message = %s,
-                elapsed_time_ms = %s,
-                token_count = %s
+            SET {', '.join(update_fields)}
             WHERE id = %s;
         """
-        response_timestamp = datetime.datetime.now(datetime.timezone.utc) # Use timezone-aware timestamp
-        params = (response_timestamp, response_text, response_xml, response_summary, error_message, elapsed_time_ms, token_count, log_id)
 
         try:
-            affected_rows = self._execute_query(query, params)
-            if affected_rows == 1:
-                logger.info(f"Updated Gemini log record ID: {log_id}")
-            else:
-                 logger.warning(f"Attempted to update Gemini log ID: {log_id}, but no rows were affected (or more than 1).")
+            affected_rows = self._execute_query(query, tuple(params))
+            if affected_rows == 1: logger.info(f"Updated Gemini log record ID: {log_id}")
+            else: logger.warning(f"Attempted to update Gemini log ID: {log_id}, but no rows were affected (or more than 1).")
         except psycopg2.Error as e:
             logger.error(f"Failed to update Gemini log ID {log_id}: {e}")
 
@@ -317,65 +387,37 @@ class DbService:
             return
 
         cutoff_date = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days_to_keep)
-        query = """
-            DELETE FROM gemini_api_logs
-            WHERE request_timestamp < %s;
-        """
+        query = "DELETE FROM gemini_api_logs WHERE request_timestamp < %s;"
         try:
             affected_rows = self._execute_query(query, (cutoff_date,))
             if affected_rows is not None and affected_rows > 0:
                 logger.info(f"Cleaned up {affected_rows} old Gemini log records older than {cutoff_date.strftime('%Y-%m-%d')}.")
-            else:
-                logger.info("No old Gemini log records found to clean up.")
+            else: logger.info("No old Gemini log records found to clean up.")
         except psycopg2.Error as e:
             logger.error(f"Failed to clean up old Gemini logs: {e}")
 
+    # --- Rate Limit and Usage Tracking ---
+
     def update_api_key_usage(self, api_key_id: int):
-        """
-        Updates the usage statistics for a given API key ID.
-        Handles minute and daily rate limit counters using UPSERT.
-        """
+        """Updates the usage statistics for a given API key ID using UPSERT."""
         if api_key_id is None:
             logger.warning("Cannot update API key usage: api_key_id is None.")
             return
 
         logger.info(f"Updating API key usage for key ID: {api_key_id}")
         now = datetime.datetime.now(datetime.timezone.utc)
-
-        # UPSERT query to handle both insert and update logic
         query = """
-            INSERT INTO api_key_usage (
-                api_key_id,
-                last_api_call_timestamp,
-                minute_start_timestamp,
-                calls_this_minute,
-                day_start_timestamp,
-                calls_this_day
-            ) VALUES (
-                %s, %s, date_trunc('minute', %s), 1, date_trunc('day', %s), 1
-            )
+            INSERT INTO api_key_usage (api_key_id, last_api_call_timestamp, minute_start_timestamp, calls_this_minute, day_start_timestamp, calls_this_day)
+            VALUES (%s, %s, date_trunc('minute', %s), 1, date_trunc('day', %s), 1)
             ON CONFLICT (api_key_id) DO UPDATE SET
                 last_api_call_timestamp = EXCLUDED.last_api_call_timestamp,
-                calls_this_minute = CASE
-                    WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN 1
-                    ELSE api_key_usage.calls_this_minute + 1
-                END,
-                minute_start_timestamp = CASE
-                    WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN date_trunc('minute', EXCLUDED.last_api_call_timestamp)
-                    ELSE api_key_usage.minute_start_timestamp
-                END,
-                calls_this_day = CASE
-                    WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN 1
-                    ELSE api_key_usage.calls_this_day + 1
-                END,
-                day_start_timestamp = CASE
-                    WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN date_trunc('day', EXCLUDED.last_api_call_timestamp)
-                    ELSE api_key_usage.day_start_timestamp
-                END,
+                calls_this_minute = CASE WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN 1 ELSE api_key_usage.calls_this_minute + 1 END,
+                minute_start_timestamp = CASE WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN date_trunc('minute', EXCLUDED.last_api_call_timestamp) ELSE api_key_usage.minute_start_timestamp END,
+                calls_this_day = CASE WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN 1 ELSE api_key_usage.calls_this_day + 1 END,
+                day_start_timestamp = CASE WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN date_trunc('day', EXCLUDED.last_api_call_timestamp) ELSE api_key_usage.day_start_timestamp END,
                 updated_at = NOW();
         """
-        params = (api_key_id, now, now, now) # Pass 'now' multiple times for clarity
-
+        params = (api_key_id, now, now, now)
         try:
             affected_rows = self._execute_query(query, params)
             logger.info(f"API key usage updated successfully for key ID: {api_key_id}. Rows affected: {affected_rows}")
@@ -384,14 +426,49 @@ class DbService:
         except Exception as e:
             logger.error(f"An unexpected error occurred during API key usage update for key ID {api_key_id}: {e}")
 
+    def get_model_rate_limit(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """Fetches the default rate limit information for a specific model."""
+        query = "SELECT rpm_limit, daily_limit FROM model_rate_limits WHERE model_name = %s;"
+        try:
+            result = self._execute_query(query, (model_name,), fetch_one=True)
+            if result:
+                logger.info(f"Rate limit found for model '{model_name}': RPM={result.get('rpm_limit')}, Daily={result.get('daily_limit')}")
+                return result
+            else:
+                logger.warning(f"No rate limit information found for model '{model_name}'.")
+                return None
+        except psycopg2.Error as e:
+            logger.error(f"Failed to get rate limit for model '{model_name}': {e}")
+            return None
 
-    # --- Methods for potential future use (Rate Limiting, API Key CRUD) ---
-    # def get_model_rate_limit(self, model_name: str) -> Optional[Dict[str, Any]]: ...
-    # def get_api_key_usage(self, api_key_id: int) -> Optional[Dict[str, Any]]: ...
-    # def add_api_key(...) -> Optional[int]: ...
-    # def update_api_key(...) -> bool: ...
-    # def delete_api_key(...) -> bool: ...
-    # def list_api_keys(...) -> List[Dict[str, Any]]: ...
+    def get_api_key_usage(self, api_key_id: int) -> Optional[Dict[str, Any]]:
+        """Fetches the current usage statistics for a specific API key ID."""
+        if api_key_id is None: return None
+        query = """
+            SELECT calls_this_minute, minute_start_timestamp, calls_this_day, day_start_timestamp
+            FROM api_key_usage
+            WHERE api_key_id = %s;
+        """
+        try:
+            result = self._execute_query(query, (api_key_id,), fetch_one=True)
+            if result:
+                logger.info(f"Usage found for API key ID {api_key_id}.")
+                # Ensure timestamps are timezone-aware if they aren't already
+                if result.get('minute_start_timestamp') and result['minute_start_timestamp'].tzinfo is None:
+                    result['minute_start_timestamp'] = result['minute_start_timestamp'].replace(tzinfo=datetime.timezone.utc)
+                if result.get('day_start_timestamp') and result['day_start_timestamp'].tzinfo is None:
+                    result['day_start_timestamp'] = result['day_start_timestamp'].replace(tzinfo=datetime.timezone.utc)
+                return result
+            else:
+                logger.info(f"No usage record found for API key ID {api_key_id}. Assuming 0 usage.")
+                # Return default zero usage if no record exists
+                return {
+                    'calls_this_minute': 0, 'minute_start_timestamp': None,
+                    'calls_this_day': 0, 'day_start_timestamp': None
+                }
+        except psycopg2.Error as e:
+            logger.error(f"Failed to get usage for API key ID {api_key_id}: {e}")
+            return None
 
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
