@@ -1,8 +1,7 @@
-
 import os
 import io
-import logging # 로깅 추가
-import datetime # datetime 추가
+import logging
+import datetime
 from typing import Optional, List, Dict, Any
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -13,11 +12,11 @@ from PyQt5.QtWidgets import (
     QFrame, QLineEdit, QDialog, QListWidget, QListWidgetItem, QStyle
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices, QPixmap, QImage
-from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl, QThread, pyqtSignal, QObject, QBuffer, QIODevice
+from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl, QThread, pyqtSignal, QObject, QBuffer, QIODevice, QTimer
 
 # 서비스 및 모델 import
 from core.pydantic_models.app_state import AppState
-from core.services.db_service import DbService # DbService import
+from core.services.db_service import DbService
 from core.services.config_service import ConfigService
 from core.services.state_service import StateService
 from core.services.template_service import TemplateService
@@ -102,6 +101,8 @@ class MainWindow(QMainWindow):
         self._is_saving_gemini_settings = False # Still needed to prevent signal loops
         self.attached_items: List[Dict[str, Any]] = []
         self.api_call_start_time: Optional[datetime.datetime] = None # API 호출 시작 시간 저장
+        self.api_timer = QTimer(self) # API 경과 시간 업데이트용 타이머 추가
+        self.api_timer.timeout.connect(self._update_api_elapsed_time) # 타이머 시그널 연결
 
         # --- 서비스 인스턴스 생성 ---
         try:
@@ -223,6 +224,7 @@ class MainWindow(QMainWindow):
         self.tree_generated = False
         self.attached_items = []
         self.api_call_start_time = None # API 시작 시간 초기화
+        self.api_timer.stop() # API 타이머 중지
         if hasattr(self, 'checkable_proxy'): self.checkable_proxy.checked_files_dict.clear()
         if hasattr(self, 'attachment_list_widget'): self.attachment_list_widget.clear()
         self.update_window_title()
@@ -263,10 +265,10 @@ class MainWindow(QMainWindow):
             "selected_model_name": selected_model_name,
             "attached_items": serializable_attachments,
             # Include Gemini params from settings in the state file
-            # "gemini_temperature": current_settings.gemini_temperature,
-            # "gemini_enable_thinking": current_settings.gemini_enable_thinking,
-            # "gemini_thinking_budget": current_settings.gemini_thinking_budget,
-            # "gemini_enable_search": current_settings.gemini_enable_search,
+            "gemini_temperature": current_settings.gemini_temperature,
+            "gemini_enable_thinking": current_settings.gemini_enable_thinking,
+            "gemini_thinking_budget": current_settings.gemini_thinking_budget,
+            "gemini_enable_search": current_settings.gemini_enable_search,
         }
         try:
             app_state = AppState(**state_data)
@@ -471,7 +473,8 @@ class MainWindow(QMainWindow):
         self.api_call_start_time = datetime.datetime.now()
         start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
         if hasattr(self, 'api_time_label'):
-            self.api_time_label.setText(f"API 시작: {start_time_str}")
+            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: 0:00:00") # 초기 경과 시간 표시
+        self.api_timer.start(1000) # 1초마다 업데이트 타이머 시작
         QApplication.processEvents()
 
         if self.gemini_thread and self.gemini_thread.isRunning():
@@ -505,9 +508,21 @@ class MainWindow(QMainWindow):
 
         self.gemini_thread.start()
 
+    def _update_api_elapsed_time(self):
+        """ Updates the API elapsed time label. """
+        if self.api_call_start_time and hasattr(self, 'api_time_label'):
+            elapsed_time = datetime.datetime.now() - self.api_call_start_time
+            elapsed_str = str(elapsed_time).split('.')[0] # HH:MM:SS 형식
+            start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
+            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: {elapsed_str}")
+        else:
+            # Stop timer if start time is somehow lost
+            self.api_timer.stop()
+
     def handle_gemini_response(self, xml_result: str, summary_result: str):
         """ Handles Gemini response. """
         print("--- Handling Gemini Response ---")
+        self.api_timer.stop() # 타이머 중지
         if hasattr(self, 'xml_input_tab'):
             self.xml_input_tab.setPlainText(xml_result)
             print(f"XML Output Length: {len(xml_result)}")
@@ -516,13 +531,13 @@ class MainWindow(QMainWindow):
             print(f"Summary Output Length: {len(summary_result)}")
             self.build_tabs.setCurrentWidget(self.summary_tab)
 
-        # API 경과 시간 계산 및 표시
+        # API 경과 시간 계산 및 표시 (최종)
         if self.api_call_start_time and hasattr(self, 'api_time_label'):
             end_time = datetime.datetime.now()
             elapsed_time = end_time - self.api_call_start_time
             elapsed_str = str(elapsed_time).split('.')[0] # HH:MM:SS 형식
             start_time_str = self.api_call_start_time.strftime('%H:%M:%S')
-            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: {elapsed_str}")
+            self.api_time_label.setText(f"API 시작: {start_time_str}, 경과: {elapsed_str} (완료)")
 
         self.status_bar.showMessage("Gemini 응답 처리 완료.")
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(True)
@@ -530,6 +545,7 @@ class MainWindow(QMainWindow):
     def handle_gemini_error(self, error_msg: str):
         """ Handles Gemini error, showing user-friendly message for specific API response issues. """
         print(f"--- Handling Gemini Error: {error_msg} ---")
+        self.api_timer.stop() # 타이머 중지
         logger.error(f"Gemini Error Received: {error_msg}")
 
         # API 경과 시간 계산 및 표시 (오류 시에도)
@@ -554,6 +570,7 @@ class MainWindow(QMainWindow):
     def cleanup_gemini_thread(self):
         """ Cleans up Gemini thread and worker objects. """
         print("--- Cleaning up Gemini thread and worker ---")
+        self.api_timer.stop() # 스레드 정리 시 타이머 중지
         self.gemini_thread = None
         self.gemini_worker = None
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(True)
@@ -647,6 +664,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Ensure database connection is closed when the window closes."""
         logger.info("Closing MainWindow. Disconnecting database.")
+        self.api_timer.stop() # 윈도우 닫을 때 타이머 중지
         if hasattr(self, 'db_service'):
             self.db_service.disconnect()
         super().closeEvent(event)
