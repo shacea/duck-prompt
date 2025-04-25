@@ -1,10 +1,12 @@
+
+
 import os
 import sys # sys 모듈 import
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
-    QFrame, QLineEdit, QGroupBox
+    QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy # QSpacerItem, QSizePolicy 추가
 )
 from PyQt5.QtGui import QFont, QFontDatabase # QFontDatabase import
 from PyQt5.QtCore import Qt
@@ -252,8 +254,23 @@ def create_widgets(mw: 'MainWindow'):
     mw.token_count_label = QLabel("토큰 계산: -")
     mw.llm_combo = QComboBox()
     mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
-    mw.model_name_input = QLineEdit()
-    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-1.5-pro-latest)")
+    mw.model_name_combo = QComboBox() # 모델 선택 콤보박스 생성
+    mw.model_name_combo.setEditable(True) # 사용자가 직접 입력 가능하도록 설정 (선택적)
+    mw.model_name_combo.setInsertPolicy(QComboBox.NoInsert) # 입력된 텍스트를 목록에 추가하지 않음
+
+    # --- Gemini 파라미터 위젯 (상태 표시줄용) ---
+    mw.gemini_temp_label = QLabel("Temp:")
+    mw.gemini_temp_edit = QLineEdit()
+    mw.gemini_temp_edit.setFixedWidth(40)
+    mw.gemini_temp_edit.setPlaceholderText("0.0")
+    mw.gemini_thinking_label = QLabel("Thinking:")
+    mw.gemini_thinking_checkbox = QCheckBox()
+    mw.gemini_budget_label = QLabel("Budget:")
+    mw.gemini_budget_edit = QLineEdit()
+    mw.gemini_budget_edit.setFixedWidth(60)
+    mw.gemini_budget_edit.setPlaceholderText("24576")
+    mw.gemini_search_label = QLabel("Search:")
+    mw.gemini_search_checkbox = QCheckBox()
 
 
 def create_layout(mw: 'MainWindow'):
@@ -328,7 +345,7 @@ def create_layout(mw: 'MainWindow'):
 
 
 def create_status_bar(mw: 'MainWindow'):
-    """Creates the status bar with character and token counts, and model selection."""
+    """Creates the status bar with character and token counts, model selection, and Gemini parameters."""
     mw.status_bar = QStatusBar()
     mw.setStatusBar(mw.status_bar)
 
@@ -336,20 +353,50 @@ def create_status_bar(mw: 'MainWindow'):
     status_widget = QWidget()
     status_layout = QHBoxLayout(status_widget)
     status_layout.setContentsMargins(5, 2, 5, 2)
-    status_layout.setSpacing(10)
+    status_layout.setSpacing(10) # 위젯 간 간격
 
+    # 문자 수
     status_layout.addWidget(mw.char_count_label)
+    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)) # 구분선 역할
 
-    # Token calculation section
+    # 모델 선택
     status_layout.addWidget(QLabel("Model:"))
     status_layout.addWidget(mw.llm_combo)
     mw.llm_combo.setFixedWidth(80)
+    status_layout.addWidget(mw.model_name_combo)
+    mw.model_name_combo.setMinimumWidth(180) # 너비 조정
 
-    status_layout.addWidget(mw.model_name_input)
-    mw.model_name_input.setMinimumWidth(200)
-
+    # 토큰 계산 결과
     status_layout.addWidget(mw.token_count_label)
+    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)) # 구분선 역할
 
-    status_layout.addStretch(1)
+    # --- Gemini 파라미터 섹션 ---
+    gemini_param_widget = QWidget()
+    gemini_param_layout = QHBoxLayout(gemini_param_widget)
+    gemini_param_layout.setContentsMargins(0, 0, 0, 0)
+    gemini_param_layout.setSpacing(5) # 파라미터 위젯 간 간격
+
+    gemini_param_layout.addWidget(mw.gemini_temp_label)
+    gemini_param_layout.addWidget(mw.gemini_temp_edit)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)) # 간격
+
+    gemini_param_layout.addWidget(mw.gemini_thinking_label)
+    gemini_param_layout.addWidget(mw.gemini_thinking_checkbox)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)) # 간격
+
+    gemini_param_layout.addWidget(mw.gemini_budget_label)
+    gemini_param_layout.addWidget(mw.gemini_budget_edit)
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum)) # 간격
+
+    gemini_param_layout.addWidget(mw.gemini_search_label)
+    gemini_param_layout.addWidget(mw.gemini_search_checkbox)
+
+    # Gemini 파라미터 위젯을 상태 표시줄 레이아웃에 추가
+    status_layout.addWidget(gemini_param_widget)
+    # Gemini 파라미터 위젯의 초기 가시성 설정 (Gemini 선택 시 보이도록)
+    gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini")
+    mw.gemini_param_widget = gemini_param_widget # MainWindow에서 참조할 수 있도록 저장
+
+    status_layout.addStretch(1) # 오른쪽 정렬
 
     mw.status_bar.addPermanentWidget(status_widget)

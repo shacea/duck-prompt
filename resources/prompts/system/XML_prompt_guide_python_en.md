@@ -510,18 +510,18 @@ app_parameters:
 
 {/* --- Summary Section Start (Positioned after XML section) --- */}
 <summary>
-**Overall Change Summary:**
-Updated the project structure and management practices according to the revised guidelines. Key changes include reorganizing the utility folder structure, introducing common logging and configuration management modules, and changing the location of sub-project-specific configuration files. The root `main.py` has been updated to use common modules for handling logging and configuration and to run the Uvicorn server.
+**전체 변경 요약:**
+프로젝트 구조 및 관리 방식을 업데이트된 가이드라인에 맞춰 수정했습니다. 주요 변경 사항으로 유틸리티 폴더 구조 개편, 공통 로깅 및 설정 관리 모듈 도입, 서브 프로젝트별 설정 파일 위치 변경 등이 있습니다. 루트 `main.py`는 공통 모듈을 사용하여 로깅 및 설정을 처리하고 Uvicorn 서버를 실행하도록 업데이트했습니다.
 
-**File-specific Change/Deletion Summary:**
-- `main.py` (UPDATE): Modified to use common logging (`log_manager`) and config loader (`config`), updated FastAPI app execution logic.
-- `src/utils/log_manager.py` (CREATE): Added a common module to manage project-wide logging. Includes file/console handlers and default format settings.
-- `src/utils/config.py` (CREATE): Added a common utility function to load `config.yml` files for each sub-project.
-- `src/sub_project_name/config.yml` (CREATE): Created an example configuration file for the sub-project.
+**파일별 변경/삭제 요약:**
+- `main.py` (UPDATE): 공통 로깅(`log_manager`) 및 설정 로더(`config`) 사용하도록 수정, FastAPI 앱 실행 로직 업데이트.
+- `src/utils/log_manager.py` (CREATE): 프로젝트 전체 로깅을 관리하는 공통 모듈 추가. 파일/콘솔 핸들러 및 기본 포맷 설정 포함.
+- `src/utils/config.py` (CREATE): 서브 프로젝트별 `config.yml` 파일을 로드하는 공통 유틸리티 함수 추가.
+- `src/sub_project_name/config.yml` (CREATE): 예시 서브 프로젝트의 설정 파일 생성.
 
-**Git Commit Message:**
+**Git 커밋 메시지:**
 feat: 프로젝트 구조 및 공통 유틸리티 개편 (로깅, 설정)
 
-(Token count: approx. 200)
+(토큰 수: 약 200)
 </summary>
 ```

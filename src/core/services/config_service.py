@@ -1,7 +1,8 @@
+
 import os
 import yaml
 from pydantic import ValidationError
-from typing import Optional
+from typing import Optional, List # List 추가
 
 from core.pydantic_models.config_settings import ConfigSettings
 from utils.helpers import get_project_root # 프로젝트 루트 경로 함수 사용
@@ -83,9 +84,22 @@ class ConfigService:
         elif llm_type == "Claude":
             return settings.claude_default_model
         elif llm_type == "GPT":
-            return "gpt-4o" # GPT는 tiktoken 사용하므로 특정 모델명 필요 없을 수 있음
+            return settings.gpt_default_model # GPT 기본 모델 반환
         else:
             return ""
+
+    def get_available_models(self, llm_type: str) -> List[str]:
+        """Gets the list of available model names for a given LLM type from settings."""
+        settings = self.get_settings()
+        if llm_type == "Gemini":
+            return settings.gemini_available_models
+        elif llm_type == "Claude":
+            return settings.claude_available_models
+        elif llm_type == "GPT":
+            return settings.gpt_available_models
+        else:
+            print(f"Warning: Unknown LLM type '{llm_type}' for available models.")
+            return []
 
     def save_default_model_name(self, llm_type: str, model_name: str):
         """Saves the default model name for a given LLM type to settings."""
@@ -94,7 +108,8 @@ class ConfigService:
             update_dict["gemini_default_model"] = model_name
         elif llm_type == "Claude":
             update_dict["claude_default_model"] = model_name
-        # GPT는 현재 저장 안 함
+        elif llm_type == "GPT":
+            update_dict["gpt_default_model"] = model_name # GPT 기본 모델 저장
 
         if update_dict:
             self.update_settings(**update_dict)

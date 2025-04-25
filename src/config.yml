@@ -1,17 +1,17 @@
 default_system_prompt: resources/prompts/system/xml_prompt_guide_python_en.md
 allowed_extensions: !!set {}
 excluded_dirs: !!set
-  .idea/: null
   .gitignore: null
   node_modules/: null
-  dist/: null
-  .git/: null
   __pycache__/: null
+  dist/: null
+  .venv/: null
+  .git/: null
   .DS_Store: null
+  .idea/: null
+  "*.log": null
   build/: null
   .vscode/: null
-  .venv/: null
-  "*.log": null
 default_ignore_list:
   - "*.egg-info/"
   - "*.pyc"
@@ -24,7 +24,28 @@ default_ignore_list:
   - __pycache__/
   - build/
   - dist/
-gemini_default_model: gemini-2.5-flash-preview-04-17
-claude_default_model: claude-3-7-sonnet-20250219
+gemini_default_model: gemini-2.5-pro-preview-03-25 # 기본 모델명
+claude_default_model: claude-3-7-sonnet-20250219 # 기본 모델명
+gpt_default_model: gpt-4o # 기본 모델명
+
+# --- 사용 가능한 모델 목록 (UI 드롭다운용) ---
+gemini_available_models:
+  - gemini-2.5-pro-preview-03-25
+  - gemini-2.5-flash-preview-04-17
+# - gemini-2.5-pro-preview-03-25 # 예시: 필요시 추가
+claude_available_models:
+  - claude-3-7-sonnet-20250219
+gpt_available_models:
+  - gpt-4o
+  - gpt-4-turbo
+  - gpt-3.5-turbo
+# ------------------------------------------
+
 anthropic_api_key: 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
 gemini_api_key: AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE
+# openai_api_key: YOUR_OPENAI_API_KEY # 필요시 추가
+
+gemini_temperature: 0.0
+gemini_enable_thinking: false
+gemini_thinking_budget: 24576
+gemini_enable_search: false

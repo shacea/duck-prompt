@@ -1,3 +1,5 @@
+
+
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtWidgets import (
@@ -90,6 +92,7 @@ class MainWindow(QMainWindow):
         self.last_generated_prompt: str = "" # 마지막 생성된 프롬프트 (단순 문자열)
         self.selected_files_data: List[tuple] = [] # 선택된 파일 정보 (UI 표시용)
         self.tree_generated: bool = False # 파일 트리 생성 여부
+        self._is_saving_gemini_settings = False # Gemini 설정 저장 중 플래그
 
         # --- 서비스 인스턴스 생성 ---
         # 서비스 인스턴스는 MainWindow 내에서 생성 및 관리
@@ -125,7 +128,7 @@ class MainWindow(QMainWindow):
 
         # --- 초기화 작업 ---
         self.resource_controller.load_templates_list() # 리소스 목록 로드
-        self._apply_initial_settings() # 기본 설정 적용 (기본 프롬프트, 모델명 등)
+        self._apply_initial_settings() # 기본 설정 적용 (기본 프롬프트, 모델명, Gemini 파라미터 등)
 
         # 상태바 메시지 및 창 크기 설정
         self.status_bar.showMessage("Ready")
@@ -146,7 +149,7 @@ class MainWindow(QMainWindow):
         self._initialized = True # 초기화 완료
 
     def _apply_initial_settings(self):
-        """Applies initial settings like default system prompt and model names."""
+        """Applies initial settings like default system prompt, model names, and Gemini parameters."""
         apply_default_system_prompt(self) # 기본 시스템 프롬프트 로드
 
         if self.mode == "Meta Prompt Builder":
@@ -160,12 +163,11 @@ class MainWindow(QMainWindow):
                 print(f"Error loading default META prompt: {e}")
 
         # Load initial model settings from config
-        settings = self.config_service.get_settings()
         self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini")) # Default to Gemini UI
-        # Set the model name input based on the config default for Gemini
-        self.model_name_input.setText(settings.gemini_default_model)
-        # Call on_llm_selected but it won't trigger token calculation due to _initialized flag
-        self.main_controller.on_llm_selected()
+        self.main_controller.on_llm_selected() # This will load available models and set the default
+
+        # Load initial Gemini parameters from config
+        self.load_gemini_settings_to_ui()
 
         self.file_tree_controller.load_gitignore_settings() # FileTreeController
         self.resource_controller.update_buttons_label() # ResourceController
@@ -205,7 +207,7 @@ class MainWindow(QMainWindow):
             print("Settings saved. Applying changes...")
             # 1. 기본 시스템 프롬프트 다시 로드 시도
             apply_default_system_prompt(self)
-            # 2. LLM 기본 모델명 업데이트 (콤보박스 현재 값 기준)
+            # 2. LLM 기본 모델명 및 사용 가능 목록 업데이트 (콤보박스 현재 값 기준)
             self.main_controller.on_llm_selected() # 토큰 계산은 내부 플래그로 제어됨
             # 3. 파일 트리 필터 업데이트 (gitignore 관련 설정 변경 시)
             self.file_tree_controller.load_gitignore_settings()
@@ -216,6 +218,8 @@ class MainWindow(QMainWindow):
             if self._initialized: # 초기화 완료 후 실행
                  self.main_controller.update_char_count_for_active_tab() # 문자수만 업데이트
                  self.token_count_label.setText("토큰 계산: -") # 토큰 레이블 리셋
+            # 6. 메인 창의 Gemini 파라미터 UI 업데이트 (설정 다이얼로그에서 변경되었을 수 있으므로)
+            self.load_gemini_settings_to_ui()
 
             self.status_bar.showMessage("Settings applied.")
         else:
@@ -240,11 +244,13 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'file_tree_controller'):
             self.file_tree_controller.reset_file_tree()
         # 모델 선택 UI 초기화 (MainController에서 처리)
-        # if hasattr(self, 'main_controller'):
-        #     self.main_controller.reset_model_selection()
+        if hasattr(self, 'main_controller'):
+             self.main_controller.on_llm_selected() # Resets model combo based on default LLM
         # Summary 탭 내용 지우기
         if hasattr(self, 'summary_tab'):
             self.summary_tab.clear()
+        # Gemini 파라미터 UI 초기값 로드
+        self.load_gemini_settings_to_ui()
         self._initialized = True # 리셋 완료 후 플래그 설정
 
 
@@ -259,7 +265,7 @@ class MainWindow(QMainWindow):
         """Gathers the current UI state and returns it as an AppState model."""
         checked_paths = self.checkable_proxy.get_all_checked_paths() if hasattr(self, 'checkable_proxy') else []
         selected_llm = self.llm_combo.currentText() if hasattr(self, 'llm_combo') else "Gemini"
-        selected_model_name = self.model_name_input.text().strip() if hasattr(self, 'model_name_input') else ""
+        selected_model_name = self.model_name_combo.currentText().strip() if hasattr(self, 'model_name_combo') else "" # QComboBox 사용
 
         state_data = {
             "mode": self.mode,
@@ -269,6 +275,7 @@ class MainWindow(QMainWindow):
             "checked_files": checked_paths,
             "selected_llm": selected_llm,
             "selected_model_name": selected_model_name,
+            # Gemini 파라미터는 AppState에서 제거됨
         }
         try:
             app_state = AppState(**state_data)
@@ -315,12 +322,24 @@ class MainWindow(QMainWindow):
         self.system_tab.setText(state.system_prompt)
         self.user_tab.setText(state.user_prompt)
 
-        # Restore model selection state (using defaults from config as fallback)
+        # Restore model selection state
         llm_index = self.llm_combo.findText(state.selected_llm)
         if llm_index != -1:
             self.llm_combo.setCurrentIndex(llm_index)
-        config_default_model = self.config_service.get_default_model_name(state.selected_llm)
-        self.model_name_input.setText(state.selected_model_name if state.selected_model_name else config_default_model)
+            # Trigger on_llm_selected to populate model_name_combo
+            self.main_controller.on_llm_selected()
+            # Now set the specific model from the state
+            model_index = self.model_name_combo.findText(state.selected_model_name)
+            if model_index != -1:
+                self.model_name_combo.setCurrentIndex(model_index)
+            else:
+                # If the saved model isn't in the list, add it and select it (or just select default)
+                # For simplicity, let's just log a warning and keep the default selected
+                print(f"Warning: Saved model '{state.selected_model_name}' not found in available models for {state.selected_llm}. Using default.")
+                # The default is already selected by on_llm_selected
+        else:
+            # If LLM type itself is invalid, just use the default UI state
+            self.main_controller.on_llm_selected()
 
 
         # 체크 상태 복원 (프로젝트 폴더가 유효할 때만 의미 있음)
@@ -349,6 +368,8 @@ class MainWindow(QMainWindow):
         self.file_tree_controller.load_gitignore_settings() # FileTreeController
         self.update_window_title(folder_name)
         self.resource_controller.update_buttons_label() # ResourceController
+        # Gemini 파라미터는 config.yml에서 로드되므로 상태 파일과 무관
+        self.load_gemini_settings_to_ui()
 
         self._initialized = True # 상태 로드 완료 후 플래그 설정
         self.status_bar.showMessage("State loaded successfully!")
@@ -502,6 +523,85 @@ class MainWindow(QMainWindow):
         print("--- Cleaning up Gemini thread and worker ---")
         self.gemini_thread = None
         self.gemini_worker = None
+
+    # --- Gemini 파라미터 관리 메서드 ---
+    def load_gemini_settings_to_ui(self):
+        """Loads Gemini parameters from config.yml to the status bar widgets."""
+        if not self._initialized: return # 초기화 중에는 실행 방지
+        settings = self.config_service.get_settings()
+        # 블록 시그널로 무한 루프 방지
+        self.gemini_temp_edit.blockSignals(True)
+        self.gemini_thinking_checkbox.blockSignals(True)
+        self.gemini_budget_edit.blockSignals(True)
+        self.gemini_search_checkbox.blockSignals(True)
+
+        self.gemini_temp_edit.setText(str(settings.gemini_temperature))
+        self.gemini_thinking_checkbox.setChecked(settings.gemini_enable_thinking)
+        self.gemini_budget_edit.setText(str(settings.gemini_thinking_budget))
+        self.gemini_search_checkbox.setChecked(settings.gemini_enable_search)
+
+        self.gemini_temp_edit.blockSignals(False)
+        self.gemini_thinking_checkbox.blockSignals(False)
+        self.gemini_budget_edit.blockSignals(False)
+        self.gemini_search_checkbox.blockSignals(False)
+
+        # Gemini 선택 시에만 파라미터 위젯 보이도록 설정
+        is_gemini_selected = (self.llm_combo.currentText() == "Gemini")
+        if hasattr(self, 'gemini_param_widget'):
+            self.gemini_param_widget.setVisible(is_gemini_selected)
+
+    def save_gemini_settings(self):
+        """Saves Gemini parameters from status bar widgets to config.yml."""
+        if not self._initialized or self._is_saving_gemini_settings: return # 초기화 중 또는 저장 중에는 실행 방지
+
+        self._is_saving_gemini_settings = True # 저장 시작 플래그
+        try:
+            # UI 값 읽기 및 유효성 검사
+            try:
+                temp_str = self.gemini_temp_edit.text().strip()
+                temperature = float(temp_str) if temp_str else 0.0 # 빈 문자열이면 기본값 0.0
+                if not (0.0 <= temperature <= 2.0):
+                    raise ValueError("Temperature must be between 0.0 and 2.0")
+            except ValueError as e:
+                print(f"Invalid temperature value: {e}")
+                # 유효하지 않으면 이전 값으로 복원 (선택적)
+                # self.load_gemini_settings_to_ui()
+                self._is_saving_gemini_settings = False
+                return
+
+            enable_thinking = self.gemini_thinking_checkbox.isChecked()
+
+            try:
+                budget_str = self.gemini_budget_edit.text().strip()
+                thinking_budget = int(budget_str) if budget_str else 0 # 빈 문자열이면 기본값 0
+                if thinking_budget < 0:
+                    raise ValueError("Thinking budget must be non-negative")
+            except ValueError as e:
+                print(f"Invalid thinking budget value: {e}")
+                # self.load_gemini_settings_to_ui()
+                self._is_saving_gemini_settings = False
+                return
+
+            enable_search = self.gemini_search_checkbox.isChecked()
+
+            # 업데이트할 데이터
+            update_data = {
+                "gemini_temperature": temperature,
+                "gemini_enable_thinking": enable_thinking,
+                "gemini_thinking_budget": thinking_budget,
+                "gemini_enable_search": enable_search,
+            }
+
+            # ConfigService를 통해 업데이트 및 저장
+            self.config_service.update_settings(**update_data)
+            print(f"Gemini settings saved: {update_data}")
+            # self.status_bar.showMessage("Gemini settings saved.", 2000) # 짧은 메시지 표시 (선택적)
+
+        except Exception as e:
+            print(f"Error saving Gemini settings: {e}")
+            QMessageBox.warning(self, "오류", f"Gemini 설정 저장 중 오류 발생: {e}")
+        finally:
+            self._is_saving_gemini_settings = False # 저장 완료 플래그 해제
 
 
     # --- Event Handlers ---

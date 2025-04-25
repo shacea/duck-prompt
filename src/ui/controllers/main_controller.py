@@ -1,3 +1,5 @@
+
+
 import os
 from typing import Optional, List, Dict, Any
 from PyQt5.QtCore import Qt, QModelIndex
@@ -63,7 +65,7 @@ class MainController:
 
         # 모델 선택 UI 초기화
         self.mw.llm_combo.setCurrentIndex(self.mw.llm_combo.findText("Gemini")) # 기본값 Gemini
-        self.on_llm_selected() # 모델명 업데이트 (토큰 계산은 안 함)
+        self.on_llm_selected() # 모델명 콤보박스 업데이트 (토큰 계산은 안 함)
 
         # 리셋 후에는 텍스트가 비어있으므로 update_active_tab_counts 호출해도 계산 안 함
         self.update_char_count_for_active_tab() # 문자 수만 업데이트
@@ -127,10 +129,11 @@ class MainController:
             return
 
         selected_llm = self.mw.llm_combo.currentText()
-        model_name = self.mw.model_name_input.text().strip()
+        # model_name = self.mw.model_name_input.text().strip() # QLineEdit 대신 QComboBox 사용
+        model_name = self.mw.model_name_combo.currentText().strip() # QComboBox 사용
 
         if not model_name:
-            token_text = f"{selected_llm} 모델명을 입력하세요."
+            token_text = f"{selected_llm} 모델명을 선택하거나 입력하세요."
             print("Token calculation skipped: Model name is empty.")
             self.mw.token_count_label.setText(token_text)
             return
@@ -157,16 +160,41 @@ class MainController:
 
 
     def on_llm_selected(self):
-        """Handles the selection change in the LLM dropdown. Updates model name and resets token label."""
+        """Handles the selection change in the LLM dropdown. Updates model name combo box, resets token label, and updates Gemini param visibility."""
         selected_llm = self.mw.llm_combo.currentText()
+
+        # Load available models for the selected LLM
+        available_models = self.config_service.get_available_models(selected_llm)
+
+        # Update the model name combo box
+        self.mw.model_name_combo.blockSignals(True) # Prevent triggering signals during update
+        self.mw.model_name_combo.clear()
+        self.mw.model_name_combo.addItems(available_models)
+        self.mw.model_name_combo.blockSignals(False)
+
         # Load the default model name for the selected LLM from config
         default_model = self.config_service.get_default_model_name(selected_llm)
-        self.mw.model_name_input.setText(default_model)
+
+        # Set the default model in the combo box
+        default_index = self.mw.model_name_combo.findText(default_model)
+        if default_index != -1:
+            self.mw.model_name_combo.setCurrentIndex(default_index)
+        elif available_models: # If default not found, select the first available model
+            self.mw.model_name_combo.setCurrentIndex(0)
+            print(f"Warning: Default model '{default_model}' not found in available list for {selected_llm}. Selecting first available.")
+        else: # No models available
+             print(f"Warning: No available models found for {selected_llm} in config.")
+
 
         # Reset token count label
         self.reset_token_label()
         # Update character count for the active tab
         self.update_char_count_for_active_tab()
+
+        # Update visibility of Gemini parameter widgets
+        is_gemini_selected = (selected_llm == "Gemini")
+        if hasattr(self.mw, 'gemini_param_widget'):
+            self.mw.gemini_param_widget.setVisible(is_gemini_selected)
 
 
     # on_mode_changed는 MainWindow에서 처리 (_toggle_mode -> _restart_with_mode)

@@ -3,9 +3,14 @@ import google.generativeai as genai
 from langgraph.graph import StateGraph, END, START
 from functools import partial
 import logging
+from typing import Optional, List # List 추가
 
 from core.langgraph_state import GeminiGraphState
 from core.services.config_service import ConfigService
+# google.generativeai.types 임포트 유지
+from google.generativeai import types
+# google.api_core.exceptions 임포트 추가 (오류 처리 강화)
+from google.api_core import exceptions as google_api_exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -20,55 +25,136 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     prompt = state['input_prompt']
     settings = config_service.get_settings()
     api_key = settings.gemini_api_key
-    # 설정에서 모델명 가져오기 (config_service에 해당 메서드 필요)
-    model_name = config_service.get_default_model_name("Gemini")
+
+    # 설정에서 모델명 및 API 파라미터 가져오기
+    model_name = settings.gemini_default_model # settings.gemini_default_model 사용
+    temperature = settings.gemini_temperature
+    enable_thinking = settings.gemini_enable_thinking
+    thinking_budget = settings.gemini_thinking_budget
+    enable_search = settings.gemini_enable_search
+
 
     if not api_key:
         error_msg = "Gemini API Key not configured in config.yml."
         logger.error(error_msg)
-        return {"error_message": error_msg}
+        return {"error_message": error_msg, "gemini_response": "", "xml_output": "", "summary_output": ""} # 초기 상태 반환 보장
     if not model_name:
         error_msg = "Gemini default model name not configured in config.yml."
         logger.error(error_msg)
-        return {"error_message": error_msg}
+        return {"error_message": error_msg, "gemini_response": "", "xml_output": "", "summary_output": ""} # 초기 상태 반환 보장
 
     try:
         # API 키 설정 (호출 시마다 필요할 수 있음)
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(model_name)
+        # 모델 이름에 'models/' 접두사가 있으면 제거 (sdk 버전에 따라 다를 수 있음)
+        effective_model_name = model_name.replace("models/", "")
+        model = genai.GenerativeModel(effective_model_name)
+        logger.info(f"Using Gemini model: {effective_model_name}")
 
-        # TODO: Gemini API 호출 시 필요한 추가 설정 (safety_settings 등) 고려
-        # generation_config = genai.types.GenerationConfig(
-        #     # candidate_count=1, # 기본값
-        #     # stop_sequences=['...'],
-        #     # max_output_tokens=...,
-        #     # temperature=...,
-        # )
-        # safety_settings = [ ... ] # 필요 시 안전 설정 추가
+        # --- GenerationConfig, ToolConfig, Tools 설정 분리 ---
+        # 1. GenerationConfig 설정
+        generation_config_params = {
+            "temperature": temperature,
+            "response_mime_type": "text/plain",
+            # max_output_tokens, stop_sequences 등 필요시 추가
+        }
+        try:
+            # 올바른 클래스명 사용: GenerationConfig
+            generation_config = types.GenerationConfig(**generation_config_params)
+            logger.info(f"Generation Config: {generation_config}")
+        except AttributeError:
+            logger.error("AttributeError: 'types' module has no attribute 'GenerationConfig'. Check google-generativeai library version.")
+            return {"error_message": "Failed to create GenerationConfig due to AttributeError", "gemini_response": "", "xml_output": "", "summary_output": ""}
+        except Exception as e:
+            logger.error(f"Error creating GenerationConfig: {e}")
+            return {"error_message": f"Error creating GenerationConfig: {e}", "gemini_response": "", "xml_output": "", "summary_output": ""}
 
-        logger.info(f"Sending prompt to Gemini model: {model_name}")
-        response = model.generate_content(prompt) #, generation_config=generation_config, safety_settings=safety_settings)
 
-        # 오류 처리 확인 (response.prompt_feedback 등)
-        # response.candidates가 비어있는지 또는 prompt_feedback에 block reason이 있는지 확인
-        if not response.candidates or (hasattr(response, 'prompt_feedback') and response.prompt_feedback.block_reason):
-             block_reason = response.prompt_feedback.block_reason if hasattr(response, 'prompt_feedback') else "Unknown"
-             safety_ratings = response.prompt_feedback.safety_ratings if hasattr(response, 'prompt_feedback') else "N/A"
-             error_msg = f"Gemini API call failed. Block Reason: {block_reason}, Safety Ratings: {safety_ratings}"
-             logger.error(error_msg)
-             # 빈 응답과 오류 메시지 반환
-             return {"gemini_response": "", "error_message": error_msg}
+        # 2. Tools 설정
+        tools_list: Optional[List[types.Tool]] = None
+        if enable_search:
+            try:
+                tools_list = [types.Tool(google_search=types.GoogleSearch())]
+                logger.info("Google Search tool enabled.")
+            except AttributeError:
+                 logger.error("AttributeError: 'types' module has no attribute 'Tool' or 'GoogleSearch'. Check google-generativeai library version or usage.")
+                 tools_list = None # 명시적으로 None 설정
+            except Exception as e:
+                 logger.error(f"Error creating GoogleSearch tool: {e}")
+                 tools_list = None
 
-        # 성공 시 텍스트 추출
-        # response.text 는 가장 가능성 높은 candidate의 text를 반환
-        gemini_response_text = response.text
+        # 3. ToolConfig 설정 (Thinking 포함)
+        tool_config_obj: Optional[types.ToolConfig] = None
+        if enable_thinking:
+            try:
+                # thinking_config는 ToolConfig 내부에 설정
+                thinking_config_obj = types.ThinkingConfig(thinking_budget=thinking_budget)
+                tool_config_obj = types.ToolConfig(thinking_config=thinking_config_obj)
+                logger.info(f"ThinkingConfig enabled with budget: {thinking_budget}")
+            except AttributeError:
+                 logger.error("AttributeError: 'types' module has no attribute 'ThinkingConfig' or 'ToolConfig'. Check google-generativeai library version.")
+                 tool_config_obj = None # 명시적으로 None 설정
+            except Exception as e:
+                 logger.error(f"Error creating ThinkingConfig/ToolConfig: {e}")
+                 tool_config_obj = None
+        # --- 설정 분리 완료 ---
+
+
+        logger.info(f"Sending prompt to Gemini model: {effective_model_name}")
+        # 스트리밍 API 호출 (인자 구조 변경)
+        response = model.generate_content(
+            prompt,
+            generation_config=generation_config, # GenerationConfig 전달
+            tools=tools_list,                   # Tools 리스트 전달 (None 가능)
+            tool_config=tool_config_obj,        # ToolConfig 전달 (None 가능)
+            # safety_settings 등 다른 옵션 필요 시 추가
+            stream=True # 스트리밍 활성화
+        )
+
+        # 스트림 응답을 모아서 처리
+        gemini_response_text = ""
+        for chunk in response:
+            # chunk에 text 속성이 없을 수 있으므로 확인
+            if hasattr(chunk, 'text'):
+                gemini_response_text += chunk.text
+            # TODO: chunk에서 오류나 차단 정보도 확인 가능 (예: chunk.candidates[0].finish_reason)
+
+        # 응답 스트림 완료 후 오류 처리 확인
+        if not gemini_response_text.strip():
+             error_detail = "Unknown reason (empty response)"
+             try:
+                 # response 객체 또는 마지막 chunk에서 feedback 확인 (SDK 구조에 따라 다름)
+                 # 예: if response.prompt_feedback.block_reason: error_detail = ...
+                 pass # 실제 SDK 구조 확인 필요
+             except Exception:
+                 pass # 오류 정보 추출 실패 시 무시
+
+             error_msg = f"Gemini API call returned empty response. Detail: {error_detail}"
+             logger.warning(error_msg)
+             return {"gemini_response": "", "error_message": error_msg, "xml_output": "", "summary_output": ""}
+
+
         logger.info("--- Gemini Response Received ---")
-        return {"gemini_response": gemini_response_text, "error_message": None}
+        # 성공 시 텍스트 추출
+        return {"gemini_response": gemini_response_text, "error_message": None, "xml_output": "", "summary_output": ""} # 초기 상태 반환 보장
 
+    except google_api_exceptions.PermissionDenied as e:
+        error_msg = f"Gemini API Permission Denied: {str(e)}. Check API key and permissions."
+        logger.error(error_msg)
+        return {"gemini_response": "", "error_message": error_msg, "xml_output": "", "summary_output": ""}
+    except google_api_exceptions.InvalidArgument as e:
+        error_msg = f"Gemini API Invalid Argument: {str(e)}. Check model name ('{effective_model_name}') or parameters."
+        logger.error(error_msg)
+        return {"gemini_response": "", "error_message": error_msg, "xml_output": "", "summary_output": ""}
+    except AttributeError as e:
+        # types.ThinkingConfig 등 SDK 내부 구조 관련 오류
+        error_msg = f"Gemini SDK AttributeError: {str(e)}. Check library version and code compatibility."
+        logger.exception(error_msg) # 스택 트레이스 포함
+        return {"gemini_response": "", "error_message": error_msg, "xml_output": "", "summary_output": ""}
     except Exception as e:
         error_msg = f"Error calling Gemini API: {str(e)}"
         logger.exception(error_msg) # 스택 트레이스 포함 로깅
-        return {"gemini_response": "", "error_message": error_msg}
+        return {"gemini_response": "", "error_message": error_msg, "xml_output": "", "summary_output": ""}
 
 
 def process_response(state: GeminiGraphState) -> GeminiGraphState:
@@ -81,14 +167,17 @@ def process_response(state: GeminiGraphState) -> GeminiGraphState:
     gemini_response = state.get('gemini_response', '') # 기본값 '' 추가
     xml_output = ""
     summary_output = ""
-    error_message = state.get('error_message') # 기존 오류 메시지 유지 시도
+    # process_response는 API 호출 성공 후 실행되므로, 여기서 error_message는 None으로 시작
+    error_message = None # API 호출 성공 시 오류 없음
 
     try:
         if not gemini_response:
              logger.warning("Gemini response is empty, skipping processing.")
-             if not error_message:
-                 error_message = "Gemini response was empty."
-             return {"xml_output": "", "summary_output": "", "error_message": error_message}
+             # API 호출은 성공했으나 응답이 비어있는 경우, 오류 메시지 설정 가능
+             error_message = "Gemini response was empty after successful API call."
+             # 상태 반환 시 gemini_response 유지
+             return {"xml_output": "", "summary_output": "", "error_message": error_message, "gemini_response": gemini_response}
+
 
         # 응답 문자열을 정리 (앞뒤 공백 제거)
         cleaned_response = gemini_response.strip()
@@ -99,38 +188,27 @@ def process_response(state: GeminiGraphState) -> GeminiGraphState:
         summary_start_index = cleaned_response.rfind(summary_start_tag) # 오른쪽에서부터 찾기
 
         # <summary> 태그가 응답의 합리적인 위치(예: 끝 부분)에 있는지 확인
-        # 너무 앞쪽에 있다면 코드 내 문자열일 가능성이 높음
-        # 예를 들어, 전체 길이의 절반 이후에 나타나는 경우만 유효한 태그로 간주 (조정 가능)
-        # 또한, 시작 태그가 문자열 시작 부분에 오는 극단적인 경우도 배제 (예: index > 0)
         is_valid_summary_position = (
             summary_start_index != -1 and
-            summary_start_index > 0 and # 시작 부분에 바로 오는 경우 제외
-            summary_start_index > len(cleaned_response) * 0.5 # 응답의 후반부에 위치하는지 확인 (50% 지점 이후)
+            summary_start_index > 0 and
+            summary_start_index > len(cleaned_response) * 0.5
         )
 
         if is_valid_summary_position:
             xml_output = cleaned_response[:summary_start_index].strip()
-            # <summary> 태그 이후의 부분을 summary_part로 추출
             summary_part = cleaned_response[summary_start_index + len(summary_start_tag):]
-
-            # summary_part 끝에서 </summary> 태그 찾기
             summary_end_index = summary_part.rfind(summary_end_tag)
             if summary_end_index != -1:
-                 # 종료 태그 이전까지의 내용을 summary로 간주
                  summary_output = summary_part[:summary_end_index].strip()
             else:
-                 # 종료 태그가 없으면 시작 태그 이후 모든 것을 summary로 간주 (기존 로직 유지)
-                 # 이 경우, summary_part 전체가 summary 내용이 됨
                  summary_output = summary_part.strip()
                  logger.warning("Summary end tag '</summary>' not found at the end of the summary part. Taking content after '<summary>'.")
 
-            # XML 부분 끝에 실수로 </summary>가 포함된 경우 제거 (선택적 보강)
             if xml_output.endswith(summary_end_tag):
                 xml_output = xml_output[:-len(summary_end_tag)].strip()
                 logger.warning("Removed trailing '</summary>' tag from the XML part.")
 
         else:
-            # Summary 태그가 없거나 유효한 위치에 없는 경우, 전체를 XML로 간주
             xml_output = cleaned_response
             if summary_start_index == -1:
                 summary_output = "Summary tag '<summary>' not found in response."
@@ -139,14 +217,14 @@ def process_response(state: GeminiGraphState) -> GeminiGraphState:
             logger.warning(summary_output)
 
         logger.info("--- Response Processed ---")
-        # 파싱 성공 시 오류 메시지는 None으로 설정 (기존 오류 덮어쓰기)
-        return {"xml_output": xml_output, "summary_output": summary_output, "error_message": None}
+        # 파싱 성공 시 오류 메시지는 None 유지, gemini_response 유지
+        return {"xml_output": xml_output, "summary_output": summary_output, "error_message": None, "gemini_response": gemini_response}
 
     except Exception as e:
         error_msg = f"Error processing response: {str(e)}"
         logger.exception(error_msg)
-        # 오류 발생 시 원본 응답을 XML로, 빈 Summary 반환
-        return {"xml_output": gemini_response, "summary_output": "", "error_message": error_msg}
+        # 파싱 오류 발생 시 원본 응답을 XML로, 빈 Summary 반환, 오류 메시지 설정, gemini_response 유지
+        return {"xml_output": gemini_response, "summary_output": "", "error_message": error_msg, "gemini_response": gemini_response}
 
 
 def build_gemini_graph(config_service: ConfigService) -> StateGraph:

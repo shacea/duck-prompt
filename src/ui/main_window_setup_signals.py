@@ -1,3 +1,4 @@
+
 from PyQt5.QtWidgets import QAction
 from PyQt5.QtGui import QKeySequence
 
@@ -44,6 +45,13 @@ def connect_signals(mw: 'MainWindow'):
 
     # 상태바 & 모델 선택
     mw.llm_combo.currentIndexChanged.connect(mw.main_controller.on_llm_selected) # MainController (Resets token label)
+
+    # --- Gemini 파라미터 변경 시그널 연결 ---
+    mw.gemini_temp_edit.textChanged.connect(mw.save_gemini_settings)
+    mw.gemini_thinking_checkbox.stateChanged.connect(mw.save_gemini_settings)
+    mw.gemini_budget_edit.textChanged.connect(mw.save_gemini_settings)
+    mw.gemini_search_checkbox.stateChanged.connect(mw.save_gemini_settings)
+    # ---------------------------------------
 
     # 텍스트 변경 시 문자 수 업데이트 및 토큰 레이블 리셋 (현재 활성 탭 기준)
     mw.build_tabs.currentChanged.connect(mw.main_controller.update_char_count_for_active_tab) # Update char counts when tab changes

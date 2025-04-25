@@ -1,7 +1,10 @@
+
+
 import os
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
-    QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox
+    QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
+    QCheckBox # QCheckBox import
 )
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List
@@ -25,7 +28,7 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.mw = main_window # MainWindow 참조
         self.config_service = main_window.config_service
-        self.settings: ConfigSettings = self.config_service.get_settings() # 현재 설정 로드
+        # self.settings: ConfigSettings = self.config_service.get_settings() # 현재 설정 로드 (load_config_settings에서 수행)
 
         self.setWindowTitle("환경 설정")
         self.setMinimumWidth(600)
@@ -59,6 +62,13 @@ class SettingsDialog(QDialog):
         api_key_layout.addRow("Gemini API Key:", self.gemini_api_key_edit)
         api_key_layout.addRow("Anthropic API Key:", self.anthropic_api_key_edit)
         self.api_key_group.setLayout(api_key_layout)
+
+        # --- Gemini Parameters Group 제거 ---
+        # self.gemini_params_group = QGroupBox("Gemini API 파라미터")
+        # ... (관련 위젯 생성 코드 제거) ...
+        # self.gemini_params_group.setLayout(gemini_params_layout)
+        # -----------------------------
+
 
         # 파일 필터링
         self.filtering_group = QGroupBox("파일 필터링")
@@ -101,6 +111,7 @@ class SettingsDialog(QDialog):
         main_layout.addWidget(self.default_prompt_group)
         main_layout.addWidget(self.llm_model_group)
         main_layout.addWidget(self.api_key_group)
+        # main_layout.addWidget(self.gemini_params_group) # Gemini 파라미터 그룹 제거
         main_layout.addWidget(self.filtering_group)
         main_layout.addWidget(self.gitignore_group) # gitignore 그룹 추가
         main_layout.addWidget(self.button_box)
@@ -126,6 +137,13 @@ class SettingsDialog(QDialog):
         self.gemini_api_key_edit.setText(self.settings.gemini_api_key or "")
         self.anthropic_api_key_edit.setText(self.settings.anthropic_api_key or "")
 
+        # Gemini Parameters 로드 로직 제거
+        # self.gemini_temperature_edit.setText(str(self.settings.gemini_temperature))
+        # self.gemini_enable_thinking_checkbox.setChecked(self.settings.gemini_enable_thinking)
+        # self.gemini_thinking_budget_edit.setText(str(self.settings.gemini_thinking_budget))
+        # self.gemini_enable_search_checkbox.setChecked(self.settings.gemini_enable_search)
+
+
         # Set<str> -> str (UI 표시용)
         self.allowed_extensions_edit.setText(", ".join(sorted(list(self.settings.allowed_extensions))))
         self.excluded_dirs_edit.setPlainText("\n".join(sorted(list(self.settings.excluded_dirs))))
@@ -133,17 +151,13 @@ class SettingsDialog(QDialog):
 
     def browse_default_prompt(self):
         """기본 시스템 프롬프트 파일을 선택하는 다이얼로그를 엽니다."""
-        current_path = self.default_prompt_path_edit.text()
-        initial_dir = os.path.dirname(current_path) if current_path and os.path.isdir(os.path.dirname(current_path)) else os.path.expanduser("~")
+        # MainWindow에서 경로 선택 로직 사용 (프로젝트 루트 기준 상대/절대 경로 처리)
+        from ui.controllers.system_prompt_controller import select_default_system_prompt
+        selected_path = select_default_system_prompt(self.config_service, parent_widget=self)
 
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "기본 시스템 프롬프트 선택",
-            initial_dir,
-            "Text/Markdown Files (*.txt *.md);;All Files (*.*)"
-        )
-        if path:
-            self.default_prompt_path_edit.setText(path)
+        if selected_path is not None: # 사용자가 취소하지 않았다면
+            self.default_prompt_path_edit.setText(selected_path)
+
 
     def load_gitignore(self):
         """현재 프로젝트 폴더의 .gitignore 파일을 로드하여 편집기에 표시합니다."""
@@ -206,17 +220,40 @@ class SettingsDialog(QDialog):
             claude_model = self.claude_default_model_edit.text().strip()
             gemini_key = self.gemini_api_key_edit.text().strip() or None
             anthropic_key = self.anthropic_api_key_edit.text().strip() or None
+
+            # Gemini Parameters 읽기 로직 제거
+            # try:
+            #     gemini_temperature = float(self.gemini_temperature_edit.text().strip())
+            # except ValueError:
+            #     QMessageBox.warning(self, "입력 오류", "Temperature는 유효한 숫자여야 합니다.")
+            #     return # 저장 중단
+            #
+            # gemini_enable_thinking = self.gemini_enable_thinking_checkbox.isChecked()
+            #
+            # try:
+            #     gemini_thinking_budget = int(self.gemini_thinking_budget_edit.text().strip())
+            # except ValueError:
+            #      QMessageBox.warning(self, "입력 오류", "Thinking Budget은 유효한 정수여야 합니다.")
+            #      return # 저장 중단
+            #
+            # gemini_enable_search = self.gemini_enable_search_checkbox.isChecked()
+
+
             allowed_ext_set = self._parse_set_from_lineedit(self.allowed_extensions_edit.text())
             excluded_dirs_set = set(self._parse_list_from_plaintextedit(self.excluded_dirs_edit.toPlainText()))
             default_ignore_list = self._parse_list_from_plaintextedit(self.default_ignore_list_edit.toPlainText())
 
-            # 업데이트할 설정 딕셔너리 생성
+            # 업데이트할 설정 딕셔너리 생성 (Gemini 파라미터 제외)
             update_data = {
                 "default_system_prompt": default_prompt,
                 "gemini_default_model": gemini_model,
                 "claude_default_model": claude_model,
                 "gemini_api_key": gemini_key,
                 "anthropic_api_key": anthropic_key,
+                # "gemini_temperature": gemini_temperature, # Gemini 파라미터 제외
+                # "gemini_enable_thinking": gemini_enable_thinking,
+                # "gemini_thinking_budget": gemini_thinking_budget,
+                # "gemini_enable_search": gemini_enable_search,
                 "allowed_extensions": allowed_ext_set,
                 "excluded_dirs": excluded_dirs_set,
                 "default_ignore_list": default_ignore_list,
