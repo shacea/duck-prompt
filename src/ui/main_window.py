@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QFrame, QLineEdit, QDialog # QDialog 추가
 )
 from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices
-from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl # QItemSelection, QUrl 추가
+from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl, QThread, pyqtSignal, QObject # QThread, pyqtSignal, QObject 추가
 
 # 변경된 경로에서 import
 from core.pydantic_models.app_state import AppState # 상태 타입 힌트용
@@ -20,6 +20,8 @@ from core.services.prompt_service import PromptService
 from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
 from core.services.token_service import TokenCalculationService # Added
+from core.services.gemini_service import build_gemini_graph # LangGraph 빌더 함수 임포트
+from core.langgraph_state import GeminiGraphState # LangGraph 상태 임포트
 
 from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
 # 컨트롤러 import
@@ -40,6 +42,36 @@ from .settings_dialog import SettingsDialog
 from ui.widgets.custom_text_edit import CustomTextEdit
 from ui.widgets.custom_tab_bar import CustomTabBar # CustomTabBar 임포트
 from utils.helpers import get_resource_path
+
+# --- Gemini API 호출을 위한 Worker 클래스 ---
+class GeminiWorker(QObject):
+    finished = pyqtSignal(str, str) # XML, Summary 결과 전달
+    error = pyqtSignal(str)         # 오류 메시지 전달
+
+    def __init__(self, graph_app, prompt):
+        super().__init__()
+        self.graph_app = graph_app
+        self.prompt = prompt
+
+    def run(self):
+        """LangGraph 워크플로우를 실행합니다."""
+        try:
+            # LangGraph 실행 (상태 초기화 및 입력 전달)
+            # 입력 상태는 LangGraph 상태 정의와 일치해야 함
+            initial_state: GeminiGraphState = {"input_prompt": self.prompt, "gemini_response": "", "xml_output": "", "summary_output": "", "error_message": None}
+            # LangGraph 실행 (.invoke 사용)
+            final_state = self.graph_app.invoke(initial_state)
+
+            # 최종 상태에서 결과 확인
+            if final_state.get("error_message"):
+                self.error.emit(final_state["error_message"])
+            else:
+                xml_result = final_state.get("xml_output", "")
+                summary_result = final_state.get("summary_output", "")
+                self.finished.emit(xml_result, summary_result)
+        except Exception as e:
+            # LangGraph 실행 자체에서 발생한 예외 처리
+            self.error.emit(f"LangGraph execution error: {str(e)}")
 
 
 class MainWindow(QMainWindow):
@@ -69,10 +101,14 @@ class MainWindow(QMainWindow):
         self.fs_service = FilesystemService(self.config_service)
         # Pass config_service to TokenCalculationService
         self.token_service = TokenCalculationService(self.config_service) # Modified
+        # LangGraph 앱 빌드 (ConfigService 주입)
+        self.gemini_graph = build_gemini_graph(self.config_service)
+        self.gemini_thread: Optional[QThread] = None # 스레드 관리를 위한 변수
+        self.gemini_worker: Optional[GeminiWorker] = None # 워커 관리를 위한 변수
 
         # --- UI 구성 요소 생성 (외부 함수 호출) ---
         create_menu_bar(self)
-        create_widgets(self)
+        create_widgets(self) # 여기서 summary_tab, send_to_gemini_btn 생성됨
         create_layout(self)
         create_status_bar(self)
 
@@ -85,7 +121,7 @@ class MainWindow(QMainWindow):
         self.file_tree_controller = FileTreeController(self, self.fs_service, self.config_service)
 
         # --- 시그널 연결 (외부 함수 호출) ---
-        connect_signals(self)
+        connect_signals(self) # 여기서 send_to_gemini_btn 시그널 연결됨
 
         # --- 초기화 작업 ---
         self.resource_controller.load_templates_list() # 리소스 목록 로드
@@ -206,6 +242,9 @@ class MainWindow(QMainWindow):
         # 모델 선택 UI 초기화 (MainController에서 처리)
         # if hasattr(self, 'main_controller'):
         #     self.main_controller.reset_model_selection()
+        # Summary 탭 내용 지우기
+        if hasattr(self, 'summary_tab'):
+            self.summary_tab.clear()
         self._initialized = True # 리셋 완료 후 플래그 설정
 
 
@@ -383,6 +422,86 @@ class MainWindow(QMainWindow):
 
         elif ok:
              QMessageBox.warning(self, "경고", "탭 이름은 비워둘 수 없습니다.")
+
+
+    # --- LangGraph 관련 메서드 ---
+    def send_prompt_to_gemini(self):
+        """ "Gemini로 전송" 버튼 클릭 시 실행될 메서드 """
+        if self.mode == "Meta Prompt Builder":
+            QMessageBox.information(self, "정보", "Meta Prompt Builder 모드에서는 Gemini 전송 기능을 사용할 수 없습니다.")
+            return
+
+        if not hasattr(self, 'prompt_output_tab'):
+            QMessageBox.warning(self, "오류", "프롬프트 출력 탭을 찾을 수 없습니다.")
+            return
+
+        prompt_text = self.prompt_output_tab.toPlainText()
+        if not prompt_text.strip():
+            QMessageBox.warning(self, "경고", "Gemini에 전송할 프롬프트 내용이 없습니다.")
+            return
+
+        # 버튼 비활성화 및 상태 메시지 업데이트
+        if hasattr(self, 'send_to_gemini_btn'):
+            self.send_to_gemini_btn.setEnabled(False)
+        self.status_bar.showMessage("Gemini API 호출 중...")
+        QApplication.processEvents() # UI 업데이트 강제
+
+        # 이전 스레드가 실행 중이면 종료 시도 (선택적)
+        if self.gemini_thread and self.gemini_thread.isRunning():
+            print("Terminating previous Gemini thread...")
+            self.gemini_thread.quit()
+            self.gemini_thread.wait() # 종료 대기
+
+        # 스레드 생성 및 시작
+        self.gemini_thread = QThread()
+        # graph_app과 prompt_text를 전달하여 Worker 생성
+        self.gemini_worker = GeminiWorker(self.gemini_graph, prompt_text)
+        self.gemini_worker.moveToThread(self.gemini_thread)
+
+        # 시그널 연결
+        self.gemini_thread.started.connect(self.gemini_worker.run)
+        self.gemini_worker.finished.connect(self.handle_gemini_response)
+        self.gemini_worker.error.connect(self.handle_gemini_error)
+        # 스레드 종료 시 정리 (finished 시그널에 연결)
+        self.gemini_worker.finished.connect(self.gemini_thread.quit)
+        self.gemini_worker.finished.connect(self.gemini_worker.deleteLater)
+        self.gemini_thread.finished.connect(self.gemini_thread.deleteLater)
+        # 오류 발생 시에도 스레드 정리
+        self.gemini_worker.error.connect(self.gemini_thread.quit)
+        self.gemini_worker.error.connect(self.gemini_worker.deleteLater)
+        self.gemini_thread.finished.connect(self.cleanup_gemini_thread) # 최종 정리 슬롯 연결
+
+        self.gemini_thread.start()
+
+    def handle_gemini_response(self, xml_result: str, summary_result: str):
+        """ Gemini 응답 처리 슬롯 """
+        print("--- Handling Gemini Response ---")
+        if hasattr(self, 'xml_input_tab'):
+            self.xml_input_tab.setPlainText(xml_result)
+            print(f"XML Output Length: {len(xml_result)}")
+        if hasattr(self, 'summary_tab'): # 새로 추가한 Summary 탭
+            self.summary_tab.setPlainText(summary_result)
+            print(f"Summary Output Length: {len(summary_result)}")
+            # Summary 탭으로 자동 전환 (선택적)
+            self.build_tabs.setCurrentWidget(self.summary_tab)
+
+        self.status_bar.showMessage("Gemini 응답 처리 완료.")
+        if hasattr(self, 'send_to_gemini_btn'):
+            self.send_to_gemini_btn.setEnabled(True) # 버튼 다시 활성화
+
+    def handle_gemini_error(self, error_msg: str):
+        """ Gemini 오류 처리 슬롯 """
+        print(f"--- Handling Gemini Error: {error_msg} ---")
+        QMessageBox.critical(self, "Gemini API 오류", f"오류 발생:\n{error_msg}")
+        self.status_bar.showMessage("Gemini API 호출 오류.")
+        if hasattr(self, 'send_to_gemini_btn'):
+            self.send_to_gemini_btn.setEnabled(True) # 버튼 다시 활성화
+
+    def cleanup_gemini_thread(self):
+        """Gemini 스레드 및 워커 객체 정리"""
+        print("--- Cleaning up Gemini thread and worker ---")
+        self.gemini_thread = None
+        self.gemini_worker = None
 
 
     # --- Event Handlers ---

@@ -74,7 +74,7 @@
  [],
  False,
  False,
- 1745533202,
+ 1745540827,
  [('runw.exe',
    'E:\\Projects\\duck-prompt\\.venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
    'EXECUTABLE')],

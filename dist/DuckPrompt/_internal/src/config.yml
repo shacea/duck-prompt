@@ -1,4 +1,4 @@
-default_system_prompt: resources/prompts/system/XML_prompt_guide_python_en.md
+default_system_prompt: resources/prompts/system/xml_prompt_guide_python_en.md
 allowed_extensions: !!set {}
 excluded_dirs: !!set
   .idea/: null

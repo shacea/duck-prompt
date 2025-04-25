@@ -7,6 +7,7 @@ class XmlService:
         """
         Parses XML string and applies file changes (CREATE, UPDATE, DELETE)
         within the specified project directory.
+        Handles removing surrounding Markdown code block markers if present.
 
         Returns a dictionary summarizing the results:
         {
@@ -31,17 +32,53 @@ class XmlService:
             result["errors"].append("XML input string is empty.")
             return result
 
+        # --- Add logic to strip Markdown code block markers ---
+        cleaned_xml_string = xml_string.strip()
+        markdown_markers = ["```xml", "```", "`````xml", "`````"] # Add any other common markers if needed
+
+        # Check and remove starting marker
+        for marker in markdown_markers:
+            if cleaned_xml_string.startswith(marker):
+                cleaned_xml_string = cleaned_xml_string[len(marker):].lstrip() # Remove marker and leading whitespace/newline
+                break # Assume only one starting marker
+
+        # Check and remove ending marker
+        for marker in markdown_markers: # Check for both ```` and ```xml` at the end
+            if cleaned_xml_string.endswith(marker):
+                 # Use rstrip() before checking endswith to handle trailing whitespace/newline
+                 temp_string = cleaned_xml_string.rstrip()
+                 if temp_string.endswith(marker):
+                    cleaned_xml_string = temp_string[:-len(marker)].rstrip() # Remove marker and trailing whitespace/newline
+                 break # Assume only one ending marker
+
+        if not cleaned_xml_string:
+             result["errors"].append("XML input string became empty after removing potential Markdown markers.")
+             return result
+        # --- End of Markdown marker stripping logic ---
+
         try:
-            # XML 파싱 시 공백 제거
-            root = ET.fromstring(xml_string.strip())
+            # XML 파싱
+            root = ET.fromstring(cleaned_xml_string) # Use the cleaned string
         except ET.ParseError as e:
-            result["errors"].append(f"Invalid XML format: {str(e)}")
+            result["errors"].append(f"Invalid XML format after cleaning: {str(e)}")
             return result
+        except Exception as e:
+             # Catch other potential errors during fromstring
+             result["errors"].append(f"Error parsing XML string: {str(e)}")
+             return result
+
 
         changed_files_node = root.find('changed_files')
         if changed_files_node is None:
-            result["errors"].append("No <changed_files> node found in XML.")
-            return result
+            # If <changed_files> is missing but parsing was successful, it might be an empty XML response.
+            # Treat as no changes rather than an error, unless it's entirely empty or unexpected structure.
+            # Let's check if the root tag itself is also unexpected.
+            if root.tag not in ['code_changes', 'root', 'response']: # Add common root tags
+                 result["errors"].append(f"No <changed_files> node found and unexpected root tag '{root.tag}' in XML.")
+            else:
+                 # Successful parse, but no changed_files node. Assume no changes.
+                 print("XML parsed successfully but no <changed_files> node found. Assuming no changes.")
+            return result # Return with errors if any added, or empty result
 
         for file_node in changed_files_node.findall('file'):
             file_op_node = file_node.find('file_operation')
@@ -60,30 +97,30 @@ class XmlService:
                 continue
 
             # 보안: 경로 조작 방지 (상대 경로가 프로젝트 디렉토리를 벗어나지 않도록 확인)
+            # 정규화된 경로 사용
             target_path = os.path.abspath(os.path.join(project_directory, relative_path.lstrip('/\\')))
             if not target_path.startswith(os.path.abspath(project_directory)):
                 result["errors"].append(f"Skipping potentially unsafe path: {relative_path}")
                 continue
 
+            # Ensure path separator consistency if needed, but os.path.join handles this locally.
+            # For comparison against input, maybe normalize relative_path too? Not critical for security check here.
+
             file_code = file_code_node.text if file_code_node is not None and file_code_node.text is not None else None
 
             try:
                 if operation in ["CREATE", "UPDATE"]:
-                    if file_code is None: # 빈 파일 생성/수정을 허용할지 결정 필요 (현재는 오류)
-                        result["errors"].append(f"Skipping {operation} for '{relative_path}': file_code is missing.")
-                        continue
+                    # Allow empty file_code for creating/updating empty files
+                    # if file_code is None: # Changed: Allow None/empty string for file_code
+                    #     result["errors"].append(f"Skipping {operation} for '{relative_path}': file_code is missing.")
+                    #     continue
 
-                    # 파일 코드 앞뒤 공백/개행 제거 (필요에 따라 조정)
-                    file_code = file_code.strip()
-                    # 첫 줄 공백 방지를 위해 선행 개행만 제거
-                    # file_code = file_code.lstrip('\r\n')
-
-                    # 디렉토리 생성
+                    # Ensure directory exists
                     os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
-                    # 파일 쓰기
+                    # Write file, handle None/empty file_code as empty content
                     with open(target_path, 'w', encoding='utf-8') as f:
-                        f.write(file_code)
+                        f.write(file_code if file_code is not None else "") # Write empty string if file_code is None
 
                     if operation == "CREATE":
                         result["created"].append(target_path)
@@ -106,7 +143,7 @@ class XmlService:
 
                 elif operation == "NONE":
                     # 수정 없음 처리 (로그 또는 아무 작업 안 함)
-                    print(f"Operation NONE for: {target_path}")
+                    # print(f"Operation NONE for: {target_path}") # Suppress this frequent log
                     pass
 
                 else:

@@ -5,3 +5,6 @@ tiktoken
 pydantic
 google-generativeai
 anthropic
+langgraph
+langchain
+langchain-google-genai

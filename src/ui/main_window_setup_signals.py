@@ -22,6 +22,7 @@ def connect_signals(mw: 'MainWindow'):
     if mw.mode != "Meta Prompt Builder":
         mw.generate_tree_btn.clicked.connect(mw.file_tree_controller.generate_directory_tree_structure) # FileTreeController
         mw.generate_btn.clicked.connect(mw.prompt_controller.generate_prompt) # PromptController (Calculates tokens)
+        mw.send_to_gemini_btn.clicked.connect(mw.send_prompt_to_gemini) # MainWindow (LangGraph 호출)
         mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
         mw.run_xml_parser_btn.clicked.connect(mw.xml_controller.run_xml_parser) # XmlController
         mw.generate_all_btn.clicked.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens via generate_prompt)
@@ -54,6 +55,8 @@ def connect_signals(mw: 'MainWindow'):
         mw.dir_structure_tab.textChanged.connect(mw.main_controller.handle_text_changed) # ReadOnly, but connect anyway
     if hasattr(mw, 'xml_input_tab'):
         mw.xml_input_tab.textChanged.connect(mw.main_controller.handle_text_changed)
+    if hasattr(mw, 'summary_tab'): # Summary 탭 연결 추가
+        mw.summary_tab.textChanged.connect(mw.main_controller.handle_text_changed) # ReadOnly, but connect anyway
     if hasattr(mw, 'meta_prompt_tab'):
         mw.meta_prompt_tab.textChanged.connect(mw.main_controller.handle_text_changed)
     if hasattr(mw, 'user_prompt_tab'):

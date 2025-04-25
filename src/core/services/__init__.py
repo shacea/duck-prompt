@@ -8,6 +8,7 @@ from .state_service import StateService
 from .template_service import TemplateService
 from .token_service import TokenCalculationService # Added
 from .xml_service import XmlService
+# from .gemini_service import build_gemini_graph # 함수 직접 임포트 대신 모듈 사용
 
 __all__ = [
     "ConfigService",
@@ -17,4 +18,5 @@ __all__ = [
     "TemplateService",
     "TokenCalculationService", # Added
     "XmlService",
+    # "build_gemini_graph", # 함수 직접 노출 대신 서비스 모듈 사용
 ]

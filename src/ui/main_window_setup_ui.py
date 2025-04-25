@@ -207,6 +207,13 @@ def create_widgets(mw: 'MainWindow'):
         mw.xml_input_tab.setFont(default_font) # 폰트 적용
         mw.build_tabs.addTab(mw.xml_input_tab, "XML 입력")
 
+        # Summary 탭 추가 (Code Enhancer 모드에서만)
+        mw.summary_tab = CustomTextEdit()
+        mw.summary_tab.setPlaceholderText("Gemini 응답 요약...")
+        mw.summary_tab.setReadOnly(True) # 읽기 전용 설정
+        mw.summary_tab.setFont(default_font) # 폰트 적용
+        mw.build_tabs.addTab(mw.summary_tab, "Summary")
+
     if mw.mode == "Meta Prompt Builder":
         mw.meta_prompt_tab = CustomTextEdit()
         mw.meta_prompt_tab.setPlaceholderText("메타 프롬프트 내용...")
@@ -229,10 +236,11 @@ def create_widgets(mw: 'MainWindow'):
     if mw.mode != "Meta Prompt Builder":
         mw.generate_tree_btn = QPushButton("🌳 트리 생성")
         mw.generate_btn = QPushButton("✨ 프롬프트 생성")
+        mw.send_to_gemini_btn = QPushButton("♊ Gemini로 전송") # Gemini 전송 버튼 추가
         mw.copy_btn = QPushButton(copy_btn_label)
         mw.run_xml_parser_btn = QPushButton("▶️ XML 파서 실행")
         mw.generate_all_btn = QPushButton("⚡️ 한번에 실행")
-        mw.run_buttons = [mw.generate_tree_btn, mw.generate_btn, mw.copy_btn, mw.run_xml_parser_btn, mw.generate_all_btn]
+        mw.run_buttons = [mw.generate_tree_btn, mw.generate_btn, mw.send_to_gemini_btn, mw.copy_btn, mw.run_xml_parser_btn, mw.generate_all_btn]
     else:
         mw.generate_btn = QPushButton("🚀 메타 프롬프트 생성")
         mw.copy_btn = QPushButton(copy_btn_label)
@@ -245,7 +253,7 @@ def create_widgets(mw: 'MainWindow'):
     mw.llm_combo = QComboBox()
     mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
     mw.model_name_input = QLineEdit()
-    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-2.5-pro-latest)")
+    mw.model_name_input.setPlaceholderText("모델명 입력 (예: gemini-1.5-pro-latest)")
 
 
 def create_layout(mw: 'MainWindow'):
@@ -300,6 +308,7 @@ def create_layout(mw: 'MainWindow'):
     run_layout.setAlignment(Qt.AlignLeft)
     for btn in mw.run_buttons:
         run_layout.addWidget(btn)
+    run_layout.addStretch(1) # 버튼들을 왼쪽으로 정렬
 
     line_frame = QFrame()
     line_frame.setFrameShape(QFrame.HLine)

@@ -1,6 +1,6 @@
 [project]
 name = "duckprompt"
-version = "1.2.1" # Version after Gemini SDK change
+version = "1.3.0" # Version after LangGraph integration
 description = "GUI tool to build prompts for LLMs by integrating file contents."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,13 +8,13 @@ license = { text = "MIT" } # Specify your license
 authors = [
   { name = "Your Name", email = "your.email@example.com" }, # Update with actual author info
 ]
-keywords = ["prompt", "llm", "gui", "pyqt5", "developer-tools", "token", "gemini", "claude"]
+keywords = ["prompt", "llm", "gui", "pyqt5", "developer-tools", "token", "gemini", "claude", "langgraph"]
 classifiers = [
     "Development Status :: 4 - Beta", # Or appropriate status
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.12", # Updated to 3.12
     "Operating System :: OS Independent",
     "Topic :: Software Development :: User Interfaces",
     "Topic :: Utilities",
@@ -28,6 +28,9 @@ dependencies = [
     "google-generativeai",
     "anthropic",
     "pyinstaller>=6.13.0",
+    "langgraph", # Added LangGraph
+    "langchain", # Added LangChain core (dependency for LangGraph)
+    "langchain-google-genai", # Added LangChain Gemini integration
 ]
 
 [project.optional-dependencies]

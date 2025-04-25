@@ -9,7 +9,7 @@ DuckPrompt (덕 프롬프트)
 DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 있는 프롬프트를 생성하는 **GUI 도구**입니다.
 
 - **코드 강화 빌더 모드**: 특정 디렉토리(또는 파일)를 선택하여, 시스템 프롬프트 + 사용자 프롬프트 + 선택한 파일의 내용을 하나로 합칩니다.
-- **메타 프롬프트 빌더 모드**: 기존 프롬프트를 상위 템플릿(메타 프롬프트)으로 감싸, 새로운 맥락의 프롬프트를 생성합니다.
+- **메타 프롬프트 빌더 모드**: 이미 만들어진 하나의 프롬프트를 상위 템플릿(메타 프롬프트)으로 감싸, 새로운 맥락의 프롬프트를 생성합니다.
 
 ## 주요 목표
 
@@ -37,12 +37,13 @@ DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 �
 - **`src/config.yml`**: 애플리케이션 설정 파일 (YAML 형식). API 키, 기본 모델명, 필터 규칙 등 포함.
 - **`src/core/`**: 핵심 비즈니스 로직 및 데이터 모델.
   - **`pydantic_models/`**: Pydantic 모델 정의 (`AppState`, `ConfigSettings`).
-  - **`services/`**: 핵심 기능 서비스 구현 (`ConfigService`, `FilesystemService`, `PromptService`, `StateService`, `TemplateService`, `XmlService`, `TokenCalculationService`).
+  - **`services/`**: 핵심 기능 서비스 구현 (`ConfigService`, `FilesystemService`, `PromptService`, `StateService`, `TemplateService`, `XmlService`, `TokenCalculationService`, `GeminiService`).
+  - **`langgraph_state.py`**: LangGraph 상태 정의 (`GeminiGraphState`).
 - **`src/ui/`**: 사용자 인터페이스 관련 코드.
   - **`controllers/`**: UI 이벤트 처리 및 서비스 계층 호출 (`FileTreeController`, `MainController`, `PromptController`, `ResourceController`, `XmlController`, `system_prompt_controller` 함수).
   - **`models/`**: UI 관련 모델 (`FilteredFileSystemModel`, `CheckableProxyModel`).
-  - **`widgets/`**: 커스텀 UI 위젯 (`CustomTabBar`, `CustomTextEdit`, `tab_manager`).
-  - **`main_window.py`**: 메인 UI 창 정의 및 위젯 배치, 컨트롤러/서비스 초기화 및 연결.
+  - **`widgets/`**: 커스텀 UI 위젯 (`CustomTabBar`, `CustomTextEdit`, `tab_manager`, `check_box_delegate`).
+  - **`main_window.py`**: 메인 UI 창 정의 및 위젯 배치, 컨트롤러/서비스 초기화 및 연결. LangGraph 실행 로직 포함.
   - **`main_window_setup_ui.py`**: 메인 윈도우 UI 요소 생성 로직 분리.
   - **`main_window_setup_signals.py`**: 메인 윈도우 시그널 연결 로직 분리.
   - **`settings_dialog.py`**: 환경 설정 다이얼로그 UI 및 로직.
@@ -57,7 +58,7 @@ DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 �
 
 - **코드 가독성 및 유지보수성**: 서비스 계층 분리, Pydantic 모델 사용, 타입 힌트 적용, UI 로직 분리.
 - **로그**: 표준 출력 및 상태 표시줄을 통해 사용자에게 정보/오류 안내.
-- **성능**: 파일 시스템 모델 최적화, API 기반 토큰 계산 시 UI 블로킹 최소화 (현재는 동기적).
+- **성능**: 파일 시스템 모델 최적화, API 기반 토큰 계산 시 UI 블로킹 최소화 (LangGraph Worker 스레드 사용).
 
 ## 테스트 및 검증
 
@@ -65,6 +66,7 @@ DuckPrompt는 여러 파일 내용을 쉽게 통합하여 LLM에게 넘길 수 �
 - XML 파서 동작 시, 임시 폴더에서 테스트 진행.
 - 폴더 구조가 큰 경우도 안정적으로 동작하는지 확인.
 - 다양한 LLM 모델명 및 API 키 설정 시 토큰 계산 동작 확인.
+- LangGraph Worker 스레드 동작 및 UI 응답성 확인.
 
 ## 기타
 
