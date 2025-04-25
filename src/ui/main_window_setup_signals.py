@@ -13,6 +13,7 @@ def connect_signals(mw: 'MainWindow'):
     # 상단 버튼
     mw.mode_toggle_btn.clicked.connect(mw._toggle_mode)
     mw.reset_program_btn.clicked.connect(mw.main_controller.reset_program) # MainController
+    mw.load_previous_work_btn.clicked.connect(mw.resource_controller.load_state_from_default) # 새 버튼 연결 (ResourceController)
     mw.select_project_btn.clicked.connect(mw.file_tree_controller.select_project_folder) # FileTreeController
 
     # 파일 트리
@@ -108,4 +109,3 @@ def connect_signals(mw: 'MainWindow'):
     shortcut_copy.setShortcut(QKeySequence("Ctrl+C"))
     shortcut_copy.triggered.connect(mw.on_copy_shortcut) # MainWindow
     mw.addAction(shortcut_copy)
-

@@ -27,11 +27,13 @@ def create_menu_bar(mw: 'MainWindow'):
     mw.menubar = QMenuBar(mw)
     mw.setMenuBar(mw.menubar)
 
-    file_menu = mw.menubar.addMenu("파일")
-    mw.settings_action = QAction("환경 설정...", mw)
-    file_menu.addAction(mw.settings_action)
-    file_menu.addSeparator()
+    # "파일" 메뉴 제거, "환경 설정" 메뉴를 첫 번째로 추가
+    settings_menu = mw.menubar.addMenu("환경 설정") # "파일" 대신 "환경 설정" 메뉴 추가
+    mw.settings_action = QAction("환경 설정 열기...", mw) # 액션 이름 변경 가능
+    settings_menu.addAction(mw.settings_action)
+    settings_menu.addSeparator() # 필요 시 구분선 추가
 
+    # 나머지 메뉴들
     mode_menu = mw.menubar.addMenu("모드")
     switch_to_code_action = QAction("코드 강화 빌더로 전환", mw)
     switch_to_meta_action = QAction("메타 프롬프트 빌더로 전환", mw)
@@ -42,7 +44,7 @@ def create_menu_bar(mw: 'MainWindow'):
 
     state_menu = mw.menubar.addMenu("상태")
     mw.save_state_action = QAction("상태 저장(기본)", mw)
-    mw.load_state_action = QAction("상태 불러오기(기본)", mw)
+    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "이전 작업 불러오기" 버튼과 기능 중복 가능성 있음
     mw.export_state_action = QAction("상태 내보내기", mw)
     mw.import_state_action = QAction("상태 가져오기", mw)
     state_menu.addAction(mw.save_state_action)
@@ -54,6 +56,7 @@ def create_menu_bar(mw: 'MainWindow'):
     open_readme_action = QAction("README 열기", mw)
     open_readme_action.triggered.connect(mw._open_readme)
     help_menu.addAction(open_readme_action)
+
 
 def create_widgets(mw: 'MainWindow'):
     """Creates the main widgets used in the window."""
@@ -92,8 +95,9 @@ def create_widgets(mw: 'MainWindow'):
     # --- 상단 버튼 및 레이블 ---
     mw.mode_toggle_btn = QPushButton("🔄 모드 전환")
     mw.reset_program_btn = QPushButton("🗑️ 전체 프로그램 리셋")
+    mw.load_previous_work_btn = QPushButton("⏪ 이전 작업 불러오기") # 새 버튼 추가
     mw.select_project_btn = QPushButton("📁 프로젝트 폴더 선택")
-    for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.select_project_btn]:
+    for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.load_previous_work_btn, mw.select_project_btn]: # 새 버튼 포함
         btn.setFixedHeight(30)
     mw.project_folder_label = QLabel("현재 프로젝트 폴더: (선택 안 됨)")
     font_lbl = mw.project_folder_label.font()
@@ -245,6 +249,7 @@ def create_layout(mw: 'MainWindow'):
     top_button_layout.setSpacing(10); top_button_layout.setContentsMargins(0, 0, 0, 0)
     top_button_layout.addWidget(mw.mode_toggle_btn)
     top_button_layout.addWidget(mw.reset_program_btn)
+    top_button_layout.addWidget(mw.load_previous_work_btn) # 새 버튼 추가
     top_button_layout.addWidget(mw.select_project_btn)
     top_button_layout.addStretch(1)
     top_layout_wrapper.addWidget(top_button_container)
