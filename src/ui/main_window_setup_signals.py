@@ -1,3 +1,4 @@
+
 from PyQt5.QtWidgets import QAction
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtCore import Qt
@@ -44,8 +45,9 @@ def connect_signals(mw: 'MainWindow'):
     mw.save_as_template_btn.clicked.connect(mw.resource_controller.save_current_as_item) # ResourceController
     mw.delete_template_btn.clicked.connect(mw.resource_controller.delete_selected_item) # ResourceController
     mw.update_template_btn.clicked.connect(mw.resource_controller.update_current_item) # ResourceController
-    mw.backup_button.clicked.connect(mw.resource_controller.backup_all_states_action) # ResourceController
-    mw.restore_button.clicked.connect(mw.resource_controller.restore_states_from_backup_action) # ResourceController
+    # 백업/복원 버튼 시그널 연결 제거
+    # mw.backup_button.clicked.connect(mw.resource_controller.backup_all_states_action)
+    # mw.restore_button.clicked.connect(mw.resource_controller.restore_states_from_backup_action)
     mw.template_tree.itemDoubleClicked.connect(mw.resource_controller.load_selected_item) # ResourceController
 
     # 첨부 파일 관리 버튼 (추가)

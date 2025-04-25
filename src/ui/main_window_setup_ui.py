@@ -132,8 +132,9 @@ def create_widgets(mw: 'MainWindow'):
     mw.template_type_combo = QComboBox(); mw.template_type_combo.addItems(["시스템", "사용자"])
     mw.delete_template_btn = QPushButton("❌ 선택 삭제")
     mw.update_template_btn = QPushButton("🔄 현재 내용 업데이트")
-    mw.backup_button = QPushButton("📦 모든 상태 백업")
-    mw.restore_button = QPushButton("🔙 백업에서 상태 복원")
+    # 백업/복원 버튼 생성 제거
+    # mw.backup_button = QPushButton("📦 모든 상태 백업")
+    # mw.restore_button = QPushButton("🔙 백업에서 상태 복원")
     resource_manager_layout.addWidget(QLabel("리소스 타입 선택:"))
     resource_manager_layout.addWidget(mw.resource_mode_combo)
     resource_manager_layout.addWidget(QLabel("아래에서 로드/저장할 리소스 선택:"))
@@ -150,13 +151,12 @@ def create_widgets(mw: 'MainWindow'):
     save_layout.addWidget(mw.save_as_template_btn)
     save_layout.setContentsMargins(0, 0, 0, 0) # 내부 여백 제거
 
-    # 그리드에 위젯 추가
+    # 그리드에 위젯 추가 (2x2 그리드)
     tm_button_layout.addWidget(mw.load_selected_template_btn, 0, 0) # 불러오기 (0, 0)
     tm_button_layout.addLayout(save_layout, 0, 1)                  # 저장 타입 + 저장 (0, 1)
     tm_button_layout.addWidget(mw.delete_template_btn, 1, 0)       # 삭제 (1, 0)
     tm_button_layout.addWidget(mw.update_template_btn, 1, 1)       # 업데이트 (1, 1)
-    tm_button_layout.addWidget(mw.backup_button, 2, 0)             # 백업 (2, 0)
-    tm_button_layout.addWidget(mw.restore_button, 2, 1)            # 복원 (2, 1)
+    # 백업/복원 버튼 관련 레이아웃 코드 제거
 
     resource_manager_layout.addLayout(tm_button_layout) # 수정된 그리드 레이아웃 추가
     mw.resource_manager_group.setLayout(resource_manager_layout)

@@ -116,12 +116,12 @@
         "E:/Projects/duck-prompt/README.md",
         "E:/Projects/duck-prompt/requirements.txt"
     ],
-    "user_prompt": "gui 에서 \"리소스 관리\" 부분 보면 버튼들의 레이아웃이 불필요하게 가로로 길게 되어 있어서 공간차지를 비효율적으로 하고 있어. 버튼 크기 및 위치를 조절해서 레이아웃이 좀 더 낫도록 수정해줘. \n첨부한 이미지처럼 버튼들 배치하면 돼.",
+    "user_prompt": "gui 에서 \"리소스 관리\" 부분 보면 버튼들의 레이아웃이 불필요하게 가로로 길게 되어 있어서 공간차지를 비효율적으로 하고 있어. 버튼 크기 및 위치를 조절해서 레이아웃이 좀 더 낫도록 수정해줘. \n\"리소스 관리\" 부분을 2열로 만든 다음에 첨부한 이미지 처럼 버튼 배치해줘. 그리고 \"모든 상태 백업\" 과 \"백업에서 상태 복원\" 버튼 및 기능은 제거해줘.",
     "attached_items": [
         {
             "type": "image",
             "path": null,
-            "name": "clipboard_image_20250425_142556.png"
+            "name": "clipboard_image_20250425_143228.png"
         }
     ],
     "mode": "Code Enhancer Prompt Builder",

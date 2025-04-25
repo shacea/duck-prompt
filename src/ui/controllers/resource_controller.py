@@ -243,28 +243,9 @@ class ResourceController:
             else:
                  QMessageBox.warning(self.mw, "오류", "상태 가져오기 중 오류가 발생했거나 파일 내용이 유효하지 않습니다.")
 
-    def backup_all_states_action(self):
-        """Backs up all states to a user-selected zip file."""
-        path, _ = QFileDialog.getSaveFileName(self.mw, "모든 상태 백업", os.path.expanduser("~"), "Zip Files (*.zip)")
-        if path:
-            if self.state_service.backup_all_states(path):
-                self.mw.status_bar.showMessage("모든 상태 백업 완료!")
-            else:
-                QMessageBox.warning(self.mw, "오류", "상태 백업 중 오류가 발생했습니다.")
-
-    def restore_states_from_backup_action(self):
-        """Restores states from a user-selected zip file."""
-        path, _ = QFileDialog.getOpenFileName(self.mw, "백업에서 상태 복원", os.path.expanduser("~"), "Zip Files (*.zip)")
-        if path:
-            reply = QMessageBox.question(self.mw, "복원 확인",
-                                         "백업 파일에서 상태를 복원하시겠습니까?\n현재 저장된 모든 상태가 백업 내용으로 대체됩니다.",
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                if self.state_service.restore_states_from_backup(path):
-                    self.mw.status_bar.showMessage("상태 복원 완료!")
-                    self.load_templates_list() # 상태 목록 새로고침
-                else:
-                    QMessageBox.warning(self.mw, "오류", "상태 복원 중 오류가 발생했습니다.")
+    # 백업/복원 관련 메서드 제거
+    # def backup_all_states_action(self): ...
+    # def restore_states_from_backup_action(self): ...
 
     def update_buttons_label(self):
         """Updates the labels of buttons in the resource manager section based on the mode."""
@@ -276,10 +257,11 @@ class ResourceController:
         self.mw.delete_template_btn.setText(f"❌ 선택한 {current_mode} 삭제")
         self.mw.update_template_btn.setText(f"🔄 현재 {current_mode} 업데이트")
 
-        self.mw.backup_button.setEnabled(not is_prompt_mode)
-        self.mw.restore_button.setEnabled(not is_prompt_mode)
-        self.mw.backup_button.setText("📦 모든 상태 백업" + (" (비활성화)" if is_prompt_mode else ""))
-        self.mw.restore_button.setText("🔙 백업에서 상태 복원" + (" (비활성화)" if is_prompt_mode else ""))
+        # 백업/복원 버튼 관련 코드 제거
+        # self.mw.backup_button.setEnabled(not is_prompt_mode)
+        # self.mw.restore_button.setEnabled(not is_prompt_mode)
+        # self.mw.backup_button.setText("📦 모든 상태 백업" + (" (비활성화)" if is_prompt_mode else ""))
+        # self.mw.restore_button.setText("🔙 백업에서 상태 복원" + (" (비활성화)" if is_prompt_mode else ""))
 
         self.mw.template_type_combo.setVisible(is_prompt_mode)
         self.mw.template_type_label.setVisible(is_prompt_mode)
