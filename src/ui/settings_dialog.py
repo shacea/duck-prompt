@@ -1,5 +1,6 @@
 
 import os
+import datetime # datetime 추가
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
@@ -9,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List, Dict, Any # Dict, Any 추가
 from pydantic import ValidationError
+import logging # 로깅 추가
 
 # 서비스 및 컨트롤러 함수 import
 from core.services.config_service import ConfigService
@@ -20,6 +22,8 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
     from core.services.db_service import DbService # DbService 타입 힌트
 
+logger = logging.getLogger(__name__) # 로거 설정
+
 class SettingsDialog(QDialog):
     """
     환경 설정을 표시하고 수정하는 다이얼로그 창.
@@ -27,6 +31,7 @@ class SettingsDialog(QDialog):
     .gitignore 파일 편집/저장 기능도 유지합니다.
     API 키 필드는 일반 텍스트로 표시됩니다. (저장 로직은 별도 관리)
     사용 가능 LLM 모델 목록 및 API 키를 관리하는 기능이 추가되었습니다.
+    API 키 목록에 잔여 사용량 정보를 표시합니다.
     """
     def __init__(self, main_window: 'MainWindow', parent=None):
         super().__init__(parent)
@@ -70,7 +75,7 @@ class SettingsDialog(QDialog):
         self.api_keys_list.setSelectionMode(QAbstractItemView.SingleSelection)
         self.api_keys_list.setMinimumHeight(100) # 최소 높이 증가
         self.api_keys_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
-        api_key_management_layout.addWidget(QLabel("등록된 API 키:"))
+        api_key_management_layout.addWidget(QLabel("등록된 API 키 (잔여량은 기본 Gemini 모델 기준):")) # 라벨 수정
         api_key_management_layout.addWidget(self.api_keys_list)
 
         # API 키 추가/제거 버튼
@@ -296,7 +301,7 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "로드 오류", f"설정을 로드하는 중 오류 발생:\n{e}")
 
     def load_api_keys_list(self):
-        """DB에서 API 키 목록을 로드하여 리스트 위젯에 표시합니다."""
+        """DB에서 API 키 목록을 로드하여 리스트 위젯에 표시하고 잔여 사용량을 계산합니다."""
         self.api_keys_list.clear()
         try:
             api_keys = self.db_service.list_api_keys()
@@ -306,29 +311,88 @@ class SettingsDialog(QDialog):
                 return
 
             self.api_keys_list.setEnabled(True)
+
+            # 기본 Gemini 모델 및 Rate Limit 정보 가져오기 (잔여량 계산 기준)
+            default_gemini_model = self.config_service.get_default_model_name('Gemini')
+            rate_limit_info = self.db_service.get_model_rate_limit(default_gemini_model)
+            rpm_limit = rate_limit_info.get('rpm_limit') if rate_limit_info else None
+            daily_limit = rate_limit_info.get('daily_limit') if rate_limit_info else None
+            logger.info(f"Default Gemini model for rate limit check: {default_gemini_model}, RPM Limit: {rpm_limit}, Daily Limit: {daily_limit}")
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+
             for key_info in api_keys:
                 key_id = key_info['id']
                 provider = key_info.get('provider', 'N/A')
                 description = key_info.get('description', '')
-                # API 키 마스킹 제거: 실제 키 일부 표시 (예: 시작 4자리 + 끝 4자리)
                 api_key_display = key_info.get('api_key', '')
                 if len(api_key_display) > 8:
                      api_key_display = f"{api_key_display[:4]}...{api_key_display[-4:]}"
                 else:
-                     api_key_display = f"{api_key_display[:4]}..." # 짧은 키 처리
+                     api_key_display = f"{api_key_display[:4]}..."
 
                 is_active = key_info.get('is_active', False)
                 active_status = "🟢" if is_active else "🔴"
 
+                # --- 잔여 사용량 계산 (Gemini 키에 대해서만) ---
+                remaining_rpm_str = "N/A"
+                remaining_daily_str = "N/A"
+                tooltip_rpm = "N/A"
+                tooltip_daily = "N/A"
+
+                if provider == 'google' and rpm_limit is not None and daily_limit is not None:
+                    usage_info = self.db_service.get_api_key_usage(key_id)
+                    if usage_info:
+                        calls_this_minute = usage_info.get('calls_this_minute', 0)
+                        minute_start = usage_info.get('minute_start_timestamp')
+                        calls_this_day = usage_info.get('calls_this_day', 0)
+                        day_start = usage_info.get('day_start_timestamp')
+
+                        # 분당 잔여량 계산
+                        current_minute_calls = calls_this_minute
+                        if minute_start and now >= minute_start + datetime.timedelta(minutes=1):
+                            current_minute_calls = 0 # 시간 창 리셋
+                        remaining_rpm = max(0, rpm_limit - current_minute_calls)
+                        remaining_rpm_str = f"{remaining_rpm}/{rpm_limit}"
+                        tooltip_rpm = f"{remaining_rpm} / {rpm_limit} (Used: {current_minute_calls})"
+
+                        # 일일 잔여량 계산
+                        current_day_calls = calls_this_day
+                        if day_start and now >= day_start + datetime.timedelta(days=1):
+                            current_day_calls = 0 # 시간 창 리셋
+                        remaining_daily = max(0, daily_limit - current_day_calls)
+                        remaining_daily_str = f"{remaining_daily}/{daily_limit}"
+                        tooltip_daily = f"{remaining_daily} / {daily_limit} (Used: {current_day_calls})"
+                    else:
+                        # 사용량 정보 없을 시
+                        remaining_rpm_str = f"{rpm_limit}/{rpm_limit}"
+                        remaining_daily_str = f"{daily_limit}/{daily_limit}"
+                        tooltip_rpm = f"{rpm_limit} / {rpm_limit} (Used: 0)"
+                        tooltip_daily = f"{daily_limit} / {daily_limit} (Used: 0)"
+                elif provider == 'google':
+                    # Rate limit 정보가 없는 경우
+                    logger.warning(f"Rate limit info not found for default model '{default_gemini_model}'. Cannot calculate remaining usage for key ID {key_id}.")
+
+                # --- 표시 텍스트 및 툴팁 업데이트 ---
                 display_text = f"{active_status} [{provider.upper()}] {description or api_key_display}"
+                if provider == 'google':
+                    display_text += f" (RPM: {remaining_rpm_str}, Daily: {remaining_daily_str})"
+
                 item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, key_id) # 사용자 데이터로 ID 저장
-                # 툴팁으로 전체 키 (마스킹된) 또는 설명을 보여줄 수 있음
-                item.setToolTip(f"ID: {key_id}\nProvider: {provider}\nKey: {api_key_display}\nActive: {is_active}")
+                item.setData(Qt.UserRole, key_id)
+
+                tooltip_text = (
+                    f"ID: {key_id}\nProvider: {provider}\nKey: {api_key_display}\nActive: {is_active}"
+                )
+                if provider == 'google':
+                    tooltip_text += f"\nRemaining RPM (vs {default_gemini_model}): {tooltip_rpm}\nRemaining Daily (vs {default_gemini_model}): {tooltip_daily}"
+                item.setToolTip(tooltip_text)
+
                 self.api_keys_list.addItem(item)
 
         except Exception as e:
             QMessageBox.critical(self, "API 키 로드 오류", f"API 키 목록을 불러오는 중 오류 발생:\n{e}")
+            logger.exception("Error loading API keys list") # 스택 트레이스 로깅
             self.api_keys_list.addItem("API 키 로드 오류")
             self.api_keys_list.setEnabled(False)
 
@@ -346,7 +410,7 @@ class SettingsDialog(QDialog):
             key_id = self.db_service.add_api_key(provider, api_key.strip(), description.strip())
             if key_id is not None:
                 QMessageBox.information(self, "성공", "API 키가 성공적으로 추가되었습니다.")
-                self.load_api_keys_list()
+                self.load_api_keys_list() # 목록 새로고침
             else:
                 QMessageBox.warning(self, "실패", "API 키 추가 중 오류가 발생했습니다.")
         except Exception as e:
@@ -371,7 +435,7 @@ class SettingsDialog(QDialog):
             success = self.db_service.delete_api_key(key_id)
             if success:
                 QMessageBox.information(self, "성공", "API 키가 성공적으로 제거되었습니다.")
-                self.load_api_keys_list()
+                self.load_api_keys_list() # 목록 새로고침
             else:
                 QMessageBox.warning(self, "실패", "API 키 제거 중 오류가 발생했습니다.")
         except Exception as e:

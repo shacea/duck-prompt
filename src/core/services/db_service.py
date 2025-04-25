@@ -1,7 +1,7 @@
 
 import psycopg2
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple # Tuple 추가
 import json # JSON 직렬화/역직렬화를 위해 추가
 import datetime # 시간 관련 작업 위해 추가
 from decimal import Decimal # NUMERIC 타입 처리를 위해 추가
@@ -470,6 +470,70 @@ class DbService:
             logger.error(f"Failed to get usage for API key ID {api_key_id}: {e}")
             return None
 
+    def is_key_rate_limited(self, api_key_id: int, model_name: str) -> Tuple[bool, str]:
+        """
+        Checks if the API key is currently rate-limited for the given model.
+
+        Returns:
+            Tuple[bool, str]: (is_limited, reason_message)
+                              is_limited is True if the key is rate-limited, False otherwise.
+                              reason_message explains why it's limited if applicable.
+        """
+        if api_key_id is None:
+            return True, "API Key ID is missing."
+
+        try:
+            # 1. Get model's default rate limits
+            rate_limit_info = self.get_model_rate_limit(model_name)
+            if not rate_limit_info:
+                logger.warning(f"No rate limit info found for model '{model_name}'. Assuming not limited.")
+                return False, "Rate limit info not found."
+            rpm_limit = rate_limit_info.get('rpm_limit')
+            daily_limit = rate_limit_info.get('daily_limit')
+
+            # 2. Get current usage for the API key
+            usage_info = self.get_api_key_usage(api_key_id)
+            if not usage_info:
+                logger.info(f"No usage info found for API key ID {api_key_id}. Assuming not limited.")
+                return False, "No usage info found."
+
+            calls_this_minute = usage_info.get('calls_this_minute', 0)
+            minute_start = usage_info.get('minute_start_timestamp')
+            calls_this_day = usage_info.get('calls_this_day', 0)
+            day_start = usage_info.get('day_start_timestamp')
+            now = datetime.datetime.now(datetime.timezone.utc)
+
+            # 3. Check RPM limit
+            if rpm_limit is not None and rpm_limit > 0:
+                # Check if the minute window has reset
+                if minute_start and now >= minute_start + datetime.timedelta(minutes=1):
+                    calls_this_minute = 0 # Reset counter for check
+                if calls_this_minute >= rpm_limit:
+                    reason = f"RPM limit ({rpm_limit}) reached (calls this minute: {calls_this_minute})."
+                    logger.warning(f"Rate limit check failed for key ID {api_key_id}: {reason}")
+                    return True, reason
+
+            # 4. Check Daily limit
+            if daily_limit is not None and daily_limit > 0:
+                # Check if the day window has reset
+                if day_start and now >= day_start + datetime.timedelta(days=1):
+                    calls_this_day = 0 # Reset counter for check
+                if calls_this_day >= daily_limit:
+                    reason = f"Daily limit ({daily_limit}) reached (calls today: {calls_this_day})."
+                    logger.warning(f"Rate limit check failed for key ID {api_key_id}: {reason}")
+                    return True, reason
+
+            logger.debug(f"Rate limit check passed for key ID {api_key_id} and model '{model_name}'.")
+            return False, "Rate limit OK."
+
+        except Exception as e:
+            logger.error(f"Error checking rate limit for key ID {api_key_id}: {e}", exc_info=True)
+            # Assume limited in case of error to be safe
+            return True, f"Error during rate limit check: {e}"
+
+
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
+
+            

@@ -18,62 +18,10 @@ from google.api_core import exceptions as google_api_exceptions
 
 logger = logging.getLogger(__name__)
 
-# --- Rate Limit Check Helper ---
-
-def check_rate_limit(db_service: DbService, api_key_id: int, model_name: str) -> Tuple[bool, str]:
-    """
-    Checks if the API key is within the rate limits for the given model.
-
-    Returns:
-        Tuple[bool, str]: (is_allowed, reason_message)
-                          is_allowed is True if the call can proceed, False otherwise.
-                          reason_message explains why it's not allowed if applicable.
-    """
-    if api_key_id is None:
-        return False, "API Key ID is missing."
-
-    # 1. Get model's default rate limits
-    rate_limit_info = db_service.get_model_rate_limit(model_name)
-    if not rate_limit_info:
-        logger.warning(f"No rate limit info found for model '{model_name}'. Allowing call by default.")
-        return True, "Rate limit info not found, proceeding."
-    rpm_limit = rate_limit_info.get('rpm_limit')
-    daily_limit = rate_limit_info.get('daily_limit')
-
-    # 2. Get current usage for the API key
-    usage_info = db_service.get_api_key_usage(api_key_id)
-    if not usage_info:
-        logger.info(f"No usage info found for API key ID {api_key_id}. Assuming OK.")
-        return True, "No usage info, proceeding."
-
-    calls_this_minute = usage_info.get('calls_this_minute', 0)
-    minute_start = usage_info.get('minute_start_timestamp')
-    calls_this_day = usage_info.get('calls_this_day', 0)
-    day_start = usage_info.get('day_start_timestamp')
-    now = datetime.datetime.now(datetime.timezone.utc)
-
-    # 3. Check RPM limit
-    if rpm_limit is not None and rpm_limit > 0:
-        # Check if the minute window has reset
-        if minute_start and now >= minute_start + datetime.timedelta(minutes=1):
-            calls_this_minute = 0 # Reset counter for check
-        if calls_this_minute >= rpm_limit:
-            reason = f"RPM limit ({rpm_limit}) reached for key ID {api_key_id} (calls this minute: {calls_this_minute})."
-            logger.warning(reason)
-            return False, reason
-
-    # 4. Check Daily limit
-    if daily_limit is not None and daily_limit > 0:
-        # Check if the day window has reset
-        if day_start and now >= day_start + datetime.timedelta(days=1):
-            calls_this_day = 0 # Reset counter for check
-        if calls_this_day >= daily_limit:
-            reason = f"Daily limit ({daily_limit}) reached for key ID {api_key_id} (calls today: {calls_this_day})."
-            logger.warning(reason)
-            return False, reason
-
-    logger.info(f"Rate limit check passed for key ID {api_key_id} and model '{model_name}'.")
-    return True, "Rate limit OK."
+# --- Rate Limit Check Helper (이제 DbService.is_key_rate_limited 사용) ---
+# def check_rate_limit(db_service: DbService, api_key_id: int, model_name: str) -> Tuple[bool, str]:
+#     """ (사용 안 함) Checks if the API key is within the rate limits for the given model. """
+#     # ... (이전 로직 제거) ...
 
 
 # --- LangGraph 노드 함수 ---
@@ -82,6 +30,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     """
     Gemini API를 호출하는 노드 (멀티모달 지원).
     Rate Limit을 체크하고, 초과 시 다른 활성 키로 전환을 시도합니다.
+    성공 시 사용된 키를 ConfigService에 업데이트합니다.
     """
     print("--- Calling Gemini API (Multimodal) ---")
     logger.info("Calling Gemini API node (Multimodal)")
@@ -122,25 +71,38 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
         default_return_state["error_message"] = error_msg
         return default_return_state
 
-    current_key_index = 0 # 시작 인덱스
+    # 시작 인덱스 결정: 현재 ConfigService에 설정된 키가 있다면 그 키부터 시도
+    current_key_id_in_config = config_service.get_current_gemini_key_id()
+    start_index = 0
+    if current_key_id_in_config:
+        for idx, key_info in enumerate(active_keys):
+            if key_info['id'] == current_key_id_in_config:
+                start_index = idx
+                logger.info(f"Starting key check from currently configured Key ID: {current_key_id_in_config} (Index: {start_index})")
+                break
+
+    current_key_index = start_index
     selected_key_info: Optional[Dict[str, Any]] = None
     api_key_id: Optional[int] = None
     log_id: Optional[int] = None
     final_error_message: Optional[str] = None
+    api_call_successful = False # API 호출 성공 여부 플래그
 
     for i in range(len(active_keys)):
-        selected_key_info = active_keys[current_key_index]
+        # 순환 인덱스 계산
+        check_index = (start_index + i) % len(active_keys)
+        selected_key_info = active_keys[check_index]
         api_key = selected_key_info['api_key']
         api_key_id = selected_key_info['id']
-        logger.info(f"Attempting to use Gemini API Key ID: {api_key_id} (Index: {current_key_index})")
+        logger.info(f"Attempting to use Gemini API Key ID: {api_key_id} (Index: {check_index})")
 
-        # Rate Limit 체크
-        is_allowed, reason = check_rate_limit(db_service, api_key_id, model_name)
-        if not is_allowed:
-            logger.warning(f"Rate limit exceeded for key ID {api_key_id}: {reason}")
+        # Rate Limit 체크 (DbService 사용)
+        is_limited, reason = db_service.is_key_rate_limited(api_key_id, model_name)
+        if is_limited:
+            logger.warning(f"Rate limit check failed for key ID {api_key_id}: {reason}")
             final_error_message = f"Rate limit exceeded for key ID {api_key_id}: {reason}"
-            current_key_index = (current_key_index + 1) % len(active_keys) # 다음 키로 이동
-            continue # 다음 키 시도
+            # 다음 키 시도 (루프 계속)
+            continue
 
         # Rate Limit 통과, 이 키로 API 호출 시도
         logger.info(f"Rate limit check passed for key ID {api_key_id}. Proceeding with API call.")
@@ -154,14 +116,13 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
             default_return_state["log_id"] = log_id # 생성된 log_id를 상태에 저장
         except Exception as db_err:
             logger.error(f"Failed to log Gemini request to DB for key ID {api_key_id}: {db_err}", exc_info=True)
-            # 로깅 실패 시에도 API 호출은 계속 시도 (log_id는 None)
-            log_id = None
+            log_id = None # 로깅 실패 시에도 API 호출은 계속 시도
         # --- DB 로깅 준비 완료 ---
 
         effective_model_name = ""
         gemini_response_text = ""
         api_error_message: Optional[str] = None
-        api_call_successful = False
+        # api_call_successful 플래그는 루프 시작 시 False로 초기화됨
 
         try:
             genai.configure(api_key=api_key)
@@ -262,9 +223,8 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
                 default_return_state["error_message"] = None # 성공 시 오류 없음
                 # --- 성공 시 현재 사용한 키를 ConfigService에 업데이트 ---
                 if config_service and api_key:
-                    # config_service.set_current_gemini_api_key(api_key) # 이 함수는 없으므로, 설정을 다시 로드하도록 유도
-                    config_service._settings.gemini_api_key = api_key # 직접 업데이트 (주의)
-                    logger.info(f"Successfully used API key ID {api_key_id}. Updated in-memory config.")
+                    config_service.update_current_gemini_key(api_key) # Use the dedicated method
+                    logger.info(f"Successfully used API key ID {api_key_id}. Updated in-memory config via ConfigService.")
                 # ----------------------------------------------------
                 break # 성공했으므로 루프 종료
 
@@ -273,8 +233,8 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
             api_error_message = f"Gemini API Rate Limit 초과 (Key ID: {api_key_id}): {str(e)}."
             logger.error(api_error_message, exc_info=False) # 스택 트레이스 제외
             final_error_message = api_error_message # 최종 오류 메시지 업데이트
-            current_key_index = (current_key_index + 1) % len(active_keys) # 다음 키로 이동
-            continue # 다음 키 시도
+            # 다음 키 시도 (루프 계속)
+            continue
 
         except (google_api_exceptions.PermissionDenied, google_api_exceptions.InvalidArgument, AttributeError, ValueError) as e:
             # 복구 불가능한 오류 (키 문제, 모델 문제, SDK 문제 등) -> 루프 중단
@@ -282,6 +242,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
             api_error_message = f"Gemini API 오류 ({error_type} - Key ID: {api_key_id}): {str(e)}. 중단합니다."
             logger.error(api_error_message, exc_info=True)
             default_return_state["error_message"] = api_error_message
+            api_call_successful = False # 호출 실패
             break # 루프 중단
 
         except Exception as e:
@@ -289,6 +250,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
             api_error_message = f"Gemini API 호출 중 예상치 못한 오류 (Key ID: {api_key_id}): {str(e)}. 중단합니다."
             logger.exception(api_error_message)
             default_return_state["error_message"] = api_error_message
+            api_call_successful = False # 호출 실패
             break # 루프 중단
 
         finally:
@@ -438,3 +400,5 @@ def build_gemini_graph(config_service: ConfigService) -> StateGraph:
     app = workflow.compile()
     logger.info("Gemini LangGraph compiled successfully.")
     return app
+
+            

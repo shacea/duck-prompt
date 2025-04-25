@@ -1,6 +1,7 @@
 
 import os
 import logging
+import random # 랜덤 선택을 위해 추가
 from pydantic import ValidationError
 from typing import Optional, List, Set, Dict, Any # Set, Dict, Any 추가
 
@@ -23,7 +24,10 @@ class ConfigService:
         self._settings: ConfigSettings = self._load_config()
 
     def _load_config(self) -> ConfigSettings:
-        """Loads configuration from the database."""
+        """
+        Loads configuration from the database.
+        Selects a random active Gemini API key that is not rate-limited initially.
+        """
         logger.info(f"Loading configuration from database for profile '{self.profile_name}'...")
         try:
             # 1. Fetch application config from DB
@@ -33,19 +37,46 @@ class ConfigService:
                 logger.critical(f"Failed to load configuration from database for profile '{self.profile_name}'. Application cannot proceed.")
                 raise ValueError(f"Configuration profile '{self.profile_name}' not found in database.")
 
-            # 2. Fetch *active* API keys from DB (get the first active one for now)
-            gemini_keys = self.db_service.get_active_api_keys('google')
-            anthropic_keys = self.db_service.get_active_api_keys('anthropic')
+            # 2. Fetch *active* API keys from DB
+            active_gemini_keys = self.db_service.get_active_api_keys('google')
+            active_anthropic_keys = self.db_service.get_active_api_keys('anthropic')
 
-            # Use the first active key if available
-            gemini_key = gemini_keys[0]['api_key'] if gemini_keys else None
-            anthropic_key = anthropic_keys[0]['api_key'] if anthropic_keys else None
+            # --- Initial Gemini Key Selection (Random, Rate Limit Aware) ---
+            selected_gemini_key: Optional[str] = None
+            if active_gemini_keys:
+                logger.info(f"Found {len(active_gemini_keys)} active Gemini keys. Checking rate limits...")
+                # Get the default Gemini model to check limits against
+                default_gemini_model = config_data.get('gemini_default_model', "gemini-1.5-pro-latest") # Use default from config or fallback
 
-            if not gemini_key: logger.warning("No active Gemini API key found in DB.")
+                available_keys_info = []
+                for key_info in active_gemini_keys:
+                    key_id = key_info['id']
+                    is_limited, reason = self.db_service.is_key_rate_limited(key_id, default_gemini_model)
+                    if not is_limited:
+                        available_keys_info.append(key_info)
+                        logger.info(f"Gemini Key ID {key_id} is available (not rate-limited).")
+                    else:
+                        logger.warning(f"Gemini Key ID {key_id} is currently rate-limited: {reason}")
+
+                if available_keys_info:
+                    # Select a random key from the available ones
+                    chosen_key_info = random.choice(available_keys_info)
+                    selected_gemini_key = chosen_key_info['api_key']
+                    logger.info(f"Randomly selected available Gemini Key ID: {chosen_key_info['id']} for initial use.")
+                else:
+                    logger.warning("No active Gemini keys available without exceeding rate limits. Will attempt to use the first active key found, but API calls might fail.")
+                    # Fallback: use the first active key found, even if limited
+                    selected_gemini_key = active_gemini_keys[0]['api_key']
+            else:
+                logger.warning("No active Gemini API key found in DB.")
+            # --- End Initial Gemini Key Selection ---
+
+            # Use the first active Anthropic key if available
+            anthropic_key = active_anthropic_keys[0]['api_key'] if active_anthropic_keys else None
             if not anthropic_key: logger.warning("No active Anthropic API key found in DB.")
 
             # 3. Add the selected API keys to the config data dictionary
-            config_data['gemini_api_key'] = gemini_key
+            config_data['gemini_api_key'] = selected_gemini_key
             config_data['anthropic_api_key'] = anthropic_key
 
             # 4. Validate and create ConfigSettings model
@@ -135,8 +166,21 @@ class ConfigService:
             if self._settings.gemini_api_key != new_key:
                  logger.info(f"Updating in-memory Gemini API key.")
                  self._settings.gemini_api_key = new_key
-            # Optionally, re-initialize clients in other services if needed
-            # e.g., self.token_service._init_clients()
+                 # Optionally, re-initialize clients in other services if needed
+                 # e.g., self.token_service._init_clients()
+            else:
+                 logger.debug("Attempted to update Gemini key, but it's the same as the current one.")
         else:
             logger.warning("Cannot update Gemini key: Settings not loaded.")
 
+    def get_current_gemini_key_id(self) -> Optional[int]:
+        """Gets the database ID of the currently configured Gemini API key."""
+        if self._settings and self._settings.gemini_api_key:
+            try:
+                return self.db_service.get_api_key_id(self._settings.gemini_api_key)
+            except Exception as e:
+                logger.error(f"Error getting ID for current Gemini key: {e}")
+                return None
+        return None
+
+            
