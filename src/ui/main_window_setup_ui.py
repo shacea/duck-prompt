@@ -44,7 +44,7 @@ def create_menu_bar(mw: 'MainWindow'):
 
     state_menu = mw.menubar.addMenu("상태")
     mw.save_state_action = QAction("상태 저장(기본)", mw) # "작업 저장" 버튼과 기능 동일
-    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "이전 작업 불러오기" 버튼과 기능 동일
+    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "마지막 작업 불러오기" 버튼과 기능 동일
     mw.export_state_action = QAction("상태 내보내기", mw)
     mw.import_state_action = QAction("상태 가져오기", mw)
     state_menu.addAction(mw.save_state_action)
@@ -95,7 +95,7 @@ def create_widgets(mw: 'MainWindow'):
     # --- 상단 버튼 및 레이블 ---
     mw.mode_toggle_btn = QPushButton("🔄 모드 전환")
     mw.reset_program_btn = QPushButton("🗑️ 전체 프로그램 리셋")
-    mw.load_previous_work_btn = QPushButton("⏪ 이전 작업 불러오기")
+    mw.load_previous_work_btn = QPushButton("⏪ 마지막 작업 불러오기") # 버튼 텍스트 변경
     mw.save_current_work_btn = QPushButton("💾 현재 작업 저장") # 작업 저장 버튼 추가
     mw.select_project_btn = QPushButton("📁 프로젝트 폴더 선택")
     for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.load_previous_work_btn, mw.save_current_work_btn, mw.select_project_btn]: # 새 버튼 포함

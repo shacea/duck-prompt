@@ -279,7 +279,7 @@ class MainWindow(QMainWindow):
             "project_folder": self.current_project_folder,
             "system_prompt": self.system_tab.toPlainText(),
             "user_prompt": self.user_tab.toPlainText(),
-            "checked_files": checked_paths,
+            "checked_files": checked_paths, # checked_files_dict의 키 리스트 저장
             "selected_llm": selected_llm,
             "selected_model_name": selected_model_name,
             "attached_items": serializable_attachments,
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
         self._initialized = False
         self.auto_save_timer.stop()
 
-        # --- 부분 로드 (이전 작업 불러오기) ---
+        # --- 부분 로드 (마지막 작업 불러오기) ---
         if partial_load:
             # 1. 프로젝트 폴더 로드
             folder_name = None
@@ -349,23 +349,42 @@ class MainWindow(QMainWindow):
             if self.current_project_folder and hasattr(self, 'checkable_proxy'):
                 self.checkable_proxy.checked_files_dict.clear() # 기존 체크 상태 초기화
                 items_to_check = []
+                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
                 for fpath in state.checked_files:
-                    abs_fpath = os.path.abspath(os.path.join(self.current_project_folder, fpath)) # 상태 파일 경로는 상대 경로일 수 있음
-                    if abs_fpath.startswith(os.path.abspath(self.current_project_folder)):
-                        src_index = self.dir_model.index(abs_fpath)
-                        if src_index.isValid():
-                            proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                            if proxy_index.isValid():
-                                self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                items_to_check.append(proxy_index)
+                    # 상태 파일의 경로는 절대 경로일 수 있으므로, 프로젝트 폴더와 비교하여 상대 경로로 변환 시도
+                    try:
+                        abs_fpath = os.path.abspath(fpath)
+                        abs_proj_folder = os.path.abspath(self.current_project_folder)
+                        if abs_fpath.startswith(abs_proj_folder):
+                            # 상태 파일에 저장된 경로가 현재 프로젝트 폴더 내에 있는지 확인
+                            if os.path.exists(abs_fpath):
+                                src_index = self.dir_model.index(abs_fpath)
+                                if src_index.isValid():
+                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
+                                    if proxy_index.isValid():
+                                        # checked_files_dict에는 절대 경로 저장
+                                        self.checkable_proxy.checked_files_dict[abs_fpath] = True
+                                        items_to_check.append(proxy_index)
+                                        logger.debug(f"  Marking {abs_fpath} as checked.")
+                                    else:
+                                        logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
+                                else:
+                                    logger.warning(f"  Could not get source index for: {abs_fpath}")
+                            else:
+                                logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
+                        else:
+                            logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
+                    except Exception as e:
+                        logger.error(f"  Error processing checked file path '{fpath}': {e}")
+
                 # UI 업데이트 (dataChanged 시그널 발생)
+                logger.info(f"Emitting dataChanged for {len(items_to_check)} restored checked items.")
                 for proxy_index in items_to_check:
                     self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
-                # 트리 새로고침하여 체크 상태 반영 (선택적, dataChanged로 충분할 수 있음)
-                # self.file_tree_controller.refresh_tree()
+                # 트리 새로고침 대신 시그널 사용
 
             # 부분 로드 시 다른 UI 요소는 변경하지 않음
-            self.status_bar.showMessage("이전 작업 상태 로드 완료.")
+            self.status_bar.showMessage("마지막 작업 상태 로드 완료.")
 
         # --- 전체 로드 (상태 가져오기 등) ---
         else:
@@ -422,19 +441,31 @@ class MainWindow(QMainWindow):
             self.attached_items = state.attached_items or []
             self._update_attachment_list_ui()
 
-            # 체크된 파일 복원
+            # 체크된 파일 복원 (부분 로드와 동일 로직)
             if self.current_project_folder and hasattr(self, 'checkable_proxy'):
                 self.checkable_proxy.checked_files_dict.clear()
                 items_to_check = []
+                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
                 for fpath in state.checked_files:
-                    abs_fpath = os.path.abspath(os.path.join(self.current_project_folder, fpath))
-                    if abs_fpath.startswith(os.path.abspath(self.current_project_folder)):
-                        src_index = self.dir_model.index(abs_fpath)
-                        if src_index.isValid():
-                            proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                            if proxy_index.isValid():
-                                self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                items_to_check.append(proxy_index)
+                    try:
+                        abs_fpath = os.path.abspath(fpath)
+                        abs_proj_folder = os.path.abspath(self.current_project_folder)
+                        if abs_fpath.startswith(abs_proj_folder):
+                            if os.path.exists(abs_fpath):
+                                src_index = self.dir_model.index(abs_fpath)
+                                if src_index.isValid():
+                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
+                                    if proxy_index.isValid():
+                                        self.checkable_proxy.checked_files_dict[abs_fpath] = True
+                                        items_to_check.append(proxy_index)
+                                        logger.debug(f"  Marking {abs_fpath} as checked.")
+                                    else: logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
+                                else: logger.warning(f"  Could not get source index for: {abs_fpath}")
+                            else: logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
+                        else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
+                    except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
+
+                logger.info(f"Emitting dataChanged for {len(items_to_check)} restored checked items.")
                 for proxy_index in items_to_check:
                     self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
 
