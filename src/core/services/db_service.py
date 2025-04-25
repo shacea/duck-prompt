@@ -59,12 +59,14 @@ class DbService:
         cursor = None
         try:
             cursor = self.connection.cursor()
+            logger.debug(f"Executing query: {query} with params: {params}") # 쿼리 실행 로깅 강화
             cursor.execute(query, params)
 
             if return_id:
                 # INSERT ... RETURNING id
                 result = cursor.fetchone()
                 self.connection.commit()
+                logger.debug(f"Query returned ID: {result[0] if result else None}")
                 return result[0] if result else None
             elif fetch_one:
                 # SELECT single value or row
@@ -72,24 +74,33 @@ class DbService:
                 if result and cursor.description:
                     # Return as dict if columns are available
                     colnames = [desc[0] for desc in cursor.description]
-                    return dict(zip(colnames, result))
+                    row_dict = dict(zip(colnames, result))
+                    logger.debug(f"Query fetched one row: {row_dict}")
+                    return row_dict
                 elif result:
                     # Return single value if only one column
+                    logger.debug(f"Query fetched one value: {result[0]}")
                     return result[0]
                 else:
+                    logger.debug("Query fetched no results (fetch_one).")
                     return None # No result found
             elif fetch_all:
                  # SELECT multiple rows/columns
                 if cursor.description:
                     colnames = [desc[0] for desc in cursor.description]
                     rows = cursor.fetchall()
-                    return [dict(zip(colnames, row)) for row in rows]
+                    results_list = [dict(zip(colnames, row)) for row in rows]
+                    logger.debug(f"Query fetched {len(results_list)} rows.")
+                    return results_list
                 else:
+                    logger.debug("Query fetched no results (fetch_all).")
                     return [] # No results for SELECT
             else:
                 # For non-SELECT queries (UPDATE, DELETE, simple INSERT without RETURNING)
+                affected_rows = cursor.rowcount
                 self.connection.commit()
-                return cursor.rowcount # Return number of affected rows
+                logger.debug(f"Query executed successfully. Rows affected: {affected_rows}")
+                return affected_rows # Return number of affected rows
         except psycopg2.Error as e:
             logger.error(f"Database query failed: {e}\nQuery: {query}\nParams: {params}", exc_info=True)
             if self.connection:
@@ -406,25 +417,81 @@ class DbService:
 
         logger.info(f"Updating API key usage for key ID: {api_key_id}")
         now = datetime.datetime.now(datetime.timezone.utc)
+        current_minute_start = now.replace(second=0, microsecond=0)
+        current_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # --- SQL Query using ON CONFLICT DO UPDATE ---
+        # This query attempts to insert a new row or update an existing one based on api_key_id.
+        # It correctly handles the logic for incrementing counts or resetting them
+        # based on whether the current minute/day window has passed.
         query = """
-            INSERT INTO api_key_usage (api_key_id, last_api_call_timestamp, minute_start_timestamp, calls_this_minute, day_start_timestamp, calls_this_day)
-            VALUES (%s, %s, date_trunc('minute', %s), 1, date_trunc('day', %s), 1)
+            INSERT INTO api_key_usage (
+                api_key_id,
+                last_api_call_timestamp,
+                minute_start_timestamp,
+                calls_this_minute,
+                day_start_timestamp,
+                calls_this_day
+            )
+            VALUES (
+                %(key_id)s, %(now)s, %(minute_start)s, 1, %(day_start)s, 1
+            )
             ON CONFLICT (api_key_id) DO UPDATE SET
-                last_api_call_timestamp = EXCLUDED.last_api_call_timestamp,
-                calls_this_minute = CASE WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN 1 ELSE api_key_usage.calls_this_minute + 1 END,
-                minute_start_timestamp = CASE WHEN api_key_usage.minute_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.minute_start_timestamp + interval '1 minute' THEN date_trunc('minute', EXCLUDED.last_api_call_timestamp) ELSE api_key_usage.minute_start_timestamp END,
-                calls_this_day = CASE WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN 1 ELSE api_key_usage.calls_this_day + 1 END,
-                day_start_timestamp = CASE WHEN api_key_usage.day_start_timestamp IS NULL OR EXCLUDED.last_api_call_timestamp >= api_key_usage.day_start_timestamp + interval '1 day' THEN date_trunc('day', EXCLUDED.last_api_call_timestamp) ELSE api_key_usage.day_start_timestamp END,
+                last_api_call_timestamp = %(now)s,
+
+                -- Update minute count and timestamp
+                calls_this_minute = CASE
+                    -- If the recorded minute start is before the current minute start, reset count to 1
+                    WHEN api_key_usage.minute_start_timestamp IS NULL OR api_key_usage.minute_start_timestamp < %(minute_start)s THEN 1
+                    -- Otherwise, increment the existing count for the current minute
+                    ELSE api_key_usage.calls_this_minute + 1
+                END,
+                minute_start_timestamp = CASE
+                    -- If the recorded minute start is before the current minute start, update timestamp
+                    WHEN api_key_usage.minute_start_timestamp IS NULL OR api_key_usage.minute_start_timestamp < %(minute_start)s THEN %(minute_start)s
+                    -- Otherwise, keep the existing timestamp for the current minute
+                    ELSE api_key_usage.minute_start_timestamp
+                END,
+
+                -- Update day count and timestamp
+                calls_this_day = CASE
+                    -- If the recorded day start is before the current day start, reset count to 1
+                    WHEN api_key_usage.day_start_timestamp IS NULL OR api_key_usage.day_start_timestamp < %(day_start)s THEN 1
+                    -- Otherwise, increment the existing count for the current day
+                    ELSE api_key_usage.calls_this_day + 1
+                END,
+                day_start_timestamp = CASE
+                    -- If the recorded day start is before the current day start, update timestamp
+                    WHEN api_key_usage.day_start_timestamp IS NULL OR api_key_usage.day_start_timestamp < %(day_start)s THEN %(day_start)s
+                    -- Otherwise, keep the existing timestamp for the current day
+                    ELSE api_key_usage.day_start_timestamp
+                END,
+
+                -- Always update the updated_at timestamp
                 updated_at = NOW();
         """
-        params = (api_key_id, now, now, now)
+        params = {
+            'key_id': api_key_id,
+            'now': now,
+            'minute_start': current_minute_start,
+            'day_start': current_day_start
+        }
+
         try:
             affected_rows = self._execute_query(query, params)
-            logger.info(f"API key usage updated successfully for key ID: {api_key_id}. Rows affected: {affected_rows}")
+            # UPSERT returns 1 if inserted, 2 if updated in some PostgreSQL versions,
+            # or potentially 0 or 1 depending on exact behavior and version.
+            # Checking for None or error is more reliable than specific row counts.
+            if affected_rows is not None: # Check if query execution was successful (returned row count or None on error)
+                logger.info(f"API key usage updated successfully for key ID: {api_key_id}. (Affected rows: {affected_rows})")
+            else:
+                 logger.error(f"API key usage update query might have failed for key ID {api_key_id} (returned None).")
+
         except psycopg2.Error as e:
-            logger.error(f"Failed to update API key usage for key ID {api_key_id}: {e}")
+            logger.error(f"Failed to update API key usage for key ID {api_key_id}: {e}", exc_info=True)
         except Exception as e:
-            logger.error(f"An unexpected error occurred during API key usage update for key ID {api_key_id}: {e}")
+            logger.error(f"An unexpected error occurred during API key usage update for key ID {api_key_id}: {e}", exc_info=True)
+
 
     def get_model_rate_limit(self, model_name: str) -> Optional[Dict[str, Any]]:
         """Fetches the default rate limit information for a specific model."""
@@ -502,24 +569,35 @@ class DbService:
             calls_this_day = usage_info.get('calls_this_day', 0)
             day_start = usage_info.get('day_start_timestamp')
             now = datetime.datetime.now(datetime.timezone.utc)
+            current_minute_start = now.replace(second=0, microsecond=0)
+            current_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
 
             # 3. Check RPM limit
             if rpm_limit is not None and rpm_limit > 0:
                 # Check if the minute window has reset
-                if minute_start and now >= minute_start + datetime.timedelta(minutes=1):
-                    calls_this_minute = 0 # Reset counter for check
-                if calls_this_minute >= rpm_limit:
-                    reason = f"RPM limit ({rpm_limit}) reached (calls this minute: {calls_this_minute})."
+                current_minute_call_count = calls_this_minute
+                if minute_start and minute_start < current_minute_start:
+                     current_minute_call_count = 0 # Minute window has passed, effective count for *next* call is 0
+                     logger.debug(f"RPM Check: Minute window reset for key {api_key_id}. Current count considered 0.")
+
+                # Check if adding one more call would exceed the limit
+                if current_minute_call_count >= rpm_limit:
+                    reason = f"RPM limit ({rpm_limit}) reached or exceeded (current minute calls: {current_minute_call_count})."
                     logger.warning(f"Rate limit check failed for key ID {api_key_id}: {reason}")
                     return True, reason
 
             # 4. Check Daily limit
             if daily_limit is not None and daily_limit > 0:
                 # Check if the day window has reset
-                if day_start and now >= day_start + datetime.timedelta(days=1):
-                    calls_this_day = 0 # Reset counter for check
-                if calls_this_day >= daily_limit:
-                    reason = f"Daily limit ({daily_limit}) reached (calls today: {calls_this_day})."
+                current_day_call_count = calls_this_day
+                if day_start and day_start < current_day_start:
+                    current_day_call_count = 0 # Day window has passed, effective count for *next* call is 0
+                    logger.debug(f"Daily Check: Day window reset for key {api_key_id}. Current count considered 0.")
+
+                # Check if adding one more call would exceed the limit
+                if current_day_call_count >= daily_limit:
+                    reason = f"Daily limit ({daily_limit}) reached or exceeded (current day calls: {current_day_call_count})."
                     logger.warning(f"Rate limit check failed for key ID {api_key_id}: {reason}")
                     return True, reason
 
@@ -535,5 +613,4 @@ class DbService:
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
-
             
