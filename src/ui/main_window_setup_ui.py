@@ -122,8 +122,10 @@ def create_widgets(mw: 'MainWindow'):
 
     # --- 리소스 관리 (오른쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리")
-    resource_manager_layout = QVBoxLayout()
+    resource_manager_layout = QGridLayout() # QVBoxLayout 대신 QGridLayout 사용
     resource_manager_layout.setContentsMargins(5, 5, 5, 5); resource_manager_layout.setSpacing(5)
+
+    # 위젯 생성 (기존 코드 재사용)
     mw.resource_mode_combo = QComboBox(); mw.resource_mode_combo.addItems(["프롬프트", "상태"])
     mw.template_tree = QTreeWidget(); mw.template_tree.setHeaderHidden(True)
     mw.load_selected_template_btn = QPushButton("📥 선택 불러오기")
@@ -132,34 +134,41 @@ def create_widgets(mw: 'MainWindow'):
     mw.template_type_combo = QComboBox(); mw.template_type_combo.addItems(["시스템", "사용자"])
     mw.delete_template_btn = QPushButton("❌ 선택 삭제")
     mw.update_template_btn = QPushButton("🔄 현재 내용 업데이트")
-    # 백업/복원 버튼 생성 제거
-    # mw.backup_button = QPushButton("📦 모든 상태 백업")
-    # mw.restore_button = QPushButton("🔙 백업에서 상태 복원")
-    resource_manager_layout.addWidget(QLabel("리소스 타입 선택:"))
-    resource_manager_layout.addWidget(mw.resource_mode_combo)
-    resource_manager_layout.addWidget(QLabel("아래에서 로드/저장할 리소스 선택:"))
-    resource_manager_layout.addWidget(mw.template_tree, 1)
 
-    # --- 버튼 레이아웃 수정 (QVBoxLayout -> QGridLayout) ---
-    tm_button_layout = QGridLayout() # QVBoxLayout 대신 QGridLayout 사용
-    tm_button_layout.setSpacing(5)
+    # --- 레이아웃 재구성 (2열 그리드) ---
+    # 왼쪽 열 (Column 0)
+    resource_manager_layout.addWidget(QLabel("아래에서 로드/저장할 리소스 선택:"), 0, 0, 1, 2) # 라벨은 2열에 걸쳐 표시
+    resource_manager_layout.addWidget(mw.template_tree, 1, 0, 6, 1) # 트리는 1행부터 6개 행에 걸쳐 표시
 
-    # 저장 타입 + 저장 버튼 레이아웃
-    save_layout = QHBoxLayout()
-    save_layout.addWidget(mw.template_type_label)
-    save_layout.addWidget(mw.template_type_combo)
-    save_layout.addWidget(mw.save_as_template_btn)
-    save_layout.setContentsMargins(0, 0, 0, 0) # 내부 여백 제거
+    # 오른쪽 열 (Column 1) - 위젯 배치 순서 조정
+    resource_manager_layout.addWidget(mw.load_selected_template_btn, 1, 1) # 행 1
 
-    # 그리드에 위젯 추가 (2x2 그리드)
-    tm_button_layout.addWidget(mw.load_selected_template_btn, 0, 0) # 불러오기 (0, 0)
-    tm_button_layout.addLayout(save_layout, 0, 1)                  # 저장 타입 + 저장 (0, 1)
-    tm_button_layout.addWidget(mw.delete_template_btn, 1, 0)       # 삭제 (1, 0)
-    tm_button_layout.addWidget(mw.update_template_btn, 1, 1)       # 업데이트 (1, 1)
-    # 백업/복원 버튼 관련 레이아웃 코드 제거
+    # 저장 타입 레이아웃 (HBox)
+    save_type_layout = QHBoxLayout()
+    save_type_layout.addWidget(mw.template_type_label)
+    save_type_layout.addWidget(mw.template_type_combo)
+    save_type_layout.setContentsMargins(0, 0, 0, 0)
+    resource_manager_layout.addLayout(save_type_layout, 2, 1) # 행 2
 
-    resource_manager_layout.addLayout(tm_button_layout) # 수정된 그리드 레이아웃 추가
-    mw.resource_manager_group.setLayout(resource_manager_layout)
+    # 리소스 타입 선택 레이아웃 (HBox)
+    resource_type_layout = QHBoxLayout()
+    resource_type_layout.addWidget(QLabel("리소스 타입 선택:"))
+    resource_type_layout.addWidget(mw.resource_mode_combo)
+    resource_type_layout.setContentsMargins(0, 0, 0, 0)
+    resource_manager_layout.addLayout(resource_type_layout, 3, 1) # 행 3
+
+    resource_manager_layout.addWidget(mw.save_as_template_btn, 4, 1) # 행 4
+    resource_manager_layout.addWidget(mw.update_template_btn, 5, 1) # 행 5
+    resource_manager_layout.addWidget(mw.delete_template_btn, 6, 1) # 행 6
+
+    # 오른쪽 열 하단에 빈 공간 추가 (선택적)
+    resource_manager_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 7, 1)
+
+    # 열 너비 비율 설정 (선택적)
+    resource_manager_layout.setColumnStretch(0, 1) # 왼쪽 열(트리)이 남는 공간 차지
+    resource_manager_layout.setColumnStretch(1, 0) # 오른쪽 열(버튼)은 필요한 만큼만
+
+    mw.resource_manager_group.setLayout(resource_manager_layout) # 최종 레이아웃 설정
 
     # --- 첨부 파일 관리 (왼쪽 하단으로 이동) ---
     mw.attachment_group = QGroupBox("첨부 파일")

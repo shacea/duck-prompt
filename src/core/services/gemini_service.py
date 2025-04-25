@@ -27,6 +27,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     API 키 및 파라미터는 ConfigService를 통해 로드합니다.
     API 호출 시작 시간과 경과 시간을 로깅하고, DB에 로그를 기록합니다.
     API 호출 성공 시 사용량 정보를 DB에 기록합니다.
+    생성된 log_id를 상태에 추가하여 다음 노드로 전달합니다.
     """
     print("--- Calling Gemini API (Multimodal) ---")
     logger.info("Calling Gemini API node (Multimodal)")
@@ -57,7 +58,8 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
         "gemini_response": "",
         "xml_output": "",
         "summary_output": "",
-        "error_message": None
+        "error_message": None,
+        "log_id": None # log_id 초기화
     }
 
     # --- DB 로깅 준비 ---
@@ -72,6 +74,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
                 request_attachments=attachments,
                 api_key_id=api_key_id
             )
+            default_return_state["log_id"] = log_id # 생성된 log_id를 상태에 저장
         except Exception as db_err:
             logger.error(f"Failed to log Gemini request to DB: {db_err}", exc_info=True)
             # DB 로깅 실패가 API 호출을 막아서는 안 됨
@@ -339,11 +342,11 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
         # --- DB 로그 업데이트 완료 ---
 
 
-def process_response(state: GeminiGraphState) -> GeminiGraphState:
+def process_response(state: GeminiGraphState, config_service: ConfigService) -> GeminiGraphState:
     """
     Gemini 응답을 XML과 Summary로 파싱하는 노드.
     응답 끝 부분의 <summary> 태그를 기준으로 분리하여 코드 내 문자열과의 혼동을 줄입니다.
-    (DB 로깅은 call_gemini 노드에서 처리하므로 여기서는 파싱만 수행)
+    파싱된 결과를 DB 로그에 업데이트합니다.
     """
     print("--- Processing Gemini Response ---")
     logger.info("Processing Gemini Response node")
@@ -351,6 +354,8 @@ def process_response(state: GeminiGraphState) -> GeminiGraphState:
     xml_output = ""
     summary_output = ""
     error_message = state.get('error_message') # 이전 노드의 오류 메시지 유지
+    log_id = state.get('log_id') # 상태에서 log_id 가져오기
+    db_service: Optional[DbService] = config_service.db_service if config_service else None
 
     new_state = state.copy()
 
@@ -410,8 +415,23 @@ def process_response(state: GeminiGraphState) -> GeminiGraphState:
         # if error_message and "Gemini API 응답 문제 발생" in error_message:
         #      new_state["error_message"] = None # Clear non-critical stream error after processing
 
-        # TODO: 파싱된 XML/Summary 결과를 DB 로그에 업데이트? (현재는 call_gemini에서 원시 응답만 저장)
-        # 만약 업데이트하려면 log_id를 state에 포함시켜 전달해야 함.
+        # --- 파싱된 XML/Summary 결과를 DB 로그에 업데이트 ---
+        if db_service and log_id is not None:
+            try:
+                logger.info(f"Updating DB log ID {log_id} with parsed XML and Summary.")
+                db_service.update_gemini_log(
+                    log_id=log_id,
+                    response_xml=xml_output,
+                    response_summary=summary_output,
+                    # 다른 필드는 None으로 전달하여 기존 값 유지 (또는 update_gemini_log 수정 필요)
+                    response_text=None,
+                    error_message=None, # 파싱 성공 시 오류 메시지 업데이트 안 함
+                    elapsed_time_ms=None,
+                    token_count=None
+                )
+            except Exception as db_err:
+                logger.error(f"Failed to update Gemini log ID {log_id} with parsed results: {db_err}", exc_info=True)
+        # --- DB 로그 업데이트 완료 ---
 
         return new_state
 
@@ -432,11 +452,12 @@ def build_gemini_graph(config_service: ConfigService) -> StateGraph:
     """
     workflow = StateGraph(GeminiGraphState)
 
-    # Bind the config_service to the node function
+    # Bind the config_service to the node functions
     bound_call_gemini = partial(call_gemini, config_service=config_service)
+    bound_process_response = partial(process_response, config_service=config_service) # process_response에도 바인딩
 
     workflow.add_node("call_gemini", bound_call_gemini)
-    workflow.add_node("process_response", process_response)
+    workflow.add_node("process_response", bound_process_response) # 바인딩된 함수 사용
 
     workflow.add_edge(START, "call_gemini")
     workflow.add_edge("call_gemini", "process_response")
@@ -445,3 +466,4 @@ def build_gemini_graph(config_service: ConfigService) -> StateGraph:
     app = workflow.compile()
     logger.info("Gemini LangGraph compiled successfully.")
     return app
+
