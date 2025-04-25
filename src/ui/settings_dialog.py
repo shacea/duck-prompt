@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
     QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog, QWidget,
-    QSplitter # QSplitter 추가
+    QSplitter, QSizePolicy # QSizePolicy 추가
 )
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List, Dict, Any # Dict, Any 추가
@@ -37,7 +37,7 @@ class SettingsDialog(QDialog):
 
         self.setWindowTitle("환경 설정") # Title updated
         self.setMinimumWidth(800) # 너비 증가
-        self.setMinimumHeight(700) # 높이 증가
+        self.setMinimumHeight(750) # 높이 증가 (내용 표시 공간 확보)
 
         # --- UI 요소 생성 ---
         # 기본 시스템 프롬프트
@@ -68,6 +68,8 @@ class SettingsDialog(QDialog):
         # API 키 목록 표시
         self.api_keys_list = QListWidget()
         self.api_keys_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.api_keys_list.setMinimumHeight(100) # 최소 높이 증가
+        self.api_keys_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         api_key_management_layout.addWidget(QLabel("등록된 API 키:"))
         api_key_management_layout.addWidget(self.api_keys_list)
 
@@ -75,10 +77,8 @@ class SettingsDialog(QDialog):
         api_key_buttons_layout = QHBoxLayout()
         self.add_api_key_btn = QPushButton("➕ 새 API 키 추가")
         self.remove_api_key_btn = QPushButton("➖ 선택한 키 제거")
-        # self.toggle_api_key_active_btn = QPushButton("🟢/🔴 활성/비활성 토글") # 활성화 토글 기능 추가 (선택적)
         api_key_buttons_layout.addWidget(self.add_api_key_btn)
         api_key_buttons_layout.addWidget(self.remove_api_key_btn)
-        # api_key_buttons_layout.addWidget(self.toggle_api_key_active_btn)
         api_key_buttons_layout.addStretch()
         api_key_management_layout.addLayout(api_key_buttons_layout)
 
@@ -95,6 +95,8 @@ class SettingsDialog(QDialog):
         gemini_model_layout.addWidget(QLabel("Gemini 모델:"))
         self.gemini_models_list = QListWidget()
         self.gemini_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.gemini_models_list.setMinimumHeight(100) # 최소 높이 증가
+        self.gemini_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         gemini_model_buttons = QHBoxLayout()
         self.add_gemini_model_btn = QPushButton("추가")
         self.remove_gemini_model_btn = QPushButton("제거")
@@ -109,6 +111,8 @@ class SettingsDialog(QDialog):
         claude_model_layout.addWidget(QLabel("Claude 모델:"))
         self.claude_models_list = QListWidget()
         self.claude_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.claude_models_list.setMinimumHeight(100) # 최소 높이 증가
+        self.claude_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         claude_model_buttons = QHBoxLayout()
         self.add_claude_model_btn = QPushButton("추가")
         self.remove_claude_model_btn = QPushButton("제거")
@@ -123,6 +127,8 @@ class SettingsDialog(QDialog):
         gpt_model_layout.addWidget(QLabel("GPT 모델:"))
         self.gpt_models_list = QListWidget()
         self.gpt_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.gpt_models_list.setMinimumHeight(100) # 최소 높이 증가
+        self.gpt_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         gpt_model_buttons = QHBoxLayout()
         self.add_gpt_model_btn = QPushButton("추가")
         self.remove_gpt_model_btn = QPushButton("제거")
@@ -144,8 +150,12 @@ class SettingsDialog(QDialog):
         self.allowed_extensions_edit.setPlaceholderText("쉼표(,) 또는 공백으로 구분 (예: .py, .js .html)")
         self.excluded_dirs_edit = QPlainTextEdit()
         self.excluded_dirs_edit.setPlaceholderText("한 줄에 하나씩 입력 (예: node_modules/, *.log)")
+        self.excluded_dirs_edit.setMinimumHeight(80) # 최소 높이 설정
+        self.excluded_dirs_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         self.default_ignore_list_edit = QPlainTextEdit()
         self.default_ignore_list_edit.setPlaceholderText("한 줄에 하나씩 입력 (예: .git/, __pycache__/)")
+        self.default_ignore_list_edit.setMinimumHeight(80) # 최소 높이 설정
+        self.default_ignore_list_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         filtering_layout.addRow("허용 확장자:", self.allowed_extensions_edit)
         filtering_layout.addRow("제외 폴더/파일:", self.excluded_dirs_edit)
         filtering_layout.addRow("기본 무시 목록:", self.default_ignore_list_edit)
@@ -175,6 +185,8 @@ class SettingsDialog(QDialog):
         gitignore_button_layout.addStretch()
         self.gitignore_edit = QPlainTextEdit()
         self.gitignore_edit.setPlaceholderText("프로젝트 폴더 선택 후 '.gitignore' 내용을 불러오거나 편집/저장하세요.")
+        self.gitignore_edit.setMinimumHeight(120) # 최소 높이 설정
+        self.gitignore_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
         gitignore_layout.addLayout(gitignore_button_layout)
         gitignore_layout.addWidget(self.gitignore_edit)
         self.gitignore_group.setLayout(gitignore_layout)
@@ -185,30 +197,47 @@ class SettingsDialog(QDialog):
         self.button_box.button(QDialogButtonBox.Save).setText("설정 저장")
         self.button_box.button(QDialogButtonBox.Close).setText("닫기")
 
-        # --- 레이아웃 설정 (스플리터 사용) ---
+        # --- 레이아웃 설정 (2단 컬럼 스플리터 사용) ---
         main_layout = QVBoxLayout(self)
 
-        # 상단 스플리터 (설정 그룹들)
-        top_splitter = QSplitter(Qt.Vertical)
-        top_splitter.addWidget(self.default_prompt_group)
-        top_splitter.addWidget(self.llm_model_group)
-        top_splitter.addWidget(self.api_key_management_group) # API 키 관리 그룹 추가
-        top_splitter.addWidget(self.available_models_group)
-        top_splitter.addWidget(self.filtering_group)
-        top_splitter.addWidget(self.gemini_group)
-        top_splitter.setSizes([50, 100, 150, 150, 150, 100]) # 초기 크기 비율 조정
+        # 메인 수평 스플리터 생성
+        main_horizontal_splitter = QSplitter(Qt.Horizontal)
 
-        # 하단 스플리터 (.gitignore 편집기)
-        bottom_splitter = QSplitter(Qt.Vertical)
-        bottom_splitter.addWidget(self.gitignore_group)
+        # 왼쪽 컬럼 위젯 및 레이아웃 생성
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(5, 5, 5, 5)
+        left_layout.setSpacing(10)
 
-        # 메인 스플리터 (상단 설정 + 하단 gitignore)
-        main_splitter = QSplitter(Qt.Vertical)
-        main_splitter.addWidget(top_splitter)
-        main_splitter.addWidget(bottom_splitter)
-        main_splitter.setSizes([500, 200]) # 상단과 하단 비율 조정
+        # 왼쪽 컬럼에 그룹 추가
+        left_layout.addWidget(self.default_prompt_group)
+        left_layout.addWidget(self.llm_model_group)
+        left_layout.addWidget(self.api_key_management_group)
+        left_layout.addWidget(self.gemini_group) # Gemini 파라미터 왼쪽으로 이동
+        left_layout.addStretch(1) # 위젯들을 위로 밀기
 
-        main_layout.addWidget(main_splitter)
+        # 오른쪽 컬럼 위젯 및 레이아웃 생성
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(5, 5, 5, 5)
+        right_layout.setSpacing(10)
+
+        # 오른쪽 컬럼에 그룹 추가
+        right_layout.addWidget(self.available_models_group) # 사용 가능 모델 목록 오른쪽으로 이동
+        right_layout.addWidget(self.filtering_group)
+        right_layout.addWidget(self.gitignore_group) # gitignore 오른쪽으로 이동
+        right_layout.addStretch(1) # 위젯들을 위로 밀기
+
+        # 수평 스플리터에 왼쪽/오른쪽 컬럼 위젯 추가
+        main_horizontal_splitter.addWidget(left_widget)
+        main_horizontal_splitter.addWidget(right_widget)
+
+        # 수평 스플리터 초기 크기 설정 (예: 1:1 비율)
+        initial_width = self.width() # 현재 다이얼로그 너비 사용
+        main_horizontal_splitter.setSizes([initial_width // 2, initial_width // 2])
+
+        # 메인 레이아웃에 수평 스플리터와 버튼 박스 추가
+        main_layout.addWidget(main_horizontal_splitter, 1) # 스플리터가 남는 공간 차지
         main_layout.addWidget(self.button_box)
 
         # --- 시그널 연결 ---
@@ -221,7 +250,6 @@ class SettingsDialog(QDialog):
         # API 키 관리 버튼 시그널
         self.add_api_key_btn.clicked.connect(self.add_api_key)
         self.remove_api_key_btn.clicked.connect(self.remove_api_key)
-        # self.toggle_api_key_active_btn.clicked.connect(self.toggle_api_key_active) # 활성화 토글 연결
 
         # 사용 가능 모델 추가/제거 버튼 시그널 연결
         self.add_gemini_model_btn.clicked.connect(lambda: self.add_model_to_list(self.gemini_models_list, "Gemini"))
@@ -282,13 +310,21 @@ class SettingsDialog(QDialog):
                 key_id = key_info['id']
                 provider = key_info.get('provider', 'N/A')
                 description = key_info.get('description', '')
-                api_key_masked = key_info.get('api_key', '')[:4] + "****" + key_info.get('api_key', '')[-4:] # 마스킹
+                # API 키 마스킹 제거: 실제 키 일부 표시 (예: 시작 4자리 + 끝 4자리)
+                api_key_display = key_info.get('api_key', '')
+                if len(api_key_display) > 8:
+                     api_key_display = f"{api_key_display[:4]}...{api_key_display[-4:]}"
+                else:
+                     api_key_display = f"{api_key_display[:4]}..." # 짧은 키 처리
+
                 is_active = key_info.get('is_active', False)
                 active_status = "🟢" if is_active else "🔴"
 
-                display_text = f"{active_status} [{provider.upper()}] {description or api_key_masked}"
+                display_text = f"{active_status} [{provider.upper()}] {description or api_key_display}"
                 item = QListWidgetItem(display_text)
                 item.setData(Qt.UserRole, key_id) # 사용자 데이터로 ID 저장
+                # 툴팁으로 전체 키 (마스킹된) 또는 설명을 보여줄 수 있음
+                item.setToolTip(f"ID: {key_id}\nProvider: {provider}\nKey: {api_key_display}\nActive: {is_active}")
                 self.api_keys_list.addItem(item)
 
         except Exception as e:
@@ -298,21 +334,19 @@ class SettingsDialog(QDialog):
 
     def add_api_key(self):
         """새 API 키를 추가하는 다이얼로그를 띄우고 DB에 저장합니다."""
-        # 입력 다이얼로그 대신 별도의 QDialog 사용 고려 (Provider, Key, Description 입력)
         provider, ok1 = QInputDialog.getItem(self, "API 키 추가", "Provider 선택:", ["google", "anthropic", "openai"], 0, False)
         if not ok1: return
+        # QLineEdit.Password 대신 QLineEdit.Normal 사용
         api_key, ok2 = QInputDialog.getText(self, "API 키 추가", f"{provider} API 키 입력:", QLineEdit.Normal)
         if not ok2 or not api_key.strip(): return
         description, ok3 = QInputDialog.getText(self, "API 키 추가", "설명 (선택 사항):", QLineEdit.Normal)
-        if not ok3: description = "" # 취소해도 빈 설명으로 진행
+        if not ok3: description = ""
 
         try:
             key_id = self.db_service.add_api_key(provider, api_key.strip(), description.strip())
             if key_id is not None:
                 QMessageBox.information(self, "성공", "API 키가 성공적으로 추가되었습니다.")
-                self.load_api_keys_list() # 목록 새로고침
-                # ConfigService의 인메모리 키도 업데이트해야 할 수 있음 (선택적)
-                # self.config_service._load_config() # 설정을 다시 로드하여 키 반영
+                self.load_api_keys_list()
             else:
                 QMessageBox.warning(self, "실패", "API 키 추가 중 오류가 발생했습니다.")
         except Exception as e:
@@ -337,24 +371,17 @@ class SettingsDialog(QDialog):
             success = self.db_service.delete_api_key(key_id)
             if success:
                 QMessageBox.information(self, "성공", "API 키가 성공적으로 제거되었습니다.")
-                self.load_api_keys_list() # 목록 새로고침
-                # ConfigService의 인메모리 키도 업데이트해야 할 수 있음
-                # self.config_service._load_config()
+                self.load_api_keys_list()
             else:
                 QMessageBox.warning(self, "실패", "API 키 제거 중 오류가 발생했습니다.")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"API 키 제거 중 예외 발생:\n{e}")
 
-    # def toggle_api_key_active(self):
-    #     """선택된 API 키의 활성 상태를 토글합니다."""
-    #     # 구현 필요: 선택된 아이템 ID 가져오기 -> DB에서 현재 상태 읽기 -> 상태 반전하여 업데이트 -> 목록 새로고침
-    #     QMessageBox.information(self, "구현 예정", "API 키 활성/비활성 토글 기능은 아직 구현되지 않았습니다.")
-
 
     def browse_default_prompt(self):
         """Opens a file dialog to select the default system prompt and updates the line edit."""
         selected_path = select_default_system_prompt(self.config_service, self)
-        if selected_path is not None: # Allow empty path selection to clear
+        if selected_path is not None:
             self.default_prompt_path_edit.setText(selected_path)
 
     def add_model_to_list(self, list_widget: QListWidget, model_type: str):
@@ -487,3 +514,4 @@ class SettingsDialog(QDialog):
                 self.mw.file_tree_controller.load_gitignore_settings()
         except Exception as e:
             QMessageBox.critical(self, "오류", f".gitignore 파일을 저장하는 중 오류 발생:\n{e}")
+            
