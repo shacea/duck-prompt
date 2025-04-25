@@ -21,8 +21,9 @@ def resource_path(relative_path):
 block_cipher = None
 
 # collect_all 호출 제거, 기본 datas만 정의
+# 아이콘 복사 방식 변경: resources/icons 폴더 전체를 번들 내 resources/icons 로 복사
 datas = [
-    (resource_path('resources/rubber_duck.ico'), 'resources'),
+    (resource_path('resources/icons'), 'resources/icons'), # 아이콘 폴더 복사
     (resource_path('resources/prompts'), 'resources/prompts'),
     (resource_path('resources/status'), 'resources/status'),
     (resource_path('resources/fonts/malgun.ttf'), 'resources/fonts'), # 폰트 파일 추가
@@ -70,8 +71,8 @@ exe = EXE(
     target_arch='arm64',
     codesign_identity=None,
     entitlements_file=None,
-    # 아이콘 경로 수정
-    icon=[resource_path('resources/rubber_duck.ico')],
+    # 실행 파일 자체의 아이콘 설정 (경로 수정 불필요)
+    icon=[resource_path('resources/icons/rubber_duck.ico')],
 )
 
 coll = COLLECT(

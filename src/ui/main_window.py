@@ -1,3 +1,4 @@
+
 import os
 import io
 import logging
@@ -29,7 +30,7 @@ from core.langgraph_state import GeminiGraphState
 
 # UI 관련 import
 from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
-from ui.controllers.main_controller import MainController
+from ui.controllers.main_controller import MainController # MainController import 수정
 from ui.controllers.resource_controller import ResourceController
 from ui.controllers.prompt_controller import PromptController
 from ui.controllers.xml_controller import XmlController
@@ -170,7 +171,7 @@ class MainWindow(QMainWindow):
                 if os.path.exists(meta_prompt_path):
                     with open(meta_prompt_path, "r", encoding="utf-8") as f:
                         self.system_tab.setText(f.read())
-            except Exception as e: print(f"Error loading default META prompt: {e}")
+            except Exception as e: logger.error(f"Error loading default META prompt: {e}")
 
         self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini"))
         self.main_controller.on_llm_selected() # Reads default model from DB via config_service
@@ -210,7 +211,7 @@ class MainWindow(QMainWindow):
         dialog.exec_()
         # No need to reload config settings here unless .gitignore affects something immediately
         # Refreshing the filter is handled within the dialog's save_gitignore
-        print("Settings dialog closed.")
+        logger.info("Settings dialog closed.")
 
 
     # --- Public Methods ---
@@ -229,7 +230,9 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'attachment_list_widget'): self.attachment_list_widget.clear()
         self.update_window_title()
         if hasattr(self, 'file_tree_controller'): self.file_tree_controller.reset_file_tree()
-        if hasattr(self, 'main_controller'): self.main_controller.on_llm_selected()
+        if hasattr(self, 'main_controller'):
+            self.main_controller.on_llm_selected()
+            self.main_controller._stop_token_calculation_thread() # 토큰 계산 스레드 중지
         if hasattr(self, 'summary_tab'): self.summary_tab.clear()
         if hasattr(self, 'api_time_label'): self.api_time_label.setText("API 시간: -") # API 시간 라벨 초기화
         self.load_gemini_settings_to_ui() # Reload settings from DB
@@ -274,7 +277,7 @@ class MainWindow(QMainWindow):
             app_state = AppState(**state_data)
             return app_state
         except Exception as e:
-             print(f"Error creating AppState model: {e}")
+             logger.error(f"Error creating AppState model: {e}")
              default_state = AppState(mode=self.mode)
              default_state.selected_llm = selected_llm
              default_state.selected_model_name = selected_model_name
@@ -283,7 +286,7 @@ class MainWindow(QMainWindow):
     def set_current_state(self, state: AppState):
         """Sets the UI state based on the provided AppState model."""
         if self.mode != state.mode:
-            print(f"Mode mismatch. Restarting...")
+            logger.info(f"Mode mismatch. Restarting...")
             self._restart_with_mode(state.mode)
             return
 
@@ -318,7 +321,7 @@ class MainWindow(QMainWindow):
             self.main_controller.on_llm_selected() # This loads models from DB config
             model_index = self.model_name_combo.findText(state.selected_model_name)
             if model_index != -1: self.model_name_combo.setCurrentIndex(model_index)
-            else: print(f"Warning: Saved model '{state.selected_model_name}' not found.")
+            else: logger.warning(f"Warning: Saved model '{state.selected_model_name}' not found.")
         else: self.main_controller.on_llm_selected()
 
         # Restore attached items
@@ -428,7 +431,7 @@ class MainWindow(QMainWindow):
                         else:
                            icon = self.style().standardIcon(QStyle.SP_FileIcon)
                     except Exception as e:
-                        print(f"Error creating thumbnail for {item_name}: {e}")
+                        logger.error(f"Error creating thumbnail for {item_name}: {e}")
                         icon = self.style().standardIcon(QStyle.SP_FileIcon)
                 else:
                     icon = self.style().standardIcon(QStyle.SP_FileIcon)
@@ -457,7 +460,7 @@ class MainWindow(QMainWindow):
                 try:
                     with open(item['path'], 'rb') as f:
                         item['data'] = f.read()
-                    print(f"Loaded data for attachment: {item['name']}")
+                    logger.info(f"Loaded data for attachment: {item['name']}")
                 except Exception as e:
                     QMessageBox.warning(self, "첨부 파일 오류", f"첨부 파일 '{item['name']}' 로드 실패: {e}")
             loaded_attachments.append(item)
@@ -478,7 +481,7 @@ class MainWindow(QMainWindow):
         QApplication.processEvents()
 
         if self.gemini_thread and self.gemini_thread.isRunning():
-            print("Terminating previous Gemini thread...")
+            logger.warning("Terminating previous Gemini thread...")
             self.gemini_thread.quit(); self.gemini_thread.wait()
 
         selected_model_name = self.model_name_combo.currentText().strip()
@@ -521,14 +524,14 @@ class MainWindow(QMainWindow):
 
     def handle_gemini_response(self, xml_result: str, summary_result: str):
         """ Handles Gemini response. """
-        print("--- Handling Gemini Response ---")
+        logger.info("--- Handling Gemini Response ---")
         self.api_timer.stop() # 타이머 중지
         if hasattr(self, 'xml_input_tab'):
             self.xml_input_tab.setPlainText(xml_result)
-            print(f"XML Output Length: {len(xml_result)}")
+            logger.info(f"XML Output Length: {len(xml_result)}")
         if hasattr(self, 'summary_tab'):
             self.summary_tab.setPlainText(summary_result)
-            print(f"Summary Output Length: {len(summary_result)}")
+            logger.info(f"Summary Output Length: {len(summary_result)}")
             self.build_tabs.setCurrentWidget(self.summary_tab)
 
         # API 경과 시간 계산 및 표시 (최종)
@@ -544,9 +547,8 @@ class MainWindow(QMainWindow):
 
     def handle_gemini_error(self, error_msg: str):
         """ Handles Gemini error, showing user-friendly message for specific API response issues. """
-        print(f"--- Handling Gemini Error: {error_msg} ---")
+        logger.error(f"--- Handling Gemini Error: {error_msg} ---")
         self.api_timer.stop() # 타이머 중지
-        logger.error(f"Gemini Error Received: {error_msg}")
 
         # API 경과 시간 계산 및 표시 (오류 시에도)
         if self.api_call_start_time and hasattr(self, 'api_time_label'):
@@ -569,7 +571,7 @@ class MainWindow(QMainWindow):
 
     def cleanup_gemini_thread(self):
         """ Cleans up Gemini thread and worker objects. """
-        print("--- Cleaning up Gemini thread and worker ---")
+        logger.info("--- Cleaning up Gemini thread and worker ---")
         self.api_timer.stop() # 스레드 정리 시 타이머 중지
         self.gemini_thread = None
         self.gemini_worker = None
@@ -662,9 +664,21 @@ class MainWindow(QMainWindow):
         self.checkable_proxy.setData(index, new_state, Qt.CheckStateRole)
 
     def closeEvent(self, event):
-        """Ensure database connection is closed when the window closes."""
-        logger.info("Closing MainWindow. Disconnecting database.")
+        """Ensure database connection is closed and threads are stopped when the window closes."""
+        logger.info("Closing MainWindow. Stopping threads and disconnecting database.")
         self.api_timer.stop() # 윈도우 닫을 때 타이머 중지
+        # 진행 중인 스레드 중지 시도
+        if hasattr(self, 'main_controller'):
+            self.main_controller._stop_token_calculation_thread()
+        if self.gemini_thread and self.gemini_thread.isRunning():
+            logger.warning("Terminating Gemini thread on close...")
+            self.gemini_thread.quit()
+            self.gemini_thread.wait(1000) # Wait up to 1 second
+            if self.gemini_thread and self.gemini_thread.isRunning():
+                self.gemini_thread.terminate()
+                self.gemini_thread.wait()
+            self.cleanup_gemini_thread()
+
         if hasattr(self, 'db_service'):
             self.db_service.disconnect()
         super().closeEvent(event)

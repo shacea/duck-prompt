@@ -52,9 +52,6 @@ def main():
     # 애플리케이션 아이콘 설정
     try:
         # 아이콘 경로를 get_resource_path를 사용하여 올바르게 가져옵니다.
-        # 사용자가 제공한 경로는 "resources\rubber_duck.ico" 이지만,
-        # 표준 구조상 icons 폴더 안에 두는 것이 일반적이므로 "icons/rubber_duck.ico"를 시도합니다.
-        # 만약 resources 폴더 바로 아래 있다면 "rubber_duck.ico"로 변경해야 합니다.
         icon_path = get_resource_path("icons/rubber_duck.ico")
         logging.info(f"Attempting to load icon from: {icon_path}") # 경로 로깅 추가
         if os.path.exists(icon_path):

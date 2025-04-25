@@ -1,4 +1,6 @@
+
 import os
+import logging # 로깅 추가
 from PyQt5.QtWidgets import QMessageBox, QApplication
 
 # 서비스 및 모델 import
@@ -9,16 +11,19 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
 
+logger = logging.getLogger(__name__) # 로거 설정
+
 class PromptController:
     """
     Handles logic related to prompt generation and clipboard operations.
+    Token calculation is now triggered asynchronously by MainController.
     """
     def __init__(self, main_window: 'MainWindow', prompt_service: PromptService):
         self.mw = main_window
         self.prompt_service = prompt_service
 
     def generate_prompt(self):
-        """Generates the prompt for the Code Enhancer mode and calculates tokens."""
+        """Generates the prompt for the Code Enhancer mode and triggers token calculation."""
         if self.mw.mode == "Meta Prompt Builder":
             return self.generate_meta_prompt() # Meta 모드면 해당 함수 호출
 
@@ -43,7 +48,7 @@ class PromptController:
                 self.mw.selected_files_data.append((fpath, size))
             except Exception as e:
                 error_msg = f"파일 읽기 오류 ({os.path.basename(fpath)}): {e}"
-                print(error_msg)
+                logger.error(error_msg) # 로깅 사용
                 read_errors.append(error_msg)
                 continue
 
@@ -57,24 +62,39 @@ class PromptController:
         if self.mw.tree_generated and hasattr(self.mw, "dir_structure_tab"):
             dir_structure_content = self.mw.dir_structure_tab.toPlainText()
 
+        # --- 첨부 파일 정보 로드 ---
+        # generate_code_enhancer_prompt는 마커만 사용하므로 실제 데이터 로드는 불필요
+        # 토큰 계산 시에는 실제 데이터가 필요하므로 MainController에서 처리
+        attachments_metadata = []
+        for item in self.mw.attached_items:
+            meta_item = item.copy()
+            meta_item.pop('data', None) # 데이터 제외하고 메타데이터만 전달
+            attachments_metadata.append(meta_item)
+        # -------------------------
+
         final_prompt = self.prompt_service.generate_code_enhancer_prompt(
             system_text=system_text,
             user_text=user_text,
             file_contents=file_contents,
             root_dir=self.mw.current_project_folder,
-            dir_structure_content=dir_structure_content
+            dir_structure_content=dir_structure_content,
+            attached_items=attachments_metadata # 메타데이터 전달
         )
 
         self.mw.last_generated_prompt = final_prompt
         self.mw.prompt_output_tab.setText(final_prompt)
-        # Calculate tokens for the generated prompt
-        self.mw.main_controller.calculate_and_display_tokens(final_prompt) # <<< Token calculation here
-        self.mw.status_bar.showMessage(f"Prompt generated! Length: {len(final_prompt):,} chars")
+
+        # --- Trigger token calculation asynchronously ---
+        # Pass the final prompt text and the *original* attached_items list (which might contain data)
+        self.mw.main_controller.calculate_and_display_tokens(final_prompt, self.mw.attached_items)
+        # -----------------------------------------------
+
+        self.mw.status_bar.showMessage(f"Prompt generated! Length: {len(final_prompt):,} chars. Token calculation started...")
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         return True
 
     def generate_meta_prompt(self):
-        """Generates the intermediate meta prompt and calculates tokens."""
+        """Generates the intermediate meta prompt and triggers token calculation."""
         system_text = self.mw.system_tab.toPlainText() # 메타 템플릿
         user_text = self.mw.user_tab.toPlainText() # 메타 사용자 입력
 
@@ -85,14 +105,17 @@ class PromptController:
 
         self.mw.prompt_output_tab.setText(final_output) # 메타 프롬프트 출력 탭
         self.mw.last_generated_prompt = final_output
-        # Calculate tokens for the generated meta prompt
-        self.mw.main_controller.calculate_and_display_tokens(final_output) # <<< Token calculation here
+
+        # --- Trigger token calculation asynchronously ---
+        self.mw.main_controller.calculate_and_display_tokens(final_output) # Meta mode has no attachments
+        # -----------------------------------------------
+
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
-        self.mw.status_bar.showMessage("META Prompt generated!")
+        self.mw.status_bar.showMessage("META Prompt generated! Token calculation started...")
         return True
 
     def generate_final_meta_prompt(self):
-        """Generates the final prompt by replacing variables in the meta prompt and calculates tokens."""
+        """Generates the final prompt by replacing variables and triggers token calculation."""
         meta_prompt_content = ""
         user_prompt_content = ""
         if hasattr(self.mw, 'meta_prompt_tab'):
@@ -119,10 +142,13 @@ class PromptController:
         if hasattr(self.mw, 'final_prompt_tab'):
             self.mw.final_prompt_tab.setText(final_prompt)
             self.mw.last_generated_prompt = final_prompt
-            # Calculate tokens for the generated final prompt
-            self.mw.main_controller.calculate_and_display_tokens(final_prompt) # <<< Token calculation here
+
+            # --- Trigger token calculation asynchronously ---
+            self.mw.main_controller.calculate_and_display_tokens(final_prompt) # Meta mode has no attachments
+            # -----------------------------------------------
+
             self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
-            self.mw.status_bar.showMessage("Final Prompt generated!")
+            self.mw.status_bar.showMessage("Final Prompt generated! Token calculation started...")
         else:
              QMessageBox.warning(self.mw, "오류", "최종 프롬프트 탭을 찾을 수 없습니다.")
 
@@ -157,7 +183,7 @@ class PromptController:
             return False
 
     def generate_all_and_copy(self):
-        """Generates directory tree, prompt, calculates tokens, and copies to clipboard (Code Enhancer mode only)."""
+        """Generates directory tree, prompt, triggers token calculation, and copies to clipboard (Code Enhancer mode only)."""
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 이 기능을 사용할 수 없습니다.")
             return
@@ -166,13 +192,13 @@ class PromptController:
         tree_success = self.mw.file_tree_controller.generate_directory_tree_structure()
         if not tree_success: return
 
-        # 자신의 프롬프트 생성 메서드 호출 (내부에서 토큰 계산 포함)
-        prompt_success = self.generate_prompt() # This already calls calculate_and_display_tokens
+        # 자신의 프롬프트 생성 메서드 호출 (내부에서 토큰 계산 트리거)
+        prompt_success = self.generate_prompt() # This now triggers calculate_and_display_tokens
         if not prompt_success: return
 
         # 자신의 클립보드 복사 메서드 호출
         copy_success = self.copy_to_clipboard()
         if copy_success:
-            self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성, 토큰 계산 및 복사 완료!")
-
-            
+            # 상태 메시지는 generate_prompt에서 이미 설정됨 ("... Token calculation started...")
+            # self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성, 토큰 계산 시작 및 복사 완료!")
+            pass

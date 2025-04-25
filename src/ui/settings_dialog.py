@@ -1,9 +1,8 @@
-
 import os
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
-    QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog
+    QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog, QWidget
 )
 from PyQt5.QtCore import Qt
 from typing import Optional, Set, List
@@ -12,8 +11,7 @@ from pydantic import ValidationError
 # 서비스 및 컨트롤러 함수 import
 from core.services.config_service import ConfigService
 from core.pydantic_models.config_settings import ConfigSettings
-from ui.controllers.system_prompt_controller import select_default_system_prompt # Keep for browsing
-
+from ui.controllers.system_prompt_controller import select_default_system_prompt
 # MainWindow 타입 힌트 (순환 참조 방지)
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
