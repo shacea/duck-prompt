@@ -1,3 +1,4 @@
+
 import os
 import xml.etree.ElementTree as ET
 from typing import Dict, List
@@ -34,22 +35,24 @@ class XmlService:
 
         # --- Add logic to strip Markdown code block markers ---
         cleaned_xml_string = xml_string.strip()
-        markdown_markers = ["```xml", "```", "`````xml", "`````"] # Add any other common markers if needed
+        # 다양한 마커 형태 고려 (예: ```xml, ```, ````xml, ```` 등)
+        markdown_markers = ["```xml", "```", "````xml", "````"]
 
-        # Check and remove starting marker
+        # 시작 마커 제거
         for marker in markdown_markers:
             if cleaned_xml_string.startswith(marker):
-                cleaned_xml_string = cleaned_xml_string[len(marker):].lstrip() # Remove marker and leading whitespace/newline
-                break # Assume only one starting marker
+                # 마커 길이만큼 제거하고, 이후 공백/줄바꿈 제거
+                cleaned_xml_string = cleaned_xml_string[len(marker):].lstrip()
+                break # 하나의 시작 마커만 처리
 
-        # Check and remove ending marker
-        for marker in markdown_markers: # Check for both ```` and ```xml` at the end
-            if cleaned_xml_string.endswith(marker):
-                 # Use rstrip() before checking endswith to handle trailing whitespace/newline
-                 temp_string = cleaned_xml_string.rstrip()
-                 if temp_string.endswith(marker):
-                    cleaned_xml_string = temp_string[:-len(marker)].rstrip() # Remove marker and trailing whitespace/newline
-                 break # Assume only one ending marker
+        # 끝 마커 제거
+        for marker in markdown_markers:
+            # 끝 마커 확인 전 후행 공백/줄바꿈 제거
+            temp_string = cleaned_xml_string.rstrip()
+            if temp_string.endswith(marker):
+                # 마커 길이만큼 제거하고, 이전 공백/줄바꿈 제거
+                cleaned_xml_string = temp_string[:-len(marker)].rstrip()
+                break # 하나의 끝 마커만 처리
 
         if not cleaned_xml_string:
              result["errors"].append("XML input string became empty after removing potential Markdown markers.")
@@ -57,8 +60,8 @@ class XmlService:
         # --- End of Markdown marker stripping logic ---
 
         try:
-            # XML 파싱
-            root = ET.fromstring(cleaned_xml_string) # Use the cleaned string
+            # XML 파싱 (정리된 문자열 사용)
+            root = ET.fromstring(cleaned_xml_string)
         except ET.ParseError as e:
             result["errors"].append(f"Invalid XML format after cleaning: {str(e)}")
             return result
