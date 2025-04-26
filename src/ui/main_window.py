@@ -43,6 +43,7 @@ from .settings_dialog import SettingsDialog
 from ui.widgets.custom_text_edit import CustomTextEdit
 from ui.widgets.custom_tab_bar import CustomTabBar
 from utils.helpers import get_resource_path
+from utils.notifications import show_notification # 알림 기능 임포트
 
 # Pillow import 시도
 try:
@@ -681,6 +682,9 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Gemini 응답 처리 완료.")
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(True)
 
+        # --- 작업 완료 알림 ---
+        show_notification("Gemini 응답 완료", "Gemini API 응답 처리가 완료되었습니다.")
+
     def handle_gemini_error(self, error_msg: str):
         """ Handles Gemini error, showing user-friendly message for specific API response issues. """
         logger.error(f"--- Handling Gemini Error: {error_msg} ---")
@@ -703,6 +707,12 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Gemini API 오류", user_display_error)
         self.status_bar.showMessage("Gemini API 호출 오류.")
         if hasattr(self, 'send_to_gemini_btn'): self.send_to_gemini_btn.setEnabled(True)
+
+        # --- 작업 오류 알림 ---
+        # 오류 메시지가 너무 길 수 있으므로 일부만 표시
+        notification_msg = f"Gemini API 호출 중 오류 발생: {error_msg[:100]}"
+        if len(error_msg) > 100: notification_msg += "..."
+        show_notification("Gemini 오류", notification_msg)
 
 
     def cleanup_gemini_thread(self):

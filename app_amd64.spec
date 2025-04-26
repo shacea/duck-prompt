@@ -37,7 +37,6 @@ a = Analysis(
     pathex=[str(src_dir)], # src 디렉토리 포함
     binaries=binaries, # 기본값 사용
     datas=datas,       # 리소스 및 폰트 포함
-    # hiddenimports에 pkg_resources 추가 (setuptools 관련 hook에서 필요할 수 있음)
     hiddenimports=[
         'pkg_resources',
     ],
