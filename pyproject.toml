@@ -5,7 +5,8 @@ version = "0.1.0"
 description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
 requires-python = ">=3.12"
 dependencies = [
-    "PyQt5>=5.15",
+    "PyQt5>=5.15.11",
+    "PyQt5-Qt5==5.15.2",
     "google-generativeai>=0.5.4", # Gemini API
     "langgraph>=0.0.69", # LangGraph for workflow
     "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
@@ -14,8 +15,7 @@ dependencies = [
     "PyYAML>=6.0.1", # YAML parsing (config)
     "pydantic>=2.7.1", # Data validation and settings
     "pillow>=10.3.0", # Image handling (optional but recommended)
-    "plyer>=2.1.0", # Platform-independent notifications
-    "win10toast-click>=0.1.2",
+    "winotify>=1.1.0", # Windows notifications - ADDED
     "pyinstaller>=6.13.0",
 ]
 
