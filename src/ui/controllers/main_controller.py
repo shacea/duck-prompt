@@ -4,9 +4,9 @@ import base64 # 추가
 import mimetypes # 추가
 import logging # 로깅 추가
 from typing import Optional, List, Dict, Any
-from PyQt5.QtCore import Qt, QModelIndex, QMimeData, QObject, QThread, pyqtSignal # QObject, QThread, pyqtSignal 추가
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QApplication, QListWidgetItem # QListWidgetItem 추가
-from PyQt5.QtGui import QImage # QImage 추가
+from PyQt6.QtCore import Qt, QModelIndex, QMimeData, QObject, QThread, pyqtSignal, QBuffer, QIODevice # PyQt5 -> PyQt6, QBuffer, QIODevice 추가
+from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QApplication, QListWidgetItem # PyQt5 -> PyQt6
+from PyQt6.QtGui import QImage # PyQt5 -> PyQt6
 
 # 서비스 및 모델 import
 from core.services.config_service import ConfigService
@@ -373,12 +373,11 @@ class MainController:
                     # Pillow 없으면 QBuffer 사용 시도 (덜 안정적일 수 있음)
                     try:
                         import io
-                        from PyQt5.QtCore import QBuffer, QIODevice
                         buffer = QBuffer()
-                        buffer.open(QIODevice.ReadWrite)
+                        buffer.open(QIODevice.OpenModeFlag.ReadWrite) # QIODevice.ReadWrite -> QIODevice.OpenModeFlag.ReadWrite
                         # PNG로 저장 시도
                         if qimage.save(buffer, "PNG"):
-                            image_data = buffer.data().data() # QByteArray -> bytes
+                            image_data = bytes(buffer.data()) # QByteArray -> bytes (PyQt6)
                             image_format = "PNG"
                             logger.info("Pasted image converted to PNG bytes using QBuffer.")
                         else:

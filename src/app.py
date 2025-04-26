@@ -3,9 +3,9 @@ import sys
 import os
 import ctypes
 import logging # 로깅 추가
-from PyQt5.QtWidgets import QApplication, QMessageBox # QMessageBox 추가
-from PyQt5.QtGui import QIcon
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QMessageBox # PyQt5 -> PyQt6
+from PyQt6.QtGui import QIcon # PyQt5 -> PyQt6
+from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
 from ui.main_window import MainWindow
 from utils.helpers import get_resource_path
 from core.services.db_service import DbService # DbService 임포트
@@ -43,8 +43,8 @@ def main():
             logging.warning(f"Error setting DPI awareness: {e}") # 로깅 사용
 
     # Qt High DPI 설정
-    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
-    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True) # Qt.AA_ -> Qt.ApplicationAttribute.AA_
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True) # Qt.AA_ -> Qt.ApplicationAttribute.AA_
     logging.info("Enabled Qt High DPI scaling attributes.")
 
     app = QApplication(sys.argv)
@@ -88,7 +88,7 @@ def main():
         # MainWindow 생성 및 실행
         window = MainWindow(mode="Code Enhancer Prompt Builder")
         window.show()
-        sys.exit(app.exec_())
+        sys.exit(app.exec()) # exec_() -> exec()
 
     except (ConnectionError, ValueError) as e:
          # Catch DB connection or config load errors from MainWindow init

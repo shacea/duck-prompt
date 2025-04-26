@@ -1,6 +1,6 @@
 
 import os
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox, QTreeWidgetItem # PyQt5 -> PyQt6, QTreeWidgetItem 추가
 
 # 서비스 및 모델 import
 from core.services.template_service import TemplateService
@@ -137,8 +137,8 @@ class ResourceController:
         parent_text = item.parent().text(0)
 
         reply = QMessageBox.question(self.mw, "삭제 확인", f"정말로 '{filename}'을(를) 삭제하시겠습니까?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply != QMessageBox.Yes: return
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) # QMessageBox.Yes/No -> QMessageBox.StandardButton.Yes/No
+        if reply != QMessageBox.StandardButton.Yes: return # QMessageBox.Yes -> QMessageBox.StandardButton.Yes
 
         deleted = False
         if current_mode == "프롬프트":
@@ -171,8 +171,8 @@ class ResourceController:
         parent_text = item.parent().text(0)
 
         reply = QMessageBox.question(self.mw, "업데이트 확인", f"'{filename}'의 내용을 현재 편집 중인 내용으로 덮어쓰시겠습니까?",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
-        if reply != QMessageBox.Yes: return
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes) # QMessageBox.Yes/No -> QMessageBox.StandardButton.Yes/No
+        if reply != QMessageBox.StandardButton.Yes: return # QMessageBox.Yes -> QMessageBox.StandardButton.Yes
 
         updated = False
         if current_mode == "프롬프트":

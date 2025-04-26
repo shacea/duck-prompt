@@ -1,7 +1,8 @@
+
 # src/ui/widgets/check_box_delegate.py
-from PyQt5.QtCore import Qt, QEvent, QRect, QModelIndex, QAbstractItemModel
-from PyQt5.QtWidgets import QStyledItemDelegate, QApplication, QStyleOptionViewItem, QWidget
-from PyQt5.QtGui import QMouseEvent
+from PyQt6.QtCore import Qt, QEvent, QRect, QModelIndex, QAbstractItemModel # PyQt5 -> PyQt6
+from PyQt6.QtWidgets import QStyledItemDelegate, QApplication, QStyleOptionViewItem, QWidget, QStyle # PyQt5 -> PyQt6, QStyle 추가
+from PyQt6.QtGui import QMouseEvent # PyQt5 -> PyQt6
 
 class CheckBoxDelegate(QStyledItemDelegate):
     """
@@ -19,25 +20,26 @@ class CheckBoxDelegate(QStyledItemDelegate):
             return super().editorEvent(event, model, option, index)
 
         # 마우스 릴리즈 이벤트이고, 왼쪽 버튼일 때만 반응 (QMouseEvent 타입 확인)
-        if event.type() == QEvent.MouseButtonRelease and isinstance(event, QMouseEvent) and event.button() == Qt.LeftButton:
+        if event.type() == QEvent.Type.MouseButtonRelease and isinstance(event, QMouseEvent) and event.button() == Qt.MouseButton.LeftButton: # QEvent.MouseButtonRelease -> QEvent.Type.MouseButtonRelease, Qt.LeftButton -> Qt.MouseButton.LeftButton
             # 체크박스 사각영역 계산 (스타일마다 다를 수 있음)
             style = QApplication.style()
             # QStyleOptionViewItem 객체를 직접 전달하고, delegate의 parent()를 widget으로 전달
-            cb_rect = style.subElementRect(style.SE_ItemViewItemCheckIndicator, option, self.parent())
+            cb_rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemCheckIndicator, option, self.parent()) # QStyle.SE_ItemViewItemCheckIndicator -> QStyle.SubElement.SE_ItemViewItemCheckIndicator
 
             # 마우스 클릭 위치가 체크박스 내부라면
             if cb_rect.contains(event.pos()):
-                current = model.data(index, Qt.CheckStateRole)
+                current = model.data(index, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                 # None 상태 처리 추가 (PartiallyChecked 등)
-                if current == Qt.Checked:
-                    new_state = Qt.Unchecked
+                if current == Qt.CheckState.Checked: # Qt.Checked -> Qt.CheckState.Checked
+                    new_state = Qt.CheckState.Unchecked # Qt.Unchecked -> Qt.CheckState.Unchecked
                 else: # Unchecked 또는 PartiallyChecked -> Checked
-                    new_state = Qt.Checked
+                    new_state = Qt.CheckState.Checked # Qt.Checked -> Qt.CheckState.Checked
 
                 # 모델 데이터 변경 (setData 호출)
                 # CheckableProxyModel의 setData가 호출되어야 함
-                if model.setData(index, new_state, Qt.CheckStateRole):
+                if model.setData(index, new_state, Qt.ItemDataRole.CheckStateRole): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                     return True # 이벤트 처리 완료, 다른 핸들러 호출 방지
 
         # 다른 이벤트는 기본 처리
         return super().editorEvent(event, model, option, index)
+

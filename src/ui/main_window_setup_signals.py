@@ -1,7 +1,7 @@
 
-from PyQt5.QtWidgets import QAction
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import Qt
+from PyQt6.QtWidgets import QAction # PyQt5 -> PyQt6
+from PyQt6.QtGui import QKeySequence # PyQt5 -> PyQt6
+from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
 
 # MainWindow 타입 힌트
 from typing import TYPE_CHECKING
@@ -22,7 +22,7 @@ def connect_signals(mw: 'MainWindow'):
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
     mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
     # 파일 체크 상태 변경 시 MainWindow의 상태 변경 시그널 발생
-    mw.checkable_proxy.dataChanged.connect(lambda topLeft, bottomRight, roles: mw.state_changed_signal.emit() if Qt.CheckStateRole in roles else None)
+    mw.checkable_proxy.dataChanged.connect(lambda topLeft, bottomRight, roles: mw.state_changed_signal.emit() if Qt.ItemDataRole.CheckStateRole in roles else None) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
 
 
     # 실행 버튼
@@ -104,8 +104,8 @@ def connect_signals(mw: 'MainWindow'):
     mw.import_state_action.triggered.connect(mw.resource_controller.import_state_from_file) # ResourceController
 
     # 단축키
-    shortcut_generate = QAction(mw)
-    shortcut_generate.setShortcut(QKeySequence("Ctrl+Return"))
+    shortcut_generate = QAction(mw) # PyQt6: QAction(parent)
+    shortcut_generate.setShortcut(QKeySequence(Qt.Modifier.CTRL | Qt.Key.Key_Return)) # PyQt6: Use Qt.Modifier and Qt.Key
     if mw.mode == "Meta Prompt Builder":
          if hasattr(mw, "generate_final_prompt_btn"):
              shortcut_generate.triggered.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController (Calculates tokens)
@@ -115,8 +115,8 @@ def connect_signals(mw: 'MainWindow'):
          shortcut_generate.triggered.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens)
     mw.addAction(shortcut_generate)
 
-    shortcut_copy = QAction(mw)
-    shortcut_copy.setShortcut(QKeySequence("Ctrl+C"))
+    shortcut_copy = QAction(mw) # PyQt6: QAction(parent)
+    shortcut_copy.setShortcut(QKeySequence(QKeySequence.StandardKey.Copy)) # PyQt6: Use StandardKey enum
     shortcut_copy.triggered.connect(mw.on_copy_shortcut) # MainWindow
     mw.addAction(shortcut_copy)
 

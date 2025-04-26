@@ -1,14 +1,14 @@
 
 import os
 import datetime # datetime 추가
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
     QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog, QWidget,
-    QSplitter, QSizePolicy # QSizePolicy 추가
+    QSplitter, QSizePolicy
 )
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QIcon # QColor, QIcon 추가
+from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
+from PyQt6.QtGui import QColor, QIcon # PyQt5 -> PyQt6
 from typing import Optional, Set, List, Dict, Any # Dict, Any 추가
 from pydantic import ValidationError
 import logging # 로깅 추가
@@ -74,9 +74,9 @@ class SettingsDialog(QDialog):
         # API 키 목록 표시 및 새로고침 버튼
         api_list_layout = QHBoxLayout()
         self.api_keys_list = QListWidget()
-        self.api_keys_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.api_keys_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection) # QAbstractItemView.SingleSelection -> QAbstractItemView.SelectionMode.SingleSelection
         self.api_keys_list.setMinimumHeight(100) # 최소 높이 증가
-        self.api_keys_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.api_keys_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         self.refresh_api_usage_btn = QPushButton("🔄") # 새로고침 버튼 추가
         self.refresh_api_usage_btn.setToolTip("API 키 사용량 새로고침")
         self.refresh_api_usage_btn.setFixedWidth(30) # 버튼 크기 고정
@@ -107,9 +107,9 @@ class SettingsDialog(QDialog):
         gemini_model_layout = QVBoxLayout(gemini_model_widget)
         gemini_model_layout.addWidget(QLabel("Gemini 모델:"))
         self.gemini_models_list = QListWidget()
-        self.gemini_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.gemini_models_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection) # QAbstractItemView.SingleSelection -> QAbstractItemView.SelectionMode.SingleSelection
         self.gemini_models_list.setMinimumHeight(100) # 최소 높이 증가
-        self.gemini_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.gemini_models_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         gemini_model_buttons = QHBoxLayout()
         self.add_gemini_model_btn = QPushButton("추가")
         self.remove_gemini_model_btn = QPushButton("제거")
@@ -123,9 +123,9 @@ class SettingsDialog(QDialog):
         claude_model_layout = QVBoxLayout(claude_model_widget)
         claude_model_layout.addWidget(QLabel("Claude 모델:"))
         self.claude_models_list = QListWidget()
-        self.claude_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.claude_models_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection) # QAbstractItemView.SingleSelection -> QAbstractItemView.SelectionMode.SingleSelection
         self.claude_models_list.setMinimumHeight(100) # 최소 높이 증가
-        self.claude_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.claude_models_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         claude_model_buttons = QHBoxLayout()
         self.add_claude_model_btn = QPushButton("추가")
         self.remove_claude_model_btn = QPushButton("제거")
@@ -139,9 +139,9 @@ class SettingsDialog(QDialog):
         gpt_model_layout = QVBoxLayout(gpt_model_widget)
         gpt_model_layout.addWidget(QLabel("GPT 모델:"))
         self.gpt_models_list = QListWidget()
-        self.gpt_models_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.gpt_models_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection) # QAbstractItemView.SingleSelection -> QAbstractItemView.SelectionMode.SingleSelection
         self.gpt_models_list.setMinimumHeight(100) # 최소 높이 증가
-        self.gpt_models_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.gpt_models_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         gpt_model_buttons = QHBoxLayout()
         self.add_gpt_model_btn = QPushButton("추가")
         self.remove_gpt_model_btn = QPushButton("제거")
@@ -164,11 +164,11 @@ class SettingsDialog(QDialog):
         self.excluded_dirs_edit = QPlainTextEdit()
         self.excluded_dirs_edit.setPlaceholderText("한 줄에 하나씩 입력 (예: node_modules/, *.log)")
         self.excluded_dirs_edit.setMinimumHeight(80) # 최소 높이 설정
-        self.excluded_dirs_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.excluded_dirs_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         self.default_ignore_list_edit = QPlainTextEdit()
         self.default_ignore_list_edit.setPlaceholderText("한 줄에 하나씩 입력 (예: .git/, __pycache__/)")
         self.default_ignore_list_edit.setMinimumHeight(80) # 최소 높이 설정
-        self.default_ignore_list_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.default_ignore_list_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         filtering_layout.addRow("허용 확장자:", self.allowed_extensions_edit)
         filtering_layout.addRow("제외 폴더/파일:", self.excluded_dirs_edit)
         filtering_layout.addRow("기본 무시 목록:", self.default_ignore_list_edit)
@@ -199,22 +199,22 @@ class SettingsDialog(QDialog):
         self.gitignore_edit = QPlainTextEdit()
         self.gitignore_edit.setPlaceholderText("프로젝트 폴더 선택 후 '.gitignore' 내용을 불러오거나 편집/저장하세요.")
         self.gitignore_edit.setMinimumHeight(120) # 최소 높이 설정
-        self.gitignore_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding) # 크기 정책 설정
+        self.gitignore_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
         gitignore_layout.addLayout(gitignore_button_layout)
         gitignore_layout.addWidget(self.gitignore_edit)
         self.gitignore_group.setLayout(gitignore_layout)
         self.gitignore_group.setEnabled(bool(self.mw.current_project_folder))
 
         # 버튼 박스 (Save and Close)
-        self.button_box = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Close)
-        self.button_box.button(QDialogButtonBox.Save).setText("설정 저장")
-        self.button_box.button(QDialogButtonBox.Close).setText("닫기")
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close) # QDialogButtonBox.Save -> QDialogButtonBox.StandardButton.Save
+        self.button_box.button(QDialogButtonBox.StandardButton.Save).setText("설정 저장") # QDialogButtonBox.Save -> QDialogButtonBox.StandardButton.Save
+        self.button_box.button(QDialogButtonBox.StandardButton.Close).setText("닫기") # QDialogButtonBox.Close -> QDialogButtonBox.StandardButton.Close
 
         # --- 레이아웃 설정 (2단 컬럼 스플리터 사용) ---
         main_layout = QVBoxLayout(self)
 
         # 메인 수평 스플리터 생성
-        main_horizontal_splitter = QSplitter(Qt.Horizontal)
+        main_horizontal_splitter = QSplitter(Qt.Orientation.Horizontal) # Qt.Horizontal -> Qt.Orientation.Horizontal
 
         # 왼쪽 컬럼 위젯 및 레이아웃 생성
         left_widget = QWidget()
@@ -405,8 +405,8 @@ class SettingsDialog(QDialog):
                     display_text += f" (RPM: {remaining_rpm_str}, Daily: {remaining_daily_str})"
 
                 item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, key_id) # 키 ID 저장
-                item.setData(Qt.UserRole + 1, api_key_value) # 실제 키 값 저장 (숨김 데이터)
+                item.setData(Qt.ItemDataRole.UserRole, key_id) # Qt.UserRole -> Qt.ItemDataRole.UserRole
+                item.setData(Qt.ItemDataRole.UserRole + 1, api_key_value) # Qt.UserRole -> Qt.ItemDataRole.UserRole
                 item.setBackground(item_color) # 배경색 설정
 
                 tooltip_text = (
@@ -430,9 +430,9 @@ class SettingsDialog(QDialog):
         provider, ok1 = QInputDialog.getItem(self, "API 키 추가", "Provider 선택:", ["google", "anthropic", "openai"], 0, False)
         if not ok1: return
         # QLineEdit.Password 대신 QLineEdit.Normal 사용
-        api_key, ok2 = QInputDialog.getText(self, "API 키 추가", f"{provider} API 키 입력:", QLineEdit.Normal)
+        api_key, ok2 = QInputDialog.getText(self, "API 키 추가", f"{provider} API 키 입력:", QLineEdit.EchoMode.Normal) # QLineEdit.Normal -> QLineEdit.EchoMode.Normal
         if not ok2 or not api_key.strip(): return
-        description, ok3 = QInputDialog.getText(self, "API 키 추가", "설명 (선택 사항):", QLineEdit.Normal)
+        description, ok3 = QInputDialog.getText(self, "API 키 추가", "설명 (선택 사항):", QLineEdit.EchoMode.Normal) # QLineEdit.Normal -> QLineEdit.EchoMode.Normal
         if not ok3: description = ""
 
         try:
@@ -453,12 +453,12 @@ class SettingsDialog(QDialog):
             return
 
         item = selected_items[0]
-        key_id = item.data(Qt.UserRole)
+        key_id = item.data(Qt.ItemDataRole.UserRole) # Qt.UserRole -> Qt.ItemDataRole.UserRole
         display_text = item.text()
 
         reply = QMessageBox.question(self, "삭제 확인", f"정말로 API 키를 삭제하시겠습니까?\n({display_text})",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply != QMessageBox.Yes: return
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) # QMessageBox.Yes/No -> QMessageBox.StandardButton.Yes/No
+        if reply != QMessageBox.StandardButton.Yes: return # QMessageBox.Yes -> QMessageBox.StandardButton.Yes
 
         try:
             success = self.db_service.delete_api_key(key_id)
@@ -472,12 +472,12 @@ class SettingsDialog(QDialog):
 
     def show_api_key_value(self, item: QListWidgetItem):
         """더블클릭된 API 키의 실제 값을 메시지 박스로 보여줍니다."""
-        api_key_value = item.data(Qt.UserRole + 1)
+        api_key_value = item.data(Qt.ItemDataRole.UserRole + 1) # Qt.UserRole -> Qt.ItemDataRole.UserRole
         if api_key_value:
             QMessageBox.information(self, "API 키 값 확인",
                                     f"선택한 API 키 값:\n\n{api_key_value}\n\n"
                                     "주의: 이 키는 민감한 정보이므로 안전하게 관리하세요.",
-                                    QMessageBox.Ok)
+                                    QMessageBox.StandardButton.Ok) # QMessageBox.Ok -> QMessageBox.StandardButton.Ok
         else:
             QMessageBox.warning(self, "오류", "API 키 값을 가져올 수 없습니다.")
 

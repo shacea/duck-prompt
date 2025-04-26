@@ -1,7 +1,7 @@
 
 import os
 import logging # 로깅 추가
-from PyQt5.QtWidgets import QMessageBox, QApplication
+from PyQt6.QtWidgets import QMessageBox, QApplication # PyQt5 -> PyQt6
 
 # 서비스 및 모델 import
 from core.services.prompt_service import PromptService
@@ -202,3 +202,4 @@ class PromptController:
             # 상태 메시지는 generate_prompt에서 이미 설정됨 ("... Token calculation started...")
             # self.mw.status_bar.showMessage("트리 생성, 프롬프트 생성, 토큰 계산 시작 및 복사 완료!")
             pass
+

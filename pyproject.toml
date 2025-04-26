@@ -5,8 +5,8 @@ version = "0.1.0"
 description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
 requires-python = ">=3.12"
 dependencies = [
-    "PyQt5>=5.15.11",
-    "PyQt5-Qt5==5.15.2",
+    "PyQt6>=6.7.0",             # PyQt5 -> PyQt6
+    "PyQt6-Qt6>=6.7.0",         # PyQt5-Qt5 -> PyQt6-Qt6
     "google-generativeai>=0.5.4", # Gemini API
     "langgraph>=0.0.69", # LangGraph for workflow
     "tiktoken>=0.7.0", # Token calculation (GPT/fallback)

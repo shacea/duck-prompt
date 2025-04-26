@@ -4,16 +4,16 @@ import io
 import logging
 import datetime
 from typing import Optional, List, Dict, Any
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTreeView, QTabWidget, QAction,
+    QTreeView, QTabWidget,
     QStatusBar, QPushButton, QLabel, QCheckBox,
     QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu,
     QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox,
     QFrame, QLineEdit, QDialog, QListWidget, QListWidgetItem, QStyle
 )
-from PyQt5.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices, QPixmap, QImage
-from PyQt5.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl, QThread, pyqtSignal, QObject, QBuffer, QIODevice, QTimer
+from PyQt6.QtGui import QKeySequence, QIcon, QCursor, QMouseEvent, QFont, QDesktopServices, QPixmap, QImage, QAction # PyQt5 -> PyQt6, QAction 추가
+from PyQt6.QtCore import Qt, QSize, QStandardPaths, QModelIndex, QItemSelection, QUrl, QThread, pyqtSignal, QObject, QBuffer, QIODevice, QTimer # PyQt5 -> PyQt6
 
 # 서비스 및 모델 import
 from core.pydantic_models.app_state import AppState
@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
         except ConnectionError as e:
              QMessageBox.critical(self, "Database Error", f"데이터베이스 연결 실패: {e}\n프로그램을 종료합니다.")
              # Exit the application gracefully
-             # QApplication.instance().quit() # This might not work before app.exec_()
+             # QApplication.instance().quit() # This might not work before app.exec()
              # Instead, prevent further initialization and let the app close
              raise SystemExit(f"Database connection failed: {e}") # Exit if DB fails
         except ValueError as e:
@@ -224,7 +224,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(self, self)
         # Dialog is now mostly read-only for config settings
         # It only saves .gitignore changes now
-        dialog.exec_()
+        dialog.exec() # exec_() -> exec()
         # No need to reload config settings here unless .gitignore affects something immediately
         # Refreshing the filter is handled within the dialog's save_gitignore
         logger.info("Settings dialog closed.")
@@ -384,7 +384,7 @@ class MainWindow(QMainWindow):
                 for proxy_index in items_to_check:
                     # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
                     # CheckableProxyModel의 setData는 내부적으로 dataChanged 시그널을 발생시킴
-                    self.checkable_proxy.setData(proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole) # Qt.Checked -> Qt.CheckState.Checked, Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                     logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
                 # 트리 새로고침 불필요
 
@@ -474,7 +474,7 @@ class MainWindow(QMainWindow):
                 logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
                 for proxy_index in items_to_check:
                     # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    self.checkable_proxy.setData(proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole) # Qt.Checked -> Qt.CheckState.Checked, Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                     logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
 
             self.file_tree_controller.load_gitignore_settings() # gitignore 로드
@@ -501,7 +501,7 @@ class MainWindow(QMainWindow):
             if src_index.isValid():
                 proxy_index = self.checkable_proxy.mapFromSource(src_index)
                 if proxy_index.isValid():
-                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.CheckStateRole])
+                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole]) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
         self.state_changed_signal.emit() # 상태 변경 시그널 발생
 
     def create_tree_item(self, text, parent=None) -> QTreeWidgetItem:
@@ -562,19 +562,19 @@ class MainWindow(QMainWindow):
                         pixmap = QPixmap()
                         pixmap.loadFromData(img_data)
                         if not pixmap.isNull():
-                            icon = QIcon(pixmap.scaled(QSize(32, 32), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                            icon = QIcon(pixmap.scaled(QSize(32, 32), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)) # Qt.KeepAspectRatio -> Qt.AspectRatioMode.KeepAspectRatio, Qt.SmoothTransformation -> Qt.TransformationMode.SmoothTransformation
                         else:
-                           icon = self.style().standardIcon(QStyle.SP_FileIcon)
+                           icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
                     except Exception as e:
                         logger.error(f"Error creating thumbnail for {item_name}: {e}")
-                        icon = self.style().standardIcon(QStyle.SP_FileIcon)
+                        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
                 else:
-                    icon = self.style().standardIcon(QStyle.SP_FileIcon)
+                    icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
 
             elif item_type == 'file':
-                icon = self.style().standardIcon(QStyle.SP_FileIcon)
+                icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
             else:
-                icon = self.style().standardIcon(QStyle.SP_FileIcon)
+                icon = self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
             list_item.setIcon(icon)
             self.attachment_list_widget.addItem(list_item)
         # 첨부 목록 변경 시 상태 변경 시그널 발생 (자동 저장용)
@@ -797,17 +797,20 @@ class MainWindow(QMainWindow):
         file_path = self.checkable_proxy.get_file_path_from_index(index)
         if not file_path: return
         menu = QMenu()
-        rename_action = menu.addAction("이름 변경"); delete_action = menu.addAction("삭제")
-        action = menu.exec_(self.tree_view.viewport().mapToGlobal(position))
+        rename_action = QAction("이름 변경", self) # PyQt6: QAction(text, parent)
+        delete_action = QAction("삭제", self) # PyQt6: QAction(text, parent)
+        menu.addAction(rename_action)
+        menu.addAction(delete_action)
+        action = menu.exec(self.tree_view.viewport().mapToGlobal(position)) # exec_() -> exec()
         if action == rename_action: self.file_tree_controller.rename_item(file_path)
         elif action == delete_action: self.file_tree_controller.delete_item(file_path)
 
     def on_tree_view_item_clicked(self, index: QModelIndex):
         """Handles item clicks in the tree view to toggle check state."""
         if not index.isValid() or index.column() != 0: return
-        current_state = self.checkable_proxy.data(index, Qt.CheckStateRole)
-        new_state = Qt.Unchecked if current_state == Qt.Checked else Qt.Checked
-        self.checkable_proxy.setData(index, new_state, Qt.CheckStateRole)
+        current_state = self.checkable_proxy.data(index, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
+        new_state = Qt.CheckState.Unchecked if current_state == Qt.CheckState.Checked else Qt.CheckState.Checked # Qt.Checked/Unchecked -> Qt.CheckState.Checked/Unchecked
+        self.checkable_proxy.setData(index, new_state, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
         # 체크 상태 변경 시 자동 저장 타이머 재시작
         self.state_changed_signal.emit()
 

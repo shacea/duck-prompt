@@ -1,6 +1,6 @@
+
 import os
-from PyQt5.QtWidgets import QFileDialog, QMessageBox, QWidget # QWidget 추가
-# from dotenv import load_dotenv, set_key, find_dotenv # .env 사용 안 함
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QWidget # PyQt5 -> PyQt6
 
 # 변경된 경로에서 import
 from utils.helpers import get_resource_path, get_project_root
@@ -148,3 +148,4 @@ def select_default_system_prompt(config_service: ConfigService, parent_widget: O
             )
             return None
     return None # 사용자가 취소한 경우
+

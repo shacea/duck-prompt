@@ -1,5 +1,6 @@
+
 import os
-from PyQt5.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QMessageBox # PyQt5 -> PyQt6
 
 # 서비스 및 모델 import
 from core.services.xml_service import XmlService
@@ -61,3 +62,4 @@ class XmlController:
         if hasattr(self.mw, 'file_tree_controller'):
             self.mw.file_tree_controller.refresh_tree()
         self.mw.status_bar.showMessage("XML 파싱 완료!")
+

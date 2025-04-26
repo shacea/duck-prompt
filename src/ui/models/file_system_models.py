@@ -1,7 +1,8 @@
+
 import os
 import fnmatch
-from PyQt5.QtCore import QSortFilterProxyModel, Qt, QModelIndex
-from PyQt5.QtWidgets import QFileSystemModel, QTreeView
+from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex # PyQt5 -> PyQt6
+from PyQt6.QtWidgets import QFileSystemModel, QTreeView # PyQt5 -> PyQt6
 from typing import Callable, Optional, Set
 from core.services.filesystem_service import FilesystemService
 
@@ -85,17 +86,17 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
         return True # 필터링되지 않으면 표시
 
-    def data(self, index, role=Qt.DisplayRole):
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole): # Qt.DisplayRole -> Qt.ItemDataRole.DisplayRole
         """Returns data for the item, including check state and file size."""
         if not index.isValid():
             return None
 
         if index.column() == 0:
-            if role == Qt.CheckStateRole:
+            if role == Qt.ItemDataRole.CheckStateRole: # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                 file_path = self.get_file_path_from_index(index)
                 # 체크 상태 반환 (dict에 없으면 Unchecked)
-                return Qt.Checked if self.checked_files_dict.get(file_path, False) else Qt.Unchecked
-            elif role == Qt.DisplayRole:
+                return Qt.CheckState.Checked if self.checked_files_dict.get(file_path, False) else Qt.CheckState.Unchecked # Qt.Checked/Unchecked -> Qt.CheckState.Checked/Unchecked
+            elif role == Qt.ItemDataRole.DisplayRole: # Qt.DisplayRole -> Qt.ItemDataRole.DisplayRole
                 # 기본 파일/폴더 이름 가져오기
                 base_name = super().data(index, role)
                 # 소스 모델 인덱스 가져오기
@@ -121,10 +122,10 @@ class CheckableProxyModel(QSortFilterProxyModel):
         flags = super().flags(index)
         if index.column() == 0:
             # Ensure the item is enabled to be checkable and selectable
-            flags |= Qt.ItemIsEnabled | Qt.ItemIsUserCheckable | Qt.ItemIsSelectable
+            flags |= Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable # Qt.ItemIsEnabled -> Qt.ItemFlag.ItemIsEnabled etc.
         return flags
 
-    def setData(self, index: QModelIndex, value: any, role: int = Qt.EditRole) -> bool:
+    def setData(self, index: QModelIndex, value: any, role: int = Qt.ItemDataRole.EditRole) -> bool: # Qt.EditRole -> Qt.ItemDataRole.EditRole
         """Sets data for the item, handling check state changes, including multi-select and folder recursion."""
         # --- 디버깅 로그 추가 (1) ---
         # print("▶ setData called:", index.row(), index.column(), "role=", role, "value=", value)
@@ -132,7 +133,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
         if self._is_setting_data: # 재귀 호출 방지
             # print(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
             return False
-        if index.column() != 0 or role != Qt.CheckStateRole:
+        if index.column() != 0 or role != Qt.ItemDataRole.CheckStateRole: # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
             return super().setData(index, value, role)
 
         # print(f"setData called for index: {self.get_file_path_from_index(index)}, value: {value}")
@@ -154,8 +155,8 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 target_indexes_to_process = [index]
                 # print(f"Single-select or non-selected click. Processing 1 item.")
 
-            new_check_state = value # The desired state (Qt.Checked or Qt.Unchecked)
-            is_checked = (new_check_state == Qt.Checked)
+            new_check_state = value # The desired state (Qt.CheckState.Checked or Qt.CheckState.Unchecked)
+            is_checked = (new_check_state == Qt.CheckState.Checked) # Qt.Checked -> Qt.CheckState.Checked
 
             processed_paths = set() # Avoid processing the same path multiple times in one go
             items_to_update_signal = [] # Collect indices for batch signal emission
@@ -214,7 +215,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 # print(f"Emitting dataChanged for {len(unique_indices_to_signal)} unique indices.")
                 for idx_to_signal in unique_indices_to_signal:
                     # print(f"  Emitting for: {self.get_file_path_from_index(idx_to_signal)}")
-                    self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.CheckStateRole])
+                    self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.ItemDataRole.CheckStateRole]) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
                     # --- 디버깅 로그 제거 (2) ---
                     # print("  ▶ dataChanged emitted for:", self.get_file_path_from_index(idx_to_signal))
 
@@ -320,3 +321,4 @@ class CheckableProxyModel(QSortFilterProxyModel):
     def get_checked_files(self) -> list[str]:
         """Returns a list of checked paths that correspond to actual files."""
         return [path for path, checked in self.checked_files_dict.items() if checked and os.path.isfile(path)]
+

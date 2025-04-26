@@ -2,8 +2,8 @@
 import os
 import shutil
 from typing import Optional, List, Set
-from PyQt5.QtCore import Qt, QModelIndex, QItemSelection
-from PyQt5.QtWidgets import QFileDialog, QInputDialog, QMessageBox
+from PyQt6.QtCore import Qt, QModelIndex, QItemSelection # PyQt5 -> PyQt6
+from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox # PyQt5 -> PyQt6
 
 # 서비스 및 모델 import
 from core.services.filesystem_service import FilesystemService
@@ -53,7 +53,7 @@ class FileTreeController:
                 # 루트 폴더 자동 체크 (선택적)
                 if root_proxy_index.isValid():
                     # Check the root folder by default
-                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.Checked, Qt.CheckStateRole)
+                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole) # Qt.Checked -> Qt.CheckState.Checked, Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
 
             self.mw.update_window_title(folder_name)
             # 프로젝트 폴더 변경 시 상태 변경 시그널 발생
@@ -186,9 +186,9 @@ class FileTreeController:
         item_type = "폴더" if os.path.isdir(file_path) else "파일"
         reply = QMessageBox.question(self.mw, "삭제 확인",
                                      f"정말로 '{item_name}' {item_type}을(를) 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.",
-                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) # QMessageBox.Yes/No -> QMessageBox.StandardButton.Yes/No
 
-        if reply == QMessageBox.Yes:
+        if reply == QMessageBox.StandardButton.Yes: # QMessageBox.Yes -> QMessageBox.StandardButton.Yes
             try:
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path)
@@ -223,10 +223,10 @@ class FileTreeController:
          parent_path = self.mw.checkable_proxy.get_file_path_from_index(parent_proxy_index)
          if parent_path:
              is_checked = self.mw.checkable_proxy.checked_files_dict.get(parent_path, False)
-             current_state = self.mw.checkable_proxy.data(parent_proxy_index, Qt.CheckStateRole)
-             target_state = Qt.Checked if is_checked else Qt.Unchecked
+             current_state = self.mw.checkable_proxy.data(parent_proxy_index, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
+             target_state = Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked # Qt.Checked/Unchecked -> Qt.CheckState.Checked/Unchecked
              if current_state != target_state:
-                 self.mw.checkable_proxy.setData(parent_proxy_index, target_state, Qt.CheckStateRole)
+                 self.mw.checkable_proxy.setData(parent_proxy_index, target_state, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
 
          row_count = self.mw.checkable_proxy.rowCount(parent_proxy_index)
          for row in range(row_count):
@@ -237,7 +237,7 @@ class FileTreeController:
 
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
-        if Qt.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'):
+        if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
             checked_files = self.mw.checkable_proxy.get_checked_files()
             self.mw.selected_files_data = []
             total_size = 0

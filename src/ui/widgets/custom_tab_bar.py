@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QTabBar, QTabWidget, QInputDialog, QMessageBox, QMainWindow
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QMouseEvent
+
+from PyQt6.QtWidgets import QTabBar, QTabWidget, QInputDialog, QMessageBox, QMainWindow # PyQt5 -> PyQt6
+from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
+from PyQt6.QtGui import QMouseEvent # PyQt5 -> PyQt6
 from .tab_manager import is_tab_deletable
 
 class CustomTabBar(QTabBar):
@@ -18,8 +19,8 @@ class CustomTabBar(QTabBar):
 
     def mousePressEvent(self, event: QMouseEvent):
         """Handles left mouse button press for adding new tabs."""
-        if event.button() == Qt.LeftButton:
-            pos = event.pos()
+        if event.button() == Qt.MouseButton.LeftButton: # Qt.LeftButton -> Qt.MouseButton.LeftButton
+            pos = event.position().toPoint() # PyQt6: event.pos() -> event.position().toPoint()
             index = self.tabAt(pos)
             # "+" 탭 클릭 시 새 탭 추가 동작 연결
             if index >= 0 and self.tabText(index) == "+":
@@ -31,8 +32,8 @@ class CustomTabBar(QTabBar):
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         """Handles middle mouse button release for closing tabs."""
-        if event.button() == Qt.MiddleButton:
-            pos = event.pos()
+        if event.button() == Qt.MouseButton.MiddleButton: # Qt.MiddleButton -> Qt.MouseButton.MiddleButton
+            pos = event.position().toPoint() # PyQt6: event.pos() -> event.position().toPoint()
             index = self.tabAt(pos)
             if index >= 0:
                 tab_text = self.tabText(index)
@@ -45,8 +46,8 @@ class CustomTabBar(QTabBar):
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         """Handles left mouse button double-click for renaming tabs."""
-        if event.button() == Qt.LeftButton:
-            pos = event.pos()
+        if event.button() == Qt.MouseButton.LeftButton: # Qt.LeftButton -> Qt.MouseButton.LeftButton
+            pos = event.position().toPoint() # PyQt6: event.pos() -> event.position().toPoint()
             index = self.tabAt(pos)
             if index >= 0:
                 tab_text = self.tabText(index)
@@ -70,3 +71,4 @@ class CustomTabBar(QTabBar):
                     elif ok:
                          QMessageBox.warning(self.parentWidget(), "경고", "탭 이름은 비워둘 수 없습니다.")
         super().mouseDoubleClickEvent(event)
+

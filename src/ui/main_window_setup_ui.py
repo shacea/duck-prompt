@@ -1,15 +1,15 @@
 
 import os
 import sys
-from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget, QAction,
+from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
+    QWidget, QVBoxLayout, QHBoxLayout, QTreeView, QTabWidget,
     QStatusBar, QPushButton, QLabel, QCheckBox, QAbstractItemView, QMenuBar,
     QSplitter, QStyleFactory, QApplication, QMenu, QTreeWidget, QComboBox,
     QFrame, QLineEdit, QGroupBox, QSpacerItem, QSizePolicy, QListWidget,
-    QGridLayout # QGridLayout 추가
+    QGridLayout
 )
-from PyQt5.QtGui import QFont, QFontDatabase
-from PyQt5.QtCore import Qt
+from PyQt6.QtGui import QFont, QFontDatabase, QAction # PyQt5 -> PyQt6, QAction 추가
+from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
 
 # MainWindow 타입 힌트
 from typing import TYPE_CHECKING
@@ -30,31 +30,31 @@ def create_menu_bar(mw: 'MainWindow'):
 
     # "파일" 메뉴 제거, "환경 설정" 메뉴를 첫 번째로 추가
     settings_menu = mw.menubar.addMenu("환경 설정") # "파일" 대신 "환경 설정" 메뉴 추가
-    mw.settings_action = QAction("환경 설정 열기...", mw) # 액션 이름 변경 가능
+    mw.settings_action = QAction("환경 설정 열기...", mw) # PyQt6: QAction(text, parent)
     settings_menu.addAction(mw.settings_action)
     settings_menu.addSeparator() # 필요 시 구분선 추가
 
     # 나머지 메뉴들
     mode_menu = mw.menubar.addMenu("모드")
-    switch_to_code_action = QAction("코드 강화 빌더로 전환", mw)
-    switch_to_meta_action = QAction("메타 프롬프트 빌더로 전환", mw)
+    switch_to_code_action = QAction("코드 강화 빌더로 전환", mw) # PyQt6: QAction(text, parent)
+    switch_to_meta_action = QAction("메타 프롬프트 빌더로 전환", mw) # PyQt6: QAction(text, parent)
     switch_to_code_action.triggered.connect(lambda: mw._restart_with_mode("Code Enhancer Prompt Builder"))
     switch_to_meta_action.triggered.connect(lambda: mw._restart_with_mode("Meta Prompt Builder"))
     mode_menu.addAction(switch_to_code_action)
     mode_menu.addAction(switch_to_meta_action)
 
     state_menu = mw.menubar.addMenu("상태")
-    mw.save_state_action = QAction("상태 저장(기본)", mw) # "작업 저장" 버튼과 기능 동일
-    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # "마지막 작업 불러오기" 버튼과 기능 동일
-    mw.export_state_action = QAction("상태 내보내기", mw)
-    mw.import_state_action = QAction("상태 가져오기", mw)
+    mw.save_state_action = QAction("상태 저장(기본)", mw) # PyQt6: QAction(text, parent)
+    mw.load_state_action = QAction("상태 불러오기(기본)", mw) # PyQt6: QAction(text, parent)
+    mw.export_state_action = QAction("상태 내보내기", mw) # PyQt6: QAction(text, parent)
+    mw.import_state_action = QAction("상태 가져오기", mw) # PyQt6: QAction(text, parent)
     state_menu.addAction(mw.save_state_action)
     state_menu.addAction(mw.load_state_action)
     state_menu.addAction(mw.export_state_action)
     state_menu.addAction(mw.import_state_action)
 
     help_menu = mw.menubar.addMenu("도움말")
-    open_readme_action = QAction("README 열기", mw)
+    open_readme_action = QAction("README 열기", mw) # PyQt6: QAction(text, parent)
     open_readme_action.triggered.connect(mw._open_readme)
     help_menu.addAction(open_readme_action)
 
@@ -88,7 +88,7 @@ def create_widgets(mw: 'MainWindow'):
         default_font.setPointSize(11)
         font_family_name = "Apple SD Gothic Neo"
     else:
-        default_font.setStyleHint(QFont.SansSerif)
+        default_font.setStyleHint(QFont.StyleHint.SansSerif) # QFont.SansSerif -> QFont.StyleHint.SansSerif
         default_font.setPointSize(10)
         font_family_name = "System Default Sans-Serif"
     print(f"Applying default font: {font_family_name}, Size: {default_font.pointSize()}")
@@ -115,9 +115,9 @@ def create_widgets(mw: 'MainWindow'):
     mw.tree_view.setModel(mw.checkable_proxy)
     mw.tree_view.setColumnWidth(0, 250)
     mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
-    mw.tree_view.setSelectionMode(QAbstractItemView.ExtendedSelection)
-    mw.tree_view.setContextMenuPolicy(Qt.CustomContextMenu)
-    mw.tree_view.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    mw.tree_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection) # QAbstractItemView.ExtendedSelection -> QAbstractItemView.SelectionMode.ExtendedSelection
+    mw.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu) # Qt.CustomContextMenu -> Qt.ContextMenuPolicy.CustomContextMenu
+    mw.tree_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) # QAbstractItemView.NoEditTriggers -> QAbstractItemView.EditTrigger.NoEditTriggers
     mw.tree_view.setItemDelegateForColumn(0, CheckBoxDelegate(mw.tree_view))
 
     # --- 리소스 관리 (오른쪽 하단) ---
@@ -162,7 +162,7 @@ def create_widgets(mw: 'MainWindow'):
     resource_manager_layout.addWidget(mw.delete_template_btn, 6, 1) # 행 6
 
     # 오른쪽 열 하단에 빈 공간 추가 (선택적)
-    resource_manager_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding), 7, 1)
+    resource_manager_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding), 7, 1) # QSizePolicy.Minimum -> QSizePolicy.Policy.Minimum, QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
 
     # 열 너비 비율 설정 (선택적)
     resource_manager_layout.setColumnStretch(0, 1) # 왼쪽 열(트리)이 남는 공간 차지
@@ -183,7 +183,7 @@ def create_widgets(mw: 'MainWindow'):
     attachment_button_layout.addWidget(mw.remove_attachment_btn)
     attachment_button_layout.addStretch()
     mw.attachment_list_widget = QListWidget() # 리스트 위젯 생성
-    mw.attachment_list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection) # 다중 선택 가능
+    mw.attachment_list_widget.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection) # QAbstractItemView.ExtendedSelection -> QAbstractItemView.SelectionMode.ExtendedSelection
     attachment_layout.addLayout(attachment_button_layout)
     attachment_layout.addWidget(mw.attachment_list_widget, 1) # 리스트 위젯이 공간 차지
     mw.attachment_group.setLayout(attachment_layout)
@@ -203,7 +203,7 @@ def create_widgets(mw: 'MainWindow'):
     if mw.mode != "Meta Prompt Builder":
         mw.dir_structure_tab = CustomTextEdit(); mw.dir_structure_tab.setReadOnly(True); mw.dir_structure_tab.setFont(default_font); mw.build_tabs.addTab(mw.dir_structure_tab, "파일 트리")
     mw.prompt_output_tab = CustomTextEdit()
-    output_font = QFont("Consolas", 10) if sys.platform == "win32" else QFont("Monaco", 11) if sys.platform == "darwin" else QFont("Monospace", 10); output_font.setStyleHint(QFont.Monospace)
+    output_font = QFont("Consolas", 10) if sys.platform == "win32" else QFont("Monaco", 11) if sys.platform == "darwin" else QFont("Monospace", 10); output_font.setStyleHint(QFont.StyleHint.Monospace) # QFont.Monospace -> QFont.StyleHint.Monospace
     mw.prompt_output_tab.setFont(output_font); mw.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }"); mw.build_tabs.addTab(mw.prompt_output_tab, prompt_output_label)
     if mw.mode != "Meta Prompt Builder":
         mw.xml_input_tab = CustomTextEdit(); mw.xml_input_tab.setPlaceholderText("XML 내용 입력..."); mw.xml_input_tab.setFont(default_font); mw.build_tabs.addTab(mw.xml_input_tab, "XML 입력")
@@ -236,7 +236,7 @@ def create_widgets(mw: 'MainWindow'):
 
     # --- LLM 관련 위젯 (상단) ---
     mw.llm_combo = QComboBox(); mw.llm_combo.addItems(["Gemini", "Claude", "GPT"])
-    mw.model_name_combo = QComboBox(); mw.model_name_combo.setEditable(True); mw.model_name_combo.setInsertPolicy(QComboBox.NoInsert)
+    mw.model_name_combo = QComboBox(); mw.model_name_combo.setEditable(True); mw.model_name_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert) # QComboBox.NoInsert -> QComboBox.InsertPolicy.NoInsert
     mw.gemini_temp_label = QLabel("Temp:")
     mw.gemini_temp_edit = QLineEdit(); mw.gemini_temp_edit.setFixedWidth(40); mw.gemini_temp_edit.setPlaceholderText("0.0")
     mw.gemini_thinking_label = QLabel("Thinking:")
@@ -250,11 +250,11 @@ def create_widgets(mw: 'MainWindow'):
     gemini_param_layout = QHBoxLayout(mw.gemini_param_widget)
     gemini_param_layout.setContentsMargins(0, 0, 0, 0); gemini_param_layout.setSpacing(5)
     gemini_param_layout.addWidget(mw.gemini_temp_label); gemini_param_layout.addWidget(mw.gemini_temp_edit)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     gemini_param_layout.addWidget(mw.gemini_thinking_label); gemini_param_layout.addWidget(mw.gemini_thinking_checkbox)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
-    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     gemini_param_layout.addWidget(mw.gemini_search_label); gemini_param_layout.addWidget(mw.gemini_search_checkbox)
     mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
 
@@ -298,7 +298,7 @@ def create_layout(mw: 'MainWindow'):
     main_layout.addLayout(top_layout_wrapper, 0) # 상단 전체 레이아웃 추가
 
     # --- 중앙 스플리터 ---
-    mw.center_splitter = QSplitter(Qt.Horizontal)
+    mw.center_splitter = QSplitter(Qt.Orientation.Horizontal) # Qt.Horizontal -> Qt.Orientation.Horizontal
 
     # --- 왼쪽 영역 (파일 트리 + 첨부 파일) ---
     left_side_widget = QWidget() # 컨테이너 위젯
@@ -306,7 +306,7 @@ def create_layout(mw: 'MainWindow'):
     left_side_layout.setContentsMargins(2, 2, 2, 2); left_side_layout.setSpacing(5)
 
     # 세로 스플리터 생성
-    left_splitter = QSplitter(Qt.Vertical)
+    left_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
     left_splitter.addWidget(mw.tree_view) # 파일 트리 추가
     left_splitter.addWidget(mw.attachment_group) # 첨부 파일 그룹 추가
     left_splitter.setSizes([400, 200]) # 초기 크기 설정 (조정 가능)
@@ -323,17 +323,17 @@ def create_layout(mw: 'MainWindow'):
     # 실행 버튼 컨테이너
     run_buttons_container = QWidget()
     run_layout = QHBoxLayout(run_buttons_container)
-    run_layout.setContentsMargins(5, 5, 5, 5); run_layout.setSpacing(10); run_layout.setAlignment(Qt.AlignLeft)
+    run_layout.setContentsMargins(5, 5, 5, 5); run_layout.setSpacing(10); run_layout.setAlignment(Qt.AlignmentFlag.AlignLeft) # Qt.AlignLeft -> Qt.AlignmentFlag.AlignLeft
     for btn in mw.run_buttons: run_layout.addWidget(btn)
     run_layout.addStretch(1)
     right_side_layout.addWidget(run_buttons_container)
 
     # 구분선
-    line_frame = QFrame(); line_frame.setFrameShape(QFrame.HLine); line_frame.setFrameShadow(QFrame.Sunken)
+    line_frame = QFrame(); line_frame.setFrameShape(QFrame.Shape.HLine); line_frame.setFrameShadow(QFrame.Shadow.Sunken) # QFrame.HLine -> QFrame.Shape.HLine, QFrame.Sunken -> QFrame.Shadow.Sunken
     right_side_layout.addWidget(line_frame)
 
     # 오른쪽 상하 분할 스플리터
-    right_content_splitter = QSplitter(Qt.Vertical)
+    right_content_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
 
     # 오른쪽 상단: 탭 위젯
     right_content_splitter.addWidget(mw.build_tabs)
@@ -356,8 +356,10 @@ def create_layout(mw: 'MainWindow'):
     mw.center_splitter.addWidget(right_side_widget)
 
     # 중앙 스플리터 크기 비율 설정 (예: 1:3)
-    mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
-    mw.center_splitter.setStretchFactor(1, 3) # 오른쪽 영역 비율
+    # setStretchFactor is deprecated in PyQt6, use setSizes or handle resize events
+    # mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
+    # mw.center_splitter.setStretchFactor(1, 3) # 오른쪽 영역 비율
+    # Instead, set initial sizes (already done above)
 
     # 메인 레이아웃에 중앙 스플리터 추가
     main_layout.addWidget(mw.center_splitter, 1)
@@ -376,7 +378,7 @@ def create_status_bar(mw: 'MainWindow'):
     status_layout.addWidget(mw.token_count_label) # 토큰 계산 라벨 위치 변경
 
     # API 시간 표시 라벨 추가
-    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Fixed, QSizePolicy.Minimum))
+    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     status_layout.addWidget(mw.api_time_label)
 
     # LLM 관련 위젯들은 상단으로 이동했으므로 여기서 제거

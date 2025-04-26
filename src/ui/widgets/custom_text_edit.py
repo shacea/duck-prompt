@@ -1,5 +1,6 @@
-from PyQt5.QtWidgets import QTextEdit
-from PyQt5.QtCore import QMimeData
+
+from PyQt6.QtWidgets import QTextEdit # PyQt5 -> PyQt6
+from PyQt6.QtCore import QMimeData # PyQt5 -> PyQt6
 
 class CustomTextEdit(QTextEdit):
     """
