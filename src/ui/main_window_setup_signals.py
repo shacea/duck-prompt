@@ -1,6 +1,4 @@
-
-from PyQt6.QtWidgets import QAction # PyQt5 -> PyQt6
-from PyQt6.QtGui import QKeySequence # PyQt5 -> PyQt6
+from PyQt6.QtGui import QKeySequence, QAction # PyQt5 -> PyQt6
 from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
 
 # MainWindow 타입 힌트

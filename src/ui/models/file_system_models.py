@@ -1,8 +1,8 @@
-
 import os
 import fnmatch
 from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex # PyQt5 -> PyQt6
-from PyQt6.QtWidgets import QFileSystemModel, QTreeView # PyQt5 -> PyQt6
+from PyQt6.QtGui import QFileSystemModel # PyQt5 -> PyQt6
+from PyQt6.QtWidgets import QTreeView # PyQt5 -> PyQt6
 from typing import Callable, Optional, Set
 from core.services.filesystem_service import FilesystemService
 

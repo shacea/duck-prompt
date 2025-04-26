@@ -1,4 +1,3 @@
-
 import sys
 import os
 import ctypes
@@ -43,9 +42,10 @@ def main():
             logging.warning(f"Error setting DPI awareness: {e}") # 로깅 사용
 
     # Qt High DPI 설정
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True) # Qt.AA_ -> Qt.ApplicationAttribute.AA_
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True) # Qt.AA_ -> Qt.ApplicationAttribute.AA_
-    logging.info("Enabled Qt High DPI scaling attributes.")
+    # PyQt6에서는 High DPI 스케일링이 기본 지원되므로 다음 코드는 더 이상 필요하지 않음
+    # QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
+    # QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+    logging.info("PyQt6에서는 High DPI 스케일링이 기본으로 활성화됨")
 
     app = QApplication(sys.argv)
 
