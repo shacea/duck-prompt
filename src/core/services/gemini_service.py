@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> GeminiGraphState:
     """
     Gemini API를 호출하는 노드 (멀티모달 지원).
-    Rate Limit을 체크하고, 초과 시 다른 활성 키로 전환을 시도합니다.
+    DB에서 활성 키와 일일 사용량을 조회하여 사용량이 가장 적은 키부터 순서대로 시도합니다.
+    Rate Limit을 체크하고, 초과 시 다음 키로 전환을 시도합니다.
     성공 시 사용된 키를 ConfigService에 업데이트합니다.
     """
     print("--- Calling Gemini API (Multimodal) ---")
@@ -43,7 +44,7 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
     settings = config_service.get_settings()
     db_service: DbService = config_service.db_service
 
-    # 설정에서 모델명 가져오기 (API 키는 루프 안에서 결정)
+    # 설정에서 모델명 가져오기
     model_name = state.get('selected_model_name', settings.gemini_default_model)
     temperature = settings.gemini_temperature
     enable_thinking = settings.gemini_enable_thinking
@@ -63,38 +64,41 @@ def call_gemini(state: GeminiGraphState, config_service: ConfigService) -> Gemin
         default_return_state["error_message"] = error_msg
         return default_return_state
 
-    # --- API 키 순환 및 Rate Limit 체크 루프 ---
-    active_keys = db_service.get_active_api_keys('google')
-    if not active_keys:
+    # --- API 키 선택 로직 (사용량 기반) ---
+    try:
+        # 활성 키 목록과 현재 일일 사용량 가져오기 (DB에서 ID 순서대로 반환됨)
+        keys_with_usage = db_service.get_active_api_keys_with_usage('google')
+    except Exception as e:
+        error_msg = f"Failed to retrieve active Gemini keys with usage from DB: {e}"
+        logger.error(error_msg, exc_info=True)
+        default_return_state["error_message"] = error_msg
+        return default_return_state
+
+    if not keys_with_usage:
         error_msg = "No active Gemini API Keys found in database configuration."
         logger.error(error_msg)
         default_return_state["error_message"] = error_msg
         return default_return_state
 
-    # 시작 인덱스 결정: 현재 ConfigService에 설정된 키가 있다면 그 키부터 시도
-    current_key_id_in_config = config_service.get_current_gemini_key_id()
-    start_index = 0
-    if current_key_id_in_config:
-        for idx, key_info in enumerate(active_keys):
-            if key_info['id'] == current_key_id_in_config:
-                start_index = idx
-                logger.info(f"Starting key check from currently configured Key ID: {current_key_id_in_config} (Index: {start_index})")
-                break
+    # 일일 사용량(calls_this_day) 기준으로 키 정렬 (오름차순). 사용량 같으면 ID 순서 유지됨.
+    keys_with_usage.sort(key=lambda x: x['calls_this_day'])
+    logger.info(f"Found {len(keys_with_usage)} active Gemini keys. Sorted by daily usage (ascending).")
+    for key_info in keys_with_usage:
+        logger.debug(f"  Key ID: {key_info['id']}, Daily Calls: {key_info['calls_this_day']}")
 
-    current_key_index = start_index
+    # --- API 키 순차 시도 및 Rate Limit 체크 루프 ---
     selected_key_info: Optional[Dict[str, Any]] = None
     api_key_id: Optional[int] = None
     log_id: Optional[int] = None
     final_error_message: Optional[str] = None
     api_call_successful = False # API 호출 성공 여부 플래그
 
-    for i in range(len(active_keys)):
-        # 순환 인덱스 계산
-        check_index = (start_index + i) % len(active_keys)
-        selected_key_info = active_keys[check_index]
+    # 정렬된 키 목록 순서대로 시도
+    for key_info in keys_with_usage:
+        selected_key_info = key_info
         api_key = selected_key_info['api_key']
         api_key_id = selected_key_info['id']
-        logger.info(f"Attempting to use Gemini API Key ID: {api_key_id} (Index: {check_index})")
+        logger.info(f"Attempting to use Gemini API Key ID: {api_key_id} (Daily Usage: {selected_key_info['calls_this_day']})")
 
         # Rate Limit 체크 (DbService 사용)
         is_limited, reason = db_service.is_key_rate_limited(api_key_id, model_name)
@@ -400,5 +404,3 @@ def build_gemini_graph(config_service: ConfigService) -> StateGraph:
     app = workflow.compile()
     logger.info("Gemini LangGraph compiled successfully.")
     return app
-
-            

@@ -228,6 +228,62 @@ class DbService:
              logger.error(f"Failed to get active API keys for provider '{provider}': {e}")
              return []
 
+    def get_active_api_keys_with_usage(self, provider: str) -> List[Dict[str, Any]]:
+        """
+        Fetches all active API keys for a given provider along with their current daily usage,
+        ordered by ID. Calculates effective daily usage considering the reset window.
+        """
+        query = """
+            SELECT
+                ak.id, ak.api_key, ak.description, ak.is_active,
+                COALESCE(usage.calls_this_day, 0) AS raw_calls_this_day,
+                usage.day_start_timestamp
+            FROM api_keys ak
+            LEFT JOIN api_key_usage usage ON ak.id = usage.api_key_id
+            WHERE ak.provider = %s AND ak.is_active = TRUE
+            ORDER BY ak.id;
+        """
+        try:
+            results = self._execute_query(query, (provider,), fetch_all=True)
+            if not results:
+                logger.warning(f"No active API keys found for provider '{provider}'.")
+                return []
+
+            logger.info(f"Found {len(results)} active API key(s) with usage info for provider '{provider}'.")
+            now = datetime.datetime.now(datetime.timezone.utc)
+            current_day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            # Calculate effective daily usage
+            for key_info in results:
+                raw_calls = key_info.get('raw_calls_this_day', 0)
+                day_start = key_info.get('day_start_timestamp')
+
+                # Ensure day_start is timezone-aware if it exists
+                if day_start and day_start.tzinfo is None:
+                    day_start = day_start.replace(tzinfo=datetime.timezone.utc)
+                    key_info['day_start_timestamp'] = day_start # Update dict if needed
+
+                # Calculate effective calls for today
+                if day_start and day_start < current_day_start:
+                    key_info['calls_this_day'] = 0 # Day has reset
+                    logger.debug(f"Key ID {key_info['id']}: Day window reset. Effective calls_this_day = 0")
+                else:
+                    key_info['calls_this_day'] = raw_calls
+                    logger.debug(f"Key ID {key_info['id']}: Within current day window. Effective calls_this_day = {raw_calls}")
+
+                # Remove raw count if no longer needed
+                # del key_info['raw_calls_this_day']
+
+            return results
+
+        except psycopg2.Error as e:
+             logger.error(f"Failed to get active API keys with usage for provider '{provider}': {e}")
+             return []
+        except Exception as e:
+            logger.error(f"Unexpected error getting active API keys with usage for '{provider}': {e}", exc_info=True)
+            return []
+
+
     def list_api_keys(self, provider: Optional[str] = None) -> List[Dict[str, Any]]:
         """Lists all API keys, optionally filtered by provider."""
         if provider:
@@ -613,4 +669,3 @@ class DbService:
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
-            
