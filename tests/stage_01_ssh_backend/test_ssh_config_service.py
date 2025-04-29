@@ -1,6 +1,14 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+# Add src directory to sys.path for module resolution
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent.parent
+src_path = project_root / 'src'
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 # 테스트 대상 모듈 임포트
 from core.services.ssh_config_service import SshConfigService
 from core.services.db_service import DbService

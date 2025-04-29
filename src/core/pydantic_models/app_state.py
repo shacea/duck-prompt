@@ -1,5 +1,4 @@
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict # ConfigDict 추가
 from typing import List, Optional, Dict, Any # Dict, Any 추가
 
 class AppState(BaseModel):
@@ -25,6 +24,6 @@ class AppState(BaseModel):
     # gemini_thinking_budget: int = 24576
     # gemini_enable_search: bool = True
 
-    class Config:
-        validate_assignment = True
+    # Pydantic V2: Config 클래스 대신 model_config 사용
+    model_config = ConfigDict(validate_assignment=True)
 

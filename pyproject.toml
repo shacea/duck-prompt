@@ -17,6 +17,10 @@ dependencies = [
     "winotify>=1.1.0", # Windows notifications
     "pyinstaller>=6.13.0",
     "paramiko>=3.4.0", # SSH 라이브러리 추가
+    "pytest-docker",
+    "pytest",
+    "pytest-cov",
+    "pytest-qt>=4.2.0", # pytest-qt 추가
 ]
 
 [tool.black]
@@ -63,3 +67,4 @@ profile = "black"
 #     "Operating System :: OS Independent",
 #     "Topic :: Software Development :: User Interfaces",
 # ]
+

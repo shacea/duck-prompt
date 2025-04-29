@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator, FilePath, field_validator
+from pydantic import BaseModel, Field, validator, FilePath, field_validator, ConfigDict # ConfigDict 추가
 from typing import Optional, Literal
 
 class SshConnectionConfig(BaseModel):
@@ -35,6 +35,9 @@ class SshConnectionConfig(BaseModel):
 
     # key_path 유효성 검사 (파일 존재 여부 등)는 서비스 레이어에서 처리하는 것이 더 적합할 수 있음
 
-    class Config:
-        validate_assignment = True
-        extra = 'ignore' # DB 로드 시 추가 필드 무시
+    # Pydantic V2: Config 클래스 대신 model_config 사용
+    model_config = ConfigDict(
+        validate_assignment=True,
+        extra='ignore' # DB 로드 시 추가 필드 무시
+    )
+

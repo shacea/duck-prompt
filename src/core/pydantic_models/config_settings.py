@@ -1,5 +1,4 @@
-
-from pydantic import BaseModel, Field, field_validator, FieldValidationInfo
+from pydantic import BaseModel, Field, field_validator, ValidationInfo, ConfigDict # FieldValidationInfo -> ValidationInfo, ConfigDict 추가
 from typing import List, Set, Any, Optional, Dict
 
 class ConfigSettings(BaseModel):
@@ -31,7 +30,7 @@ class ConfigSettings(BaseModel):
 
     @field_validator('allowed_extensions', 'excluded_dirs', mode='before')
     @classmethod
-    def ensure_set_from_list_or_none(cls, v: Any, info: FieldValidationInfo):
+    def ensure_set_from_list_or_none(cls, v: Any, info: ValidationInfo): # FieldValidationInfo -> ValidationInfo
         """Converts list (from DB array) or None to a set of strings."""
         if v is None:
             return set()
@@ -49,7 +48,7 @@ class ConfigSettings(BaseModel):
 
     @field_validator('default_ignore_list', 'gemini_available_models', 'claude_available_models', 'gpt_available_models', mode='before')
     @classmethod
-    def ensure_list_from_list_or_none(cls, v: Any, info: FieldValidationInfo):
+    def ensure_list_from_list_or_none(cls, v: Any, info: ValidationInfo): # FieldValidationInfo -> ValidationInfo
         """Ensures the value is a list of strings, accepting None."""
         if v is None:
             return []
@@ -61,8 +60,10 @@ class ConfigSettings(BaseModel):
                 raise TypeError(f"{info.field_name} must be a list/set of strings")
         raise TypeError(f"{info.field_name} must be a list, set, or None (received {type(v)})")
 
-    class Config:
-        validate_assignment = True
+    # Pydantic V2: Config 클래스 대신 model_config 사용
+    model_config = ConfigDict(
+        validate_assignment=True,
         # If loading directly from DB dict, extra fields might exist (id, created_at etc.)
-        extra = 'ignore' # Ignore extra fields from DB query result
+        extra='ignore' # Ignore extra fields from DB query result
+    )
 

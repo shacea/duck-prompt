@@ -1,11 +1,21 @@
 import pytest
 import os
 from unittest.mock import patch, MagicMock
-from PyQt6.QtCore import QThread, QSignalSpy # QSignalSpy 추가
+from PyQt6.QtCore import QThread
+from pytestqt.qt_signal import QSignalSpy # QSignalSpy 임포트 경로 수정 (pytest-qt 필요)
+
+# Add src directory to sys.path for module resolution
+import sys
+from pathlib import Path
+project_root = Path(__file__).parent.parent.parent
+src_path = project_root / 'src'
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
 
 # 테스트 대상 모듈 임포트
 from ui.settings_dialog import SshConnectionTester # Worker 클래스
 from core.pydantic_models.ssh_config import SshConnectionConfig
+import paramiko # Mocking 대상
 
 # paramiko Mocking (실제 연결 시도 방지)
 # pytest-mock-ssh 같은 라이브러리 사용 고려 가능
@@ -19,8 +29,8 @@ def mock_paramiko():
 
 # --- 테스트 케이스 ---
 
-@pytest.mark.qt
-def test_ssh_connection_tester_success_password(qtbot):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_success_password(): # qtbot fixture 제거
     """비밀번호 인증 성공 시그널 테스트"""
     config = SshConnectionConfig(
         alias="pwd_success", hostname="testhost", port=22, username="testuser",
@@ -46,8 +56,8 @@ def test_ssh_connection_tester_success_password(qtbot):
     assert result_args[0] is True # 성공 여부
     assert "성공" in result_args[1] # 메시지
 
-@pytest.mark.qt
-def test_ssh_connection_tester_success_key(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_success_key(mock_paramiko): # qtbot fixture 제거
     """키 파일 인증 성공 시그널 테스트"""
     # 임시 키 파일 생성 (테스트 목적)
     key_path = "temp_test_key.pem"
@@ -84,8 +94,8 @@ def test_ssh_connection_tester_success_key(qtbot, mock_paramiko):
     os.remove(key_path)
 
 
-@pytest.mark.qt
-def test_ssh_connection_tester_auth_failure(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_auth_failure(mock_paramiko): # qtbot fixture 제거
     """인증 실패 시그널 테스트"""
     # paramiko.connect 호출 시 AuthenticationException 발생하도록 설정
     mock_paramiko.connect.side_effect = paramiko.AuthenticationException("Auth failed")
@@ -111,8 +121,8 @@ def test_ssh_connection_tester_auth_failure(qtbot, mock_paramiko):
     assert result_args[0] is False
     assert "인증 실패" in result_args[1]
 
-@pytest.mark.qt
-def test_ssh_connection_tester_key_file_not_found(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_key_file_not_found(mock_paramiko): # qtbot fixture 제거
     """키 파일 없음 오류 시그널 테스트"""
     config = SshConnectionConfig(
         alias="key_not_found", hostname="keyhost", port=22, username="keyuser",
@@ -138,8 +148,8 @@ def test_ssh_connection_tester_key_file_not_found(qtbot, mock_paramiko):
     # connect는 호출되지 않아야 함
     mock_paramiko.connect.assert_not_called()
 
-@pytest.mark.qt
-def test_ssh_connection_tester_connection_error(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_connection_error(mock_paramiko): # qtbot fixture 제거
     """일반 연결 오류 시그널 테스트"""
     mock_paramiko.connect.side_effect = paramiko.SSHException("Connection refused")
 
@@ -165,8 +175,8 @@ def test_ssh_connection_tester_connection_error(qtbot, mock_paramiko):
     assert "SSH 오류" in result_args[1]
     assert "Connection refused" in result_args[1]
 
-@pytest.mark.qt
-def test_ssh_connection_tester_missing_password(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_missing_password(mock_paramiko): # qtbot fixture 제거
     """비밀번호 방식인데 비밀번호 누락 시 오류"""
     config = SshConnectionConfig(
         alias="missing_pwd", hostname="host", port=22, username="user",
@@ -191,8 +201,8 @@ def test_ssh_connection_tester_missing_password(qtbot, mock_paramiko):
     assert "Password is required" in result_args[1]
     mock_paramiko.connect.assert_not_called()
 
-@pytest.mark.qt
-def test_ssh_connection_tester_missing_key_path(qtbot, mock_paramiko):
+# @pytest.mark.qt 제거
+def test_ssh_connection_tester_missing_key_path(mock_paramiko): # qtbot fixture 제거
     """키 방식인데 키 경로 누락 시 오류"""
     config = SshConnectionConfig(
         alias="missing_key", hostname="host", port=22, username="user",
@@ -216,3 +226,4 @@ def test_ssh_connection_tester_missing_key_path(qtbot, mock_paramiko):
     assert "연결 오류" in result_args[1] # ValueError가 발생
     assert "Key file path is required" in result_args[1]
     mock_paramiko.connect.assert_not_called()
+

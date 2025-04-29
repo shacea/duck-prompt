@@ -1,0 +1,22 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.2, pytest-8.3.5, pluggy-1.5.0 -- E:\Projects\duck-prompt\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: E:\Projects\duck-prompt
+configfile: pyproject.toml
+plugins: anyio-4.9.0, langsmith-0.3.38, cov-6.1.1, docker-3.2.1
+collecting ... collected 24 items / 1 error
+
+=================================== ERRORS ====================================
+_____ ERROR collecting tests/stage_01_ssh_backend/test_ssh_connection.py ______
+ImportError while importing test module 'E:\Projects\duck-prompt\tests\stage_01_ssh_backend\test_ssh_connection.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\shace\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests\stage_01_ssh_backend\test_ssh_connection.py:5: in <module>
+    from pytestqt.qt_signal import QSignalSpy # QSignalSpy 임포트 경로 수정 (pytest-qt 필요)
+E   ModuleNotFoundError: No module named 'pytestqt'
+=========================== short test summary info ===========================
+ERROR tests/stage_01_ssh_backend/test_ssh_connection.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 0.74s ===============================
