@@ -20,7 +20,8 @@ dependencies = [
     "pytest-docker",
     "pytest",
     "pytest-cov",
-    "pytest-qt>=4.2.0", # pytest-qt 추가
+    "pytest-qt>=4.2.0", # pytest-qt 추가 (테스트 오류 수정)
+    "pytest-timeout>=2.3.1",
 ]
 
 [tool.black]

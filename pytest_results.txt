@@ -1,22 +1,34 @@
 ============================= test session starts =============================
 platform win32 -- Python 3.13.2, pytest-8.3.5, pluggy-1.5.0 -- E:\Projects\duck-prompt\.venv\Scripts\python.exe
 cachedir: .pytest_cache
+PyQt6 6.9.0 -- Qt runtime 6.9.0 -- Qt compiled 6.9.0
 rootdir: E:\Projects\duck-prompt
 configfile: pyproject.toml
-plugins: anyio-4.9.0, langsmith-0.3.38, cov-6.1.1, docker-3.2.1
-collecting ... collected 24 items / 1 error
+plugins: anyio-4.9.0, langsmith-0.3.38, cov-6.1.1, docker-3.2.1, qt-4.4.0
+collecting ... collected 31 items
 
-=================================== ERRORS ====================================
-_____ ERROR collecting tests/stage_01_ssh_backend/test_ssh_connection.py ______
-ImportError while importing test module 'E:\Projects\duck-prompt\tests\stage_01_ssh_backend\test_ssh_connection.py'.
-Hint: make sure your test modules/packages have valid Python names.
-Traceback:
-C:\Users\shace\AppData\Roaming\uv\python\cpython-3.13.2-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-tests\stage_01_ssh_backend\test_ssh_connection.py:5: in <module>
-    from pytestqt.qt_signal import QSignalSpy # QSignalSpy 임포트 경로 수정 (pytest-qt 필요)
-E   ModuleNotFoundError: No module named 'pytestqt'
-=========================== short test summary info ===========================
-ERROR tests/stage_01_ssh_backend/test_ssh_connection.py
-!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
-============================== 1 error in 0.74s ===============================
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_add_ssh_connection_success PASSED [  3%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_add_ssh_connection_duplicate_alias PASSED [  6%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_get_ssh_connection_found PASSED [  9%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_get_ssh_connection_not_found PASSED [ 12%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_list_ssh_connections_success PASSED [ 16%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_list_ssh_connections_empty PASSED [ 19%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_update_ssh_connection_success PASSED [ 22%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_update_ssh_connection_not_found PASSED [ 25%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_update_ssh_connection_missing_id PASSED [ 29%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_delete_ssh_connection_success PASSED [ 32%]
+tests/stage_01_ssh_backend/test_db_service_ssh.py::test_delete_ssh_connection_not_found PASSED [ 35%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_add_connection_success PASSED [ 38%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_add_connection_failure PASSED [ 41%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_get_connection_found PASSED [ 45%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_get_connection_not_found PASSED [ 48%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_list_connections_success PASSED [ 51%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_list_connections_empty PASSED [ 54%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_update_connection_success PASSED [ 58%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_update_connection_missing_id PASSED [ 61%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_update_connection_failure PASSED [ 64%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_delete_connection_success PASSED [ 67%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_delete_connection_failure PASSED [ 70%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_get_connection_by_alias_found PASSED [ 74%]
+tests/stage_01_ssh_backend/test_ssh_config_service.py::test_get_connection_by_alias_not_found PASSED [ 77%]
+tests/stage_01_ssh_backend/test_ssh_connection.py::test_ssh_connection_tester_success_password 
