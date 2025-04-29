@@ -1,0 +1,66 @@
+
+[project]
+name = "duck-prompt"
+version = "0.2.0"
+description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
+requires-python = ">=3.12"
+dependencies = [
+    "PyQt6>=6.7.0",
+    "PyQt6-Qt6>=6.7.0",
+    "google-generativeai>=0.5.4", # Gemini API
+    "langgraph>=0.0.69", # LangGraph for workflow
+    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
+    "anthropic>=0.28.0", # Anthropic API (Claude)
+    "psycopg2-binary>=2.9.9", # PostgreSQL driver
+    "PyYAML>=6.0.1", # YAML parsing (config)
+    "pydantic>=2.7.1", # Data validation and settings
+    "pillow>=10.3.0", # Image handling
+    "winotify>=1.1.0", # Windows notifications
+    "pyinstaller>=6.13.0",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.uv.sources]
+# Optional: Specify custom package sources if needed
+
+# Optional: Define project scripts or entry points
+# [project.scripts]
+# duckprompt = "src.app:main"
+
+# Optional: Project URLs
+# [project.urls]
+# homepage = "https://example.com"
+# documentation = "https://readthedocs.org"
+# repository = "https://github.com/user/duck-prompt.git"
+# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
+
+# Optional: Author and maintainer information
+# authors = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+# maintainers = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+
+# Optional: License information
+# license = { text = "MIT License" }
+
+# Optional: Keywords for PyPI
+# keywords = ["llm", "prompt", "gui", "pyqt"]
+
+# Optional: Classifiers for PyPI
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "License :: OSI Approved :: MIT License",
+#     "Programming Language :: Python :: 3",
+#     "Programming Language :: Python :: 3.12",
+#     "Operating System :: OS Independent",
+#     "Topic :: Software Development :: User Interfaces",
+# ]
+
