@@ -1,10 +1,13 @@
-
 import psycopg2
 import logging
 from typing import Optional, Dict, Any, List, Tuple
 import json
 import datetime
 from decimal import Decimal
+from pydantic import ValidationError # 추가
+
+# SSH 설정 모델 임포트
+from core.pydantic_models.ssh_config import SshConnectionConfig
 
 logger = logging.getLogger(__name__)
 
@@ -535,6 +538,50 @@ class DbService:
             logger.error(f"Failed to get rate limit for model '{model_name}': {e}")
             return None
 
+    def insert_or_update_rate_limit(self, model_name: str, provider: str, rpm_limit: int, daily_limit: int, notes: Optional[str] = None) -> bool:
+        """Inserts or updates a model's rate limit in the model_rate_limits table."""
+        logger.info(f"Attempting to insert/update rate limit for model: {model_name}...")
+        sql = """
+            INSERT INTO model_rate_limits (model_name, provider, rpm_limit, daily_limit, notes)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (model_name) DO UPDATE SET
+                provider = EXCLUDED.provider,
+                rpm_limit = EXCLUDED.rpm_limit,
+                daily_limit = EXCLUDED.daily_limit,
+                notes = EXCLUDED.notes,
+                updated_at = NOW();
+        """
+        params = (model_name, provider, rpm_limit, daily_limit, notes)
+        try:
+            affected_rows = self._execute_query(sql, params)
+            logger.info(f"Rate limit for model '{model_name}' inserted/updated successfully. Rows affected: {affected_rows}")
+            return True
+        except psycopg2.Error as e:
+            logger.error(f"Error inserting/updating rate limit for {model_name}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during rate limit update for {model_name}: {e}")
+            return False
+
+    def delete_rate_limit(self, model_name: str) -> bool:
+        """Deletes a model's rate limit information from the database."""
+        logger.info(f"Attempting to delete rate limit for model: {model_name}...")
+        query = "DELETE FROM model_rate_limits WHERE model_name = %s;"
+        try:
+            affected_rows = self._execute_query(query, (model_name,))
+            if affected_rows == 1:
+                logger.info(f"Rate limit for model '{model_name}' deleted successfully.")
+                return True
+            elif affected_rows == 0:
+                logger.warning(f"Rate limit for model '{model_name}' not found for deletion.")
+                return False
+            else:
+                logger.error(f"Unexpected number of rows affected ({affected_rows}) during rate limit deletion for model '{model_name}'.")
+                return False
+        except psycopg2.Error as e:
+            logger.error(f"Failed to delete rate limit for model '{model_name}': {e}")
+            return False
+
     def get_api_key_usage(self, api_key_id: int) -> Optional[Dict[str, Any]]:
         """Fetches the current usage statistics for a specific API key ID from the api_keys table."""
         if api_key_id is None: return None
@@ -598,7 +645,8 @@ class DbService:
             # 3. Check RPM limit
             if rpm_limit is not None and rpm_limit > 0:
                 current_minute_call_count = calls_this_minute
-                if minute_start and minute_start < current_minute_start:
+                # 분 시작 시간이 있고, 현재 시간이 분 시작 시간 + 1분보다 크거나 같으면 0으로 리셋
+                if minute_start and now >= minute_start + datetime.timedelta(minutes=1):
                      current_minute_call_count = 0
                      logger.debug(f"RPM Check: Minute window reset for key {api_key_id}. Current count considered 0.")
 
@@ -610,7 +658,8 @@ class DbService:
             # 4. Check Daily limit
             if daily_limit is not None and daily_limit > 0:
                 current_day_call_count = calls_this_day
-                if day_start and day_start < current_day_start:
+                # 일 시작 시간이 있고, 현재 시간이 일 시작 시간 + 1일보다 크거나 같으면 0으로 리셋
+                if day_start and now >= day_start + datetime.timedelta(days=1):
                     current_day_call_count = 0
                     logger.debug(f"Daily Check: Day window reset for key {api_key_id}. Current count considered 0.")
 
@@ -626,8 +675,117 @@ class DbService:
             logger.error(f"Error checking rate limit for key ID {api_key_id}: {e}", exc_info=True)
             return True, f"Error during rate limit check: {e}"
 
+    # --- SSH Connection Management ---
+
+    def add_ssh_connection(self, config: SshConnectionConfig) -> Optional[int]:
+        """Adds a new SSH connection configuration to the database."""
+        logger.info(f"Adding SSH connection: {config.alias}")
+        sql = """
+            INSERT INTO ssh_connections (alias, hostname, port, username, auth_method, password, key_path)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """
+        # 비밀번호/키 경로 저장 (주의: 현재 평문 저장)
+        params = (
+            config.alias, config.hostname, config.port, config.username,
+            config.auth_method, config.password, config.key_path
+        )
+        try:
+            connection_id = self._execute_query(sql, params, return_id=True)
+            logger.info(f"SSH connection '{config.alias}' added with ID: {connection_id}")
+            return connection_id
+        except psycopg2.IntegrityError as e:
+            logger.error(f"Failed to add SSH connection '{config.alias}': Alias likely already exists. {e}")
+            return None
+        except psycopg2.Error as e:
+            logger.error(f"Failed to add SSH connection '{config.alias}': {e}")
+            return None
+
+    def get_ssh_connection(self, connection_id: int) -> Optional[SshConnectionConfig]:
+        """Fetches a specific SSH connection configuration by ID."""
+        logger.debug(f"Fetching SSH connection with ID: {connection_id}")
+        query = "SELECT * FROM ssh_connections WHERE id = %s;"
+        try:
+            result_dict = self._execute_query(query, (connection_id,), fetch_one=True)
+            if result_dict:
+                # Pydantic 모델로 변환
+                return SshConnectionConfig(**result_dict)
+            else:
+                logger.warning(f"SSH connection with ID {connection_id} not found.")
+                return None
+        except (psycopg2.Error, ValidationError) as e:
+            logger.error(f"Failed to get or validate SSH connection ID {connection_id}: {e}")
+            return None
+
+    def list_ssh_connections(self) -> List[SshConnectionConfig]:
+        """Lists all saved SSH connection configurations."""
+        logger.info("Listing all SSH connections...")
+        query = "SELECT * FROM ssh_connections ORDER BY alias;"
+        connections = []
+        try:
+            results = self._execute_query(query, fetch_all=True)
+            if results:
+                for row_dict in results:
+                    try:
+                        connections.append(SshConnectionConfig(**row_dict))
+                    except ValidationError as e:
+                        logger.error(f"Skipping invalid SSH connection data from DB (ID: {row_dict.get('id')}): {e}")
+            logger.info(f"Found {len(connections)} SSH connections.")
+            return connections
+        except psycopg2.Error as e:
+            logger.error(f"Failed to list SSH connections: {e}")
+            return []
+
+    def update_ssh_connection(self, config: SshConnectionConfig) -> bool:
+        """Updates an existing SSH connection configuration in the database."""
+        if config.id is None:
+            logger.error("Cannot update SSH connection: ID is missing.")
+            return False
+        logger.info(f"Updating SSH connection: {config.alias} (ID: {config.id})")
+        sql = """
+            UPDATE ssh_connections SET
+                alias = %s, hostname = %s, port = %s, username = %s,
+                auth_method = %s, password = %s, key_path = %s,
+                updated_at = NOW()
+            WHERE id = %s;
+        """
+        params = (
+            config.alias, config.hostname, config.port, config.username,
+            config.auth_method, config.password, config.key_path,
+            config.id
+        )
+        try:
+            affected_rows = self._execute_query(sql, params)
+            if affected_rows == 1:
+                logger.info(f"SSH connection ID {config.id} updated successfully.")
+                return True
+            else:
+                logger.warning(f"SSH connection ID {config.id} not found or no changes made.")
+                return False
+        except psycopg2.IntegrityError as e:
+             logger.error(f"Failed to update SSH connection '{config.alias}': Alias likely conflicts. {e}")
+             return False
+        except psycopg2.Error as e:
+            logger.error(f"Failed to update SSH connection ID {config.id}: {e}")
+            return False
+
+    def delete_ssh_connection(self, connection_id: int) -> bool:
+        """Deletes an SSH connection configuration from the database."""
+        logger.info(f"Deleting SSH connection with ID: {connection_id}")
+        query = "DELETE FROM ssh_connections WHERE id = %s;"
+        try:
+            affected_rows = self._execute_query(query, (connection_id,))
+            if affected_rows == 1:
+                logger.info(f"SSH connection ID {connection_id} deleted successfully.")
+                return True
+            else:
+                logger.warning(f"SSH connection ID {connection_id} not found for deletion.")
+                return False
+        except psycopg2.Error as e:
+            logger.error(f"Failed to delete SSH connection ID {connection_id}: {e}")
+            return False
+
 
     def __del__(self):
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
-

@@ -25,6 +25,7 @@ from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
 from core.services.token_service import TokenCalculationService
 from core.services.gemini_service import build_gemini_graph
+from core.services.ssh_config_service import SshConfigService # SSH 설정 서비스 추가
 from core.langgraph_state import GeminiGraphState
 
 # UI 관련 import
@@ -117,6 +118,7 @@ class MainWindow(QMainWindow):
         try:
             self.db_service = DbService() # Initialize DbService first
             self.config_service = ConfigService(self.db_service) # Inject DbService
+            self.ssh_config_service = SshConfigService(self.db_service) # SSH 설정 서비스 추가
         except ConnectionError as e:
              QMessageBox.critical(self, "Database Error", f"데이터베이스 연결 실패: {e}\n프로그램을 종료합니다.")
              # Exit the application gracefully
@@ -238,6 +240,7 @@ class MainWindow(QMainWindow):
 
     def open_settings_dialog(self):
         """Opens the settings dialog."""
+        # SettingsDialog 생성 시 SshConfigService도 전달
         dialog = SettingsDialog(self, self)
         # Dialog is now mostly read-only for config settings
         # It only saves .gitignore changes now
@@ -1006,6 +1009,9 @@ class MainWindow(QMainWindow):
                 self.gemini_thread.terminate()
                 self.gemini_thread.wait()
             self.cleanup_gemini_thread()
+        # SSH 연결 테스트 스레드 정리 추가
+        if hasattr(self, 'settings_dialog') and self.settings_dialog:
+             self.settings_dialog.cancel_ssh_test()
 
         # 마지막 상태 저장 시도 (선택적)
         try:

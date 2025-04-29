@@ -1,20 +1,24 @@
 import os
 import datetime # datetime 추가
+import logging # 로깅 추가
+import paramiko # SSH 연결 테스트용
 from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QDialogButtonBox,
     QLabel, QPlainTextEdit, QFileDialog, QMessageBox, QGroupBox, QHBoxLayout, QComboBox,
     QCheckBox, QApplication, QListWidget, QListWidgetItem, QAbstractItemView, QInputDialog, QWidget,
-    QSplitter, QSizePolicy
+    QSplitter, QSizePolicy, QTableWidget, QTableWidgetItem, QHeaderView, QAbstractScrollArea,
+    QProgressDialog # 추가
 )
-from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject # PyQt5 -> PyQt6, QThread, pyqtSignal, QObject 추가
 from PyQt6.QtGui import QColor, QIcon, QIntValidator, QBrush # PyQt5 -> PyQt6, QIntValidator 추가, QBrush 추가
 from typing import Optional, Set, List, Dict, Any, Tuple # Dict, Any, Tuple 추가
 from pydantic import ValidationError
-import logging # 로깅 추가
 
 # 서비스 및 컨트롤러 함수 import
 from core.services.config_service import ConfigService
+from core.services.ssh_config_service import SshConfigService # SSH 설정 서비스 임포트
 from core.pydantic_models.config_settings import ConfigSettings
+from core.pydantic_models.ssh_config import SshConnectionConfig # SSH 모델 임포트
 from ui.controllers.system_prompt_controller import select_default_system_prompt
 # MainWindow 타입 힌트 (순환 참조 방지)
 from typing import TYPE_CHECKING
@@ -30,6 +34,69 @@ PASTEL_GREEN = QColor(152, 251, 152) # 연한 녹색 (RGB)
 PASTEL_BLUE = QColor(173, 216, 230) # 연한 파란색 (Light Blue)
 # 파스텔 퍼플 색상 정의 (자동 선택 예정 강조용)
 PASTEL_PURPLE = QColor(221, 160, 221) # 연보라색 (Plum)
+
+# --- SSH 연결 테스트 Worker ---
+class SshConnectionTester(QObject):
+    finished = pyqtSignal(bool, str) # 성공 여부, 메시지 전달
+
+    def __init__(self, config: SshConnectionConfig):
+        super().__init__()
+        self.config = config
+
+    def run(self):
+        """SSH 연결을 시도합니다."""
+        client = None
+        try:
+            logger.info(f"Attempting SSH connection to {self.config.username}@{self.config.hostname}:{self.config.port}...")
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy()) # 자동으로 호스트 키 추가 (보안 주의)
+            # client.load_system_host_keys() # 시스템 호스트 키 로드 (선택 사항)
+
+            connect_args = {
+                "hostname": self.config.hostname,
+                "port": self.config.port,
+                "username": self.config.username,
+                "timeout": 10 # 연결 타임아웃 (초)
+            }
+
+            if self.config.auth_method == 'password':
+                if not self.config.password:
+                    raise ValueError("Password is required for password authentication.")
+                connect_args["password"] = self.config.password
+                logger.info("Using password authentication.")
+            elif self.config.auth_method == 'key':
+                if not self.config.key_path:
+                    raise ValueError("Key file path is required for key authentication.")
+                key_path_abs = os.path.expanduser(self.config.key_path) # 사용자 홈 디렉토리 확장
+                if not os.path.isfile(key_path_abs):
+                    raise FileNotFoundError(f"SSH key file not found at: {key_path_abs}")
+                connect_args["key_filename"] = key_path_abs
+                # connect_args["passphrase"] = self.config.key_passphrase # 키 암호 필요 시
+                logger.info(f"Using key file authentication: {key_path_abs}")
+            else:
+                raise ValueError(f"Unsupported authentication method: {self.config.auth_method}")
+
+            client.connect(**connect_args)
+            logger.info("SSH connection successful.")
+            self.finished.emit(True, "SSH 연결 성공!")
+
+        except paramiko.AuthenticationException:
+            logger.error("SSH Authentication failed.")
+            self.finished.emit(False, "인증 실패 (사용자명, 비밀번호 또는 키 확인)")
+        except paramiko.SSHException as ssh_ex:
+            logger.error(f"SSH connection error: {ssh_ex}")
+            self.finished.emit(False, f"SSH 오류: {ssh_ex}")
+        except FileNotFoundError as fnf_ex:
+            logger.error(f"SSH key file error: {fnf_ex}")
+            self.finished.emit(False, f"키 파일 오류: {fnf_ex}")
+        except Exception as e:
+            logger.exception("Unexpected error during SSH connection test.")
+            self.finished.emit(False, f"연결 오류: {e}")
+        finally:
+            if client:
+                client.close()
+                logger.info("SSH client closed.")
+
 
 # --- 모델 추가 다이얼로그 ---
 class AddModelDialog(QDialog):
@@ -100,6 +167,156 @@ class AddModelDialog(QDialog):
             return model_name, rpm_limit, daily_limit
         return None
 
+# --- SSH 설정 추가/수정 다이얼로그 ---
+class SshConfigDialog(QDialog):
+    """SSH 연결 설정을 추가하거나 수정하는 다이얼로그."""
+    def __init__(self, config: Optional[SshConnectionConfig] = None, existing_aliases: List[str] = [], parent=None):
+        super().__init__(parent)
+        self.config = config
+        self.existing_aliases = existing_aliases
+        self.is_edit_mode = config is not None
+        self.setWindowTitle("SSH 연결 설정 " + ("수정" if self.is_edit_mode else "추가"))
+
+        layout = QVBoxLayout(self)
+        form_layout = QFormLayout()
+
+        self.alias_edit = QLineEdit()
+        self.hostname_edit = QLineEdit()
+        self.port_edit = QLineEdit()
+        self.port_edit.setValidator(QIntValidator(1, 65535))
+        self.username_edit = QLineEdit()
+        self.auth_method_combo = QComboBox()
+        self.auth_method_combo.addItems(["password", "key"])
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.key_path_edit = QLineEdit()
+        self.browse_key_button = QPushButton("찾아보기...")
+
+        form_layout.addRow("별칭*:", self.alias_edit)
+        form_layout.addRow("호스트 주소*:", self.hostname_edit)
+        form_layout.addRow("포트*:", self.port_edit)
+        form_layout.addRow("사용자명*:", self.username_edit)
+        form_layout.addRow("인증 방식*:", self.auth_method_combo)
+        form_layout.addRow("비밀번호:", self.password_edit)
+        key_layout = QHBoxLayout()
+        key_layout.addWidget(self.key_path_edit)
+        key_layout.addWidget(self.browse_key_button)
+        form_layout.addRow("키 파일 경로:", key_layout)
+
+        layout.addLayout(form_layout)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        self.button_box.accepted.connect(self.validate_and_accept)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
+
+        # 시그널 연결
+        self.auth_method_combo.currentIndexChanged.connect(self.update_auth_fields_visibility)
+        self.browse_key_button.clicked.connect(self.browse_key_file)
+
+        # 초기값 설정 (수정 모드)
+        if self.is_edit_mode and self.config:
+            self.alias_edit.setText(self.config.alias)
+            self.hostname_edit.setText(self.config.hostname)
+            self.port_edit.setText(str(self.config.port))
+            self.username_edit.setText(self.config.username)
+            self.auth_method_combo.setCurrentText(self.config.auth_method)
+            self.password_edit.setText(self.config.password or "")
+            self.key_path_edit.setText(self.config.key_path or "")
+
+        self.update_auth_fields_visibility() # 초기 가시성 설정
+
+    def update_auth_fields_visibility(self):
+        """인증 방식에 따라 비밀번호/키 경로 필드 가시성 업데이트."""
+        method = self.auth_method_combo.currentText()
+        is_password_auth = (method == 'password')
+        self.password_edit.setVisible(is_password_auth)
+        self.key_path_edit.setVisible(not is_password_auth)
+        self.browse_key_button.setVisible(not is_password_auth)
+        # QFormLayout에서 위젯 숨기기 처리
+        form_layout = self.layout().itemAt(0).layout() # QFormLayout 가져오기
+        password_row_index = 5 # 비밀번호 행 인덱스 (0부터 시작)
+        key_row_index = 6    # 키 파일 행 인덱스
+        form_layout.setRowVisible(password_row_index, is_password_auth)
+        form_layout.setRowVisible(key_row_index, not is_password_auth)
+
+
+    def browse_key_file(self):
+        """키 파일을 선택하는 파일 다이얼로그 열기."""
+        start_dir = os.path.expanduser("~/.ssh") # 기본 시작 디렉토리
+        if not os.path.isdir(start_dir):
+            start_dir = os.path.expanduser("~")
+        file_path, _ = QFileDialog.getOpenFileName(self, "개인 키 파일 선택", start_dir, "모든 파일 (*)")
+        if file_path:
+            self.key_path_edit.setText(file_path)
+
+    def validate_and_accept(self):
+        """입력값 유효성 검사 후 accept."""
+        alias = self.alias_edit.text().strip()
+        hostname = self.hostname_edit.text().strip()
+        port_str = self.port_edit.text().strip()
+        username = self.username_edit.text().strip()
+        auth_method = self.auth_method_combo.currentText()
+        password = self.password_edit.text() # strip() 제거 (비밀번호는 공백 포함 가능)
+        key_path = self.key_path_edit.text().strip()
+
+        if not all([alias, hostname, port_str, username]):
+            QMessageBox.warning(self, "입력 오류", "별칭, 호스트 주소, 포트, 사용자명은 필수 입력 항목입니다.")
+            return
+
+        # 별칭 중복 검사 (수정 모드에서는 자기 자신 제외)
+        current_id = self.config.id if self.is_edit_mode and self.config else None
+        if alias in self.existing_aliases and \
+           (not self.is_edit_mode or (self.is_edit_mode and self.config and alias != self.config.alias)):
+            QMessageBox.warning(self, "입력 오류", f"별칭 '{alias}'이(가) 이미 존재합니다.")
+            return
+
+        try:
+            port = int(port_str)
+            if not (0 < port <= 65535): raise ValueError("Port out of range")
+        except ValueError:
+            QMessageBox.warning(self, "입력 오류", "포트 번호는 1과 65535 사이의 숫자여야 합니다.")
+            return
+
+        # Pydantic 모델을 사용하여 추가 유효성 검사
+        try:
+            temp_config_data = {
+                "alias": alias, "hostname": hostname, "port": port, "username": username,
+                "auth_method": auth_method,
+                "password": password if auth_method == 'password' else None,
+                "key_path": key_path if auth_method == 'key' else None
+            }
+            # id는 유효성 검사 시 제외
+            SshConnectionConfig(**temp_config_data)
+        except ValidationError as e:
+            QMessageBox.warning(self, "입력 오류", f"설정 값 유효성 검사 실패:\n{e}")
+            return
+
+        self.accept()
+
+    def get_config_data(self) -> Optional[SshConnectionConfig]:
+        """입력된 설정 데이터를 SshConnectionConfig 객체로 반환."""
+        if self.result() == QDialog.DialogCode.Accepted:
+            config_data = {
+                "id": self.config.id if self.is_edit_mode and self.config else None,
+                "alias": self.alias_edit.text().strip(),
+                "hostname": self.hostname_edit.text().strip(),
+                "port": int(self.port_edit.text().strip()),
+                "username": self.username_edit.text().strip(),
+                "auth_method": self.auth_method_combo.currentText(),
+                "password": self.password_edit.text() if self.auth_method_combo.currentText() == 'password' else None,
+                "key_path": self.key_path_edit.text().strip() if self.auth_method_combo.currentText() == 'key' else None
+            }
+            try:
+                return SshConnectionConfig(**config_data)
+            except ValidationError as e:
+                # 이론상 validate_and_accept에서 걸러지지만 안전장치
+                logger.error(f"Error creating SshConnectionConfig from dialog data: {e}")
+                QMessageBox.critical(self, "오류", f"설정 객체 생성 실패:\n{e}")
+                return None
+        return None
+
+
 # --- SettingsDialog ---
 class SettingsDialog(QDialog):
     """
@@ -111,6 +328,7 @@ class SettingsDialog(QDialog):
     API 키 목록에 잔여 사용량 정보를 표시하고, 사용자가 사용할 키를 선택할 수 있습니다.
     사용 가능 LLM 모델 목록에서 클릭하여 기본 모델을 지정할 수 있습니다.
     사용자가 키를 선택하지 않았을 때 자동으로 선택될 키를 표시합니다.
+    SSH 연결 설정을 관리하는 기능이 추가되었습니다.
     """
     PASTEL_GREEN = PASTEL_GREEN # 클래스 변수로도 정의
     PASTEL_BLUE = PASTEL_BLUE # 클래스 변수로도 정의
@@ -120,12 +338,15 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.mw = main_window # MainWindow 참조
         self.config_service = main_window.config_service
+        self.ssh_config_service = main_window.ssh_config_service # SshConfigService 참조 추가
         self.db_service: 'DbService' = main_window.db_service # DbService 참조 추가
         self.settings: Optional[ConfigSettings] = None # Load in load_config_settings
+        self.ssh_connection_test_thread: Optional[QThread] = None
+        self.ssh_connection_tester: Optional[SshConnectionTester] = None
 
         self.setWindowTitle("환경 설정") # Title updated
-        self.setMinimumWidth(800) # 너비 증가
-        self.setMinimumHeight(750) # 높이 증가 (내용 표시 공간 확보)
+        self.setMinimumWidth(900) # 너비 증가
+        self.setMinimumHeight(800) # 높이 증가 (내용 표시 공간 확보)
 
         # --- UI 요소 생성 ---
         # 기본 시스템 프롬프트
@@ -232,6 +453,45 @@ class SettingsDialog(QDialog):
         available_models_main_layout.addWidget(gpt_model_widget)
         self.available_models_group.setLayout(available_models_main_layout)
 
+        # --- SSH 연결 설정 관리 ---
+        self.ssh_config_group = QGroupBox("SSH 연결 설정 관리")
+        ssh_config_layout = QVBoxLayout()
+        self.ssh_connections_table = QTableWidget()
+        self.ssh_connections_table.setColumnCount(5) # ID, 별칭, 호스트, 포트, 사용자명
+        self.ssh_connections_table.setHorizontalHeaderLabels(["ID", "별칭", "호스트", "포트", "사용자명"])
+        self.ssh_connections_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows) # QAbstractItemView.SelectRows -> QAbstractItemView.SelectionBehavior.SelectRows
+        self.ssh_connections_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection) # QAbstractItemView.SingleSelection -> QAbstractItemView.SelectionMode.SingleSelection
+        self.ssh_connections_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) # QAbstractItemView.NoEditTriggers -> QAbstractItemView.EditTrigger.NoEditTriggers
+        self.ssh_connections_table.verticalHeader().setVisible(False)
+        self.ssh_connections_table.horizontalHeader().setStretchLastSection(True)
+        self.ssh_connections_table.setMinimumHeight(120) # 최소 높이 설정
+        self.ssh_connections_table.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents) # QAbstractScrollArea.AdjustToContents -> QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents
+        self.ssh_connections_table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding) # QSizePolicy.Expanding -> QSizePolicy.Policy.Expanding
+        # 컬럼 너비 조정
+        header = self.ssh_connections_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # ID
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)    # 별칭
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)        # 호스트
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents) # 포트
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)    # 사용자명
+        self.ssh_connections_table.setColumnWidth(1, 150) # 별칭 너비
+        self.ssh_connections_table.setColumnWidth(4, 120) # 사용자명 너비
+
+        ssh_buttons_layout = QHBoxLayout()
+        self.add_ssh_config_btn = QPushButton("➕ 추가")
+        self.edit_ssh_config_btn = QPushButton("✏️ 수정")
+        self.remove_ssh_config_btn = QPushButton("➖ 삭제")
+        self.test_ssh_connection_btn = QPushButton("🔌 연결 테스트") # 연결 테스트 버튼 추가
+        ssh_buttons_layout.addWidget(self.add_ssh_config_btn)
+        ssh_buttons_layout.addWidget(self.edit_ssh_config_btn)
+        ssh_buttons_layout.addWidget(self.remove_ssh_config_btn)
+        ssh_buttons_layout.addWidget(self.test_ssh_connection_btn) # 버튼 레이아웃에 추가
+        ssh_buttons_layout.addStretch()
+
+        ssh_config_layout.addWidget(self.ssh_connections_table)
+        ssh_config_layout.addLayout(ssh_buttons_layout)
+        self.ssh_config_group.setLayout(ssh_config_layout)
+
 
         # 파일 필터링
         self.filtering_group = QGroupBox("파일 필터링")
@@ -304,6 +564,7 @@ class SettingsDialog(QDialog):
         left_layout.addWidget(self.default_prompt_group)
         left_layout.addWidget(self.available_models_group) # 사용 가능 모델 목록 그룹을 왼쪽으로 이동
         left_layout.addWidget(self.api_key_management_group)
+        left_layout.addWidget(self.ssh_config_group) # SSH 설정 그룹 추가
         left_layout.addWidget(self.gemini_group) # Gemini 파라미터 왼쪽으로 이동
         left_layout.addStretch(1) # 위젯들을 위로 밀기
 
@@ -357,9 +618,17 @@ class SettingsDialog(QDialog):
         self.claude_models_list.itemClicked.connect(lambda item: self.handle_model_click(item, self.claude_models_list, 'claude'))
         self.gpt_models_list.itemClicked.connect(lambda item: self.handle_model_click(item, self.gpt_models_list, 'gpt'))
 
+        # SSH 설정 관리 버튼 시그널 연결
+        self.add_ssh_config_btn.clicked.connect(self.add_ssh_config)
+        self.edit_ssh_config_btn.clicked.connect(self.edit_ssh_config)
+        self.remove_ssh_config_btn.clicked.connect(self.remove_ssh_config)
+        self.test_ssh_connection_btn.clicked.connect(self.test_ssh_connection) # 연결 테스트 버튼 연결
+        self.ssh_connections_table.itemDoubleClicked.connect(self.edit_ssh_config) # 더블클릭으로 수정
+
         # --- 초기 설정값 로드 ---
         self.load_config_settings()
         self.load_api_keys_list() # API 키 목록 로드
+        self.load_ssh_connections_list() # SSH 연결 목록 로드
         if self.mw.current_project_folder:
             self.load_gitignore()
 
@@ -769,7 +1038,192 @@ class SettingsDialog(QDialog):
             QMessageBox.critical(self, "오류", f"모델 제거 중 예외 발생:\n{e}")
             logger.exception(f"Error removing model {model_to_remove}")
 
+    # --- SSH Config Methods ---
+    def load_ssh_connections_list(self):
+        """DB에서 SSH 연결 목록을 로드하여 테이블 위젯에 표시합니다."""
+        self.ssh_connections_table.setRowCount(0) # 테이블 초기화
+        try:
+            connections = self.ssh_config_service.list_connections()
+            self.ssh_connections_table.setRowCount(len(connections))
+            for row, conn in enumerate(connections):
+                self.ssh_connections_table.setItem(row, 0, QTableWidgetItem(str(conn.id)))
+                self.ssh_connections_table.setItem(row, 1, QTableWidgetItem(conn.alias))
+                self.ssh_connections_table.setItem(row, 2, QTableWidgetItem(conn.hostname))
+                self.ssh_connections_table.setItem(row, 3, QTableWidgetItem(str(conn.port)))
+                self.ssh_connections_table.setItem(row, 4, QTableWidgetItem(conn.username))
+                # ID 컬럼은 읽기 전용 및 가운데 정렬
+                id_item = self.ssh_connections_table.item(row, 0)
+                if id_item:
+                    id_item.setFlags(id_item.flags() & ~Qt.ItemFlag.ItemIsEditable) # Qt.ItemIsEditable -> Qt.ItemFlag.ItemIsEditable
+                    id_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter) # Qt.AlignCenter -> Qt.AlignmentFlag.AlignCenter
+            logger.info(f"Loaded {len(connections)} SSH connections into table.")
+        except Exception as e:
+            QMessageBox.critical(self, "SSH 목록 로드 오류", f"SSH 연결 목록을 불러오는 중 오류 발생:\n{e}")
+            logger.exception("Error loading SSH connections list")
 
+    def add_ssh_config(self):
+        """새 SSH 연결 설정을 추가하는 다이얼로그를 엽니다."""
+        existing_aliases = [self.ssh_connections_table.item(row, 1).text() for row in range(self.ssh_connections_table.rowCount())]
+        dialog = SshConfigDialog(existing_aliases=existing_aliases, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted: # QDialog.Accepted -> QDialog.DialogCode.Accepted
+            new_config = dialog.get_config_data()
+            if new_config:
+                connection_id = self.ssh_config_service.add_connection(new_config)
+                if connection_id is not None:
+                    QMessageBox.information(self, "성공", f"SSH 연결 '{new_config.alias}'이(가) 추가되었습니다.")
+                    self.load_ssh_connections_list() # 목록 새로고침
+                else:
+                    QMessageBox.warning(self, "실패", "SSH 연결 추가 중 오류가 발생했습니다.")
+
+    def edit_ssh_config(self):
+        """선택된 SSH 연결 설정을 수정하는 다이얼로그를 엽니다."""
+        selected_rows = self.ssh_connections_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "선택 오류", "수정할 SSH 연결 설정을 목록에서 선택하세요.")
+            return
+
+        selected_row = selected_rows[0].row()
+        connection_id_item = self.ssh_connections_table.item(selected_row, 0)
+        if not connection_id_item: return # ID 아이템 없으면 중단
+
+        try:
+            connection_id = int(connection_id_item.text())
+            existing_config = self.ssh_config_service.get_connection(connection_id)
+            if not existing_config:
+                QMessageBox.warning(self, "오류", "선택한 SSH 연결 정보를 찾을 수 없습니다.")
+                self.load_ssh_connections_list() # 목록 동기화
+                return
+
+            existing_aliases = [self.ssh_connections_table.item(row, 1).text() for row in range(self.ssh_connections_table.rowCount())]
+            dialog = SshConfigDialog(config=existing_config, existing_aliases=existing_aliases, parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted: # QDialog.Accepted -> QDialog.DialogCode.Accepted
+                updated_config = dialog.get_config_data()
+                if updated_config:
+                    if self.ssh_config_service.update_connection(updated_config):
+                        QMessageBox.information(self, "성공", f"SSH 연결 '{updated_config.alias}'이(가) 수정되었습니다.")
+                        self.load_ssh_connections_list() # 목록 새로고침
+                    else:
+                        QMessageBox.warning(self, "실패", "SSH 연결 수정 중 오류가 발생했습니다.")
+        except ValueError:
+            QMessageBox.warning(self, "오류", "유효하지 않은 연결 ID입니다.")
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"SSH 연결 수정 준비 중 오류 발생:\n{e}")
+
+    def remove_ssh_config(self):
+        """선택된 SSH 연결 설정을 삭제합니다."""
+        selected_rows = self.ssh_connections_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "선택 오류", "삭제할 SSH 연결 설정을 목록에서 선택하세요.")
+            return
+
+        selected_row = selected_rows[0].row()
+        connection_id_item = self.ssh_connections_table.item(selected_row, 0)
+        alias_item = self.ssh_connections_table.item(selected_row, 1)
+        if not connection_id_item or not alias_item: return
+
+        try:
+            connection_id = int(connection_id_item.text())
+            alias = alias_item.text()
+            reply = QMessageBox.question(self, "삭제 확인", f"정말로 SSH 연결 '{alias}'(ID: {connection_id})을(를) 삭제하시겠습니까?",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            if reply != QMessageBox.StandardButton.Yes: return
+
+            if self.ssh_config_service.delete_connection(connection_id):
+                QMessageBox.information(self, "성공", f"SSH 연결 '{alias}'이(가) 삭제되었습니다.")
+                self.load_ssh_connections_list() # 목록 새로고침
+            else:
+                QMessageBox.warning(self, "실패", "SSH 연결 삭제 중 오류가 발생했습니다.")
+        except ValueError:
+            QMessageBox.warning(self, "오류", "유효하지 않은 연결 ID입니다.")
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"SSH 연결 삭제 중 예외 발생:\n{e}")
+
+    def test_ssh_connection(self):
+        """선택된 SSH 설정으로 연결 테스트를 수행합니다."""
+        selected_rows = self.ssh_connections_table.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "선택 오류", "연결 테스트할 SSH 설정을 목록에서 선택하세요.")
+            return
+
+        selected_row = selected_rows[0].row()
+        connection_id_item = self.ssh_connections_table.item(selected_row, 0)
+        if not connection_id_item: return
+
+        try:
+            connection_id = int(connection_id_item.text())
+            config_to_test = self.ssh_config_service.get_connection(connection_id)
+            if not config_to_test:
+                QMessageBox.warning(self, "오류", "선택한 SSH 연결 정보를 찾을 수 없습니다.")
+                return
+
+            # 비밀번호 인증 시 비밀번호 다시 입력받기 (보안 강화)
+            if config_to_test.auth_method == 'password' and not config_to_test.password:
+                 password, ok = QInputDialog.getText(self, "비밀번호 입력", f"'{config_to_test.alias}' 연결을 위한 비밀번호 입력:", QLineEdit.EchoMode.Password)
+                 if not ok or not password:
+                     QMessageBox.information(self, "취소", "비밀번호가 입력되지 않아 연결 테스트를 취소합니다.")
+                     return
+                 config_to_test.password = password # 임시로 비밀번호 설정 (DB 저장 안 함)
+
+            # 진행률 표시 다이얼로그 (선택적)
+            progress = QProgressDialog("SSH 연결 테스트 중...", "취소", 0, 0, self)
+            progress.setWindowModality(Qt.WindowModality.WindowModal) # Qt.WindowModal -> Qt.WindowModality.WindowModal
+            progress.setWindowTitle("연결 테스트")
+            progress.show()
+            QApplication.processEvents() # UI 업데이트
+
+            # 이전 스레드 정리
+            if self.ssh_connection_test_thread and self.ssh_connection_test_thread.isRunning():
+                self.ssh_connection_test_thread.quit()
+                self.ssh_connection_test_thread.wait()
+
+            # 스레드 및 워커 생성
+            self.ssh_connection_test_thread = QThread()
+            self.ssh_connection_tester = SshConnectionTester(config_to_test)
+            self.ssh_connection_tester.moveToThread(self.ssh_connection_test_thread)
+
+            # 시그널 연결
+            self.ssh_connection_tester.finished.connect(self.handle_ssh_test_result)
+            self.ssh_connection_tester.finished.connect(progress.close) # 완료 시 진행률 닫기
+            self.ssh_connection_tester.finished.connect(self.ssh_connection_test_thread.quit)
+            self.ssh_connection_tester.finished.connect(self.ssh_connection_tester.deleteLater)
+            self.ssh_connection_test_thread.finished.connect(self.ssh_connection_test_thread.deleteLater)
+            self.ssh_connection_test_thread.started.connect(self.ssh_connection_tester.run)
+
+            # 스레드 시작
+            self.ssh_connection_test_thread.start()
+
+            # 진행률 다이얼로그 취소 버튼 연결
+            progress.canceled.connect(self.cancel_ssh_test)
+
+        except ValueError:
+            QMessageBox.warning(self, "오류", "유효하지 않은 연결 ID입니다.")
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"SSH 연결 테스트 준비 중 오류 발생:\n{e}")
+
+    def handle_ssh_test_result(self, success: bool, message: str):
+        """SSH 연결 테스트 결과를 처리합니다."""
+        if success:
+            QMessageBox.information(self, "연결 테스트 결과", message)
+        else:
+            QMessageBox.warning(self, "연결 테스트 결과", message)
+        self.ssh_connection_tester = None
+        self.ssh_connection_test_thread = None
+
+    def cancel_ssh_test(self):
+        """SSH 연결 테스트 스레드를 중지합니다."""
+        if self.ssh_connection_test_thread and self.ssh_connection_test_thread.isRunning():
+            logger.info("Canceling SSH connection test...")
+            # 스레드 종료 시도 (paramiko는 직접적인 중단 어려움, timeout으로 종료 유도)
+            self.ssh_connection_test_thread.quit()
+            if not self.ssh_connection_test_thread.wait(500): # 0.5초 대기
+                 logger.warning("SSH test thread did not quit gracefully.")
+                 # self.ssh_connection_test_thread.terminate() # 강제 종료는 지양
+            self.ssh_connection_tester = None
+            self.ssh_connection_test_thread = None
+            QMessageBox.information(self, "취소", "SSH 연결 테스트가 취소되었습니다.")
+
+
+    # --- 기존 메서드 ---
     def save_config_settings(self):
         """UI에서 설정값을 읽어 ConfigSettings 모델을 업데이트하고 DB에 저장합니다."""
         if not self.settings:
@@ -894,3 +1348,8 @@ class SettingsDialog(QDialog):
                 self.mw.file_tree_controller.load_gitignore_settings()
         except Exception as e:
             QMessageBox.critical(self, "오류", f".gitignore 파일을 저장하는 중 오류 발생:\n{e}")
+
+    def closeEvent(self, event):
+        """다이얼로그 닫힐 때 진행 중인 SSH 테스트 스레드 정리."""
+        self.cancel_ssh_test() # 진행 중인 테스트 취소 시도
+        super().closeEvent(event)

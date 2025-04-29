@@ -1,4 +1,3 @@
-
 import psycopg2
 import os
 import yaml # YAML 파싱을 위해 추가
@@ -43,6 +42,7 @@ $$ LANGUAGE plpgsql;
 -- DROP TABLE IF EXISTS model_rate_limits CASCADE;
 -- DROP TABLE IF EXISTS api_keys CASCADE;
 -- DROP TABLE IF EXISTS gemini_api_logs CASCADE;
+-- DROP TABLE IF EXISTS ssh_connections CASCADE; -- SSH 테이블 삭제 추가 (필요시)
 
 -- ==== API 키 테이블 (사용량 컬럼 추가) ====
 -- 테이블이 존재하지 않을 경우에만 생성 (IF NOT EXISTS 추가)
@@ -206,6 +206,43 @@ COMMENT ON COLUMN gemini_api_logs.error_message IS 'Error message if the API cal
 COMMENT ON COLUMN gemini_api_logs.elapsed_time_ms IS 'Total time taken for the API call in milliseconds.';
 COMMENT ON COLUMN gemini_api_logs.token_count IS 'Calculated token count for the request/response.';
 COMMENT ON COLUMN gemini_api_logs.api_key_id IS 'Foreign key referencing the api_key used for the request.';
+
+-- ==== SSH 접속 정보 테이블 ====
+-- 테이블이 존재하지 않을 경우에만 생성
+CREATE TABLE IF NOT EXISTS ssh_connections (
+    id SERIAL PRIMARY KEY,
+    alias TEXT NOT NULL UNIQUE,
+    hostname TEXT NOT NULL,
+    port INTEGER NOT NULL DEFAULT 22,
+    username TEXT NOT NULL,
+    auth_method TEXT NOT NULL CHECK (auth_method IN ('password', 'key')), -- 'password' 또는 'key'만 허용
+    password TEXT, -- 암호화 필요 시 BYTEA 또는 다른 방식 고려
+    key_path TEXT,
+    -- key_passphrase TEXT, -- 필요 시 추가
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 트리거가 존재하지 않을 경우에만 생성
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'set_ssh_connections_timestamp') THEN
+        CREATE TRIGGER set_ssh_connections_timestamp
+        BEFORE UPDATE ON ssh_connections
+        FOR EACH ROW
+        EXECUTE FUNCTION trigger_set_timestamp();
+    END IF;
+END $$;
+
+COMMENT ON TABLE ssh_connections IS 'Stores SSH connection configurations.';
+COMMENT ON COLUMN ssh_connections.alias IS 'User-defined alias for the connection.';
+COMMENT ON COLUMN ssh_connections.hostname IS 'Hostname or IP address of the SSH server.';
+COMMENT ON COLUMN ssh_connections.port IS 'Port number for the SSH connection.';
+COMMENT ON COLUMN ssh_connections.username IS 'Username for SSH login.';
+COMMENT ON COLUMN ssh_connections.auth_method IS 'Authentication method: ''password'' or ''key''.';
+COMMENT ON COLUMN ssh_connections.password IS 'Password for authentication (store securely!).';
+COMMENT ON COLUMN ssh_connections.key_path IS 'Path to the private key file for authentication.';
+-- COMMENT ON COLUMN ssh_connections.key_passphrase IS 'Passphrase for the private key file, if encrypted.';
 
 """
 
@@ -445,4 +482,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
