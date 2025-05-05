@@ -1,7 +1,6 @@
-
 import os
 import fnmatch
-from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex
+from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex, QFileInfo # QFileInfo 추가
 from PyQt6.QtGui import QFileSystemModel
 from PyQt6.QtWidgets import QTreeView
 from typing import Callable, Optional, Set, List, Dict, Any # List, Dict, Any 추가
@@ -12,39 +11,35 @@ logger = logging.getLogger(__name__)
 
 class FilteredFileSystemModel(QFileSystemModel):
     """
-    Custom file system model that fetches all children recursively upon setting root path.
+    Custom file system model using Qt's default lazy loading behavior.
+    The eager recursive loading (_fetch_all_recursively) has been removed
+    to improve performance on large or remote directories.
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        # Lazy loading is the default behavior, no extra options needed here.
+        # Options like DontWatchForChanges can be set if needed, but might affect responsiveness.
+        # self.setOption(QFileSystemModel.Option.DontWatchForChanges, True) # Example if needed
 
     def setRootPathFiltered(self, path: str) -> QModelIndex:
-        """Sets the root path and immediately fetches all children."""
+        """
+        Sets the root path for the model. Lazy loading will occur as needed
+        when the view requests more data (e.g., expanding a directory).
+        """
+        logger.info(f"Setting root path (lazy loading enabled): {path}")
+        # Simply call the base class method. Qt handles fetching as needed.
         root_index = super().setRootPath(path)
-        if root_index.isValid():
-            self._fetch_all_recursively(root_index)
+        # The _fetch_all_recursively call is removed.
         return root_index
 
-    def _fetch_all_recursively(self, parent_index: QModelIndex) -> None:
-        """Recursively fetches all items under the parent index."""
-        if not parent_index.isValid():
-            return
-
-        # Fetch immediate children first
-        while self.canFetchMore(parent_index):
-            self.fetchMore(parent_index)
-
-        # Recursively fetch for child directories
-        row_count = self.rowCount(parent_index)
-        for row in range(row_count):
-            child_index = self.index(row, 0, parent_index)
-            if child_index.isValid() and self.isDir(child_index):
-                self._fetch_all_recursively(child_index)
+    # _fetch_all_recursively method is removed entirely.
 
 
 class CheckableProxyModel(QSortFilterProxyModel):
     """
     Proxy model that provides checkable items and filters based on ignore patterns.
     Handles recursive checking for folders and multi-selection checking.
+    Optimized to reduce filesystem access in `data` and `filterAcceptsRow`.
     """
     def __init__(self, fs_model: FilteredFileSystemModel, project_folder_getter: Callable[[], Optional[str]], fs_service: FilesystemService, tree_view: QTreeView, parent=None):
         super().__init__(parent)
@@ -60,56 +55,70 @@ class CheckableProxyModel(QSortFilterProxyModel):
         """Sets the ignore patterns used for filtering."""
         if self._ignore_patterns != patterns:
             self._ignore_patterns = patterns
+            logger.info(f"Ignore patterns updated. Invalidating filter.")
             self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
-        """Determines if a row should be shown based on ignore patterns."""
+        """
+        Determines if a row should be shown based on ignore patterns.
+        Uses QFileInfo for potentially cached attributes.
+        """
         source_index = self.sourceModel().index(source_row, 0, source_parent)
         if not source_index.isValid():
             return False
 
-        file_path = self.sourceModel().filePath(source_index)
+        # Use QFileInfo provided by the source model, which might cache attributes.
+        file_info: QFileInfo = self.sourceModel().fileInfo(source_index)
+        file_path = file_info.filePath() # Get absolute path
+        is_dir = file_info.isDir()
+
         project_root = self.project_folder_getter()
 
-        if not project_root or not file_path.startswith(project_root):
+        # Allow items outside the project root or the root itself
+        if not project_root or not file_path.startswith(project_root) or file_path == project_root:
             return True
 
-        if file_path == project_root:
-            return True
-
-        is_dir = self.sourceModel().isDir(source_index)
+        # Check against ignore patterns using the FilesystemService
+        # This call is now potentially faster as is_dir is obtained from QFileInfo.
         if self.fs_service.should_ignore(file_path, project_root, self._ignore_patterns, is_dir):
             if file_path in self.checked_files_dict:
-                # 필터링되어 숨겨지는 항목은 체크 상태 딕셔너리에서도 제거
+                # Remove filtered items from the check state dictionary
                 logger.debug(f"Removing filtered item from checked_files_dict: {file_path}")
                 del self.checked_files_dict[file_path]
+            # logger.debug(f"Ignoring item: {file_path}") # Can be verbose
             return False
 
         return True
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
-        """Returns data for the item, including check state and file size."""
+        """
+        Returns data for the item, including check state.
+        Removed file size calculation for performance.
+        """
         if not index.isValid():
             return None
 
         if index.column() == 0:
             if role == Qt.ItemDataRole.CheckStateRole:
                 file_path = self.get_file_path_from_index(index)
-                # checked_files_dict에 경로가 존재하고 값이 True이면 Checked, 아니면 Unchecked 반환
-                # (값이 False인 경우는 없지만 명확성을 위해 True 확인)
                 is_checked = self.checked_files_dict.get(file_path, False)
                 return Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
             elif role == Qt.ItemDataRole.DisplayRole:
-                base_name = super().data(index, role)
-                src_index = self.mapToSource(index)
-                if src_index.isValid() and not self.fs_model.isDir(src_index):
-                    file_path = self.fs_model.filePath(src_index)
-                    try:
-                        size = os.path.getsize(file_path)
-                        return f"{base_name} ({size:,} bytes)"
-                    except OSError:
-                        return f"{base_name} (size error)"
-                return base_name
+                # Return only the base name, removing the size calculation.
+                return super().data(index, role)
+                # --- Removed file size calculation ---
+                # base_name = super().data(index, role)
+                # src_index = self.mapToSource(index)
+                # if src_index.isValid() and not self.fs_model.isDir(src_index):
+                #     file_path = self.fs_model.filePath(src_index)
+                #     try:
+                #         # This os.path.getsize call is expensive on network drives.
+                #         size = os.path.getsize(file_path)
+                #         return f"{base_name} ({size:,} bytes)"
+                #     except OSError:
+                #         return f"{base_name} (size error)"
+                # return base_name
+                # --- End of removal ---
 
         return super().data(index, role)
 
@@ -117,11 +126,15 @@ class CheckableProxyModel(QSortFilterProxyModel):
         """Returns item flags, adding ItemIsUserCheckable."""
         flags = super().flags(index)
         if index.column() == 0:
+            # Ensure items are enabled, checkable, and selectable
             flags |= Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable
         return flags
 
     def setData(self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
-        """Sets data for the item, handling check state changes, including multi-select and folder recursion."""
+        """
+        Sets data for the item, handling check state changes, including multi-select and folder recursion.
+        Removed calls to ensure_loaded as lazy loading is now used.
+        """
         # 재귀 호출 방지 플래그 체크
         if self._is_setting_data:
             logger.debug(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
@@ -149,7 +162,8 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 return False
 
             is_checked = (new_check_state == Qt.CheckState.Checked)
-            current_state_in_dict = file_path in self.checked_files_dict
+            # Use get() with default False for cleaner check
+            current_state_in_dict = self.checked_files_dict.get(file_path, False)
 
             # 상태가 실제로 변경되는 경우에만 처리
             if is_checked == current_state_in_dict:
@@ -165,7 +179,6 @@ class CheckableProxyModel(QSortFilterProxyModel):
             elif file_path in self.checked_files_dict:
                 # 체크 해제 시 딕셔너리에서 제거
                 del self.checked_files_dict[file_path]
-                # logger.info(f"  Item unchecked and removed from checked_files_dict: {file_path}") # 제거 로그 레벨 INFO -> DEBUG로 변경
                 logger.debug(f"  Item unchecked and removed from checked_files_dict: {file_path}")
 
             # 변경된 인덱스 목록 초기화
@@ -175,8 +188,11 @@ class CheckableProxyModel(QSortFilterProxyModel):
             src_index = self.mapToSource(index)
             if src_index.isValid() and self.fs_model.isDir(src_index):
                 logger.debug(f"  {file_path} is a directory. Updating children...")
-                self.ensure_loaded(src_index) # 하위 항목 로드 보장
+                # ensure_loaded call removed - rely on lazy loading
+                # self.ensure_loaded(src_index) # 하위 항목 로드 보장 (REMOVED)
+
                 # update_children_state 호출하여 하위 항목 상태 업데이트 및 변경된 인덱스 받기
+                # This might only affect already loaded children due to lazy loading.
                 changed_children_indices = self.update_children_state(src_index, is_checked)
                 indices_to_signal.update(changed_children_indices) # 변경된 하위 인덱스 추가
                 logger.debug(f"  Finished updating children for {file_path}. Total signals needed: {len(indices_to_signal)}")
@@ -204,20 +220,28 @@ class CheckableProxyModel(QSortFilterProxyModel):
             logger.debug("setData finished. Releasing flag.")
             self._is_setting_data = False # 플래그 해제
 
-    def ensure_loaded(self, parent_src_index: QModelIndex):
-        """Ensures all children under the parent source index are loaded."""
-        if parent_src_index.isValid() and hasattr(self.fs_model, '_fetch_all_recursively'):
-            self.fs_model._fetch_all_recursively(parent_src_index)
+    # ensure_loaded method is removed as it relied on _fetch_all_recursively.
 
     def update_children_state(self, parent_src_index: QModelIndex, checked: bool) -> Set[QModelIndex]:
         """
-        Recursively updates check state for all visible children based on the 'checked' parameter.
-        Updates the internal dictionary and returns a set of *proxy* indices whose state was changed.
+        Recursively updates check state for all *currently loaded* visible children
+        based on the 'checked' parameter. Updates the internal dictionary and
+        returns a set of *proxy* indices whose state was changed.
+        Due to lazy loading, this might not affect children that haven't been fetched yet.
         """
         changed_indices = set()
+        # Check if the source model has fetched children for this parent
+        if not self.fs_model.hasChildren(parent_src_index):
+             # If it has children but they aren't fetched, rowCount might be 0 initially.
+             # We might need to fetch them first if we want to update them immediately.
+             # However, for performance, we'll only update loaded children.
+             # If canFetchMore is true, it means children exist but aren't loaded.
+             # logger.debug(f"    update_children_state: Parent {self.fs_model.filePath(parent_src_index)} has no loaded children.")
+             pass # Continue without fetching for performance
+
         row_count = self.fs_model.rowCount(parent_src_index)
         parent_path = self.fs_model.filePath(parent_src_index)
-        # logger.debug(f"    update_children_state for {parent_path}, checked={checked}, children={row_count}")
+        # logger.debug(f"    update_children_state for {parent_path}, checked={checked}, loaded children={row_count}")
 
         for row in range(row_count):
             child_src_index = self.fs_model.index(row, 0, parent_src_index)
@@ -230,7 +254,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 continue
 
             file_path = self.fs_model.filePath(child_src_index)
-            current_state_in_dict = file_path in self.checked_files_dict
+            current_state_in_dict = self.checked_files_dict.get(file_path, False)
             needs_update = (checked != current_state_in_dict)
 
             if needs_update:
@@ -239,14 +263,14 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 elif file_path in self.checked_files_dict:
                     # 체크 해제 시 딕셔너리에서 제거
                     del self.checked_files_dict[file_path]
-                    # logger.info(f"      Child unchecked and removed from checked_files_dict: {file_path}") # 제거 로그 레벨 INFO -> DEBUG로 변경
                     logger.debug(f"      Child unchecked and removed from checked_files_dict: {file_path}")
                 changed_indices.add(child_proxy_index) # 변경된 프록시 인덱스 추가
                 # logger.debug(f"      Child state changed: {file_path}, Added proxy index.")
 
             # 하위 폴더 재귀 호출 (폴더인 경우에만)
             if self.fs_model.isDir(child_src_index):
-                self.ensure_loaded(child_src_index) # 하위 항목 로드 보장
+                # ensure_loaded call removed
+                # self.ensure_loaded(child_src_index) # 하위 항목 로드 보장 (REMOVED)
                 grandchildren_indices = self.update_children_state(child_src_index, checked)
                 changed_indices.update(grandchildren_indices) # 재귀적으로 변경된 인덱스 추가
 
@@ -259,6 +283,9 @@ class CheckableProxyModel(QSortFilterProxyModel):
         if not proxy_index.isValid(): return
 
         self.tree_view.expand(proxy_index)
+        # With lazy loading, rowCount might be 0 until children are fetched.
+        # Expanding might trigger fetching, but we might need to wait or re-check.
+        # For simplicity, we only recurse if children are already loaded.
         child_count = self.rowCount(proxy_index)
         for row in range(child_count):
             child_proxy_idx = self.index(row, 0, proxy_index)
@@ -278,16 +305,26 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def get_all_checked_paths(self) -> List[str]:
         """Returns a list of all paths currently marked as checked."""
-        # checked_files_dict의 키 목록을 반환 (값은 항상 True)
-        # logger.info(f"get_all_checked_paths called. Returning {len(self.checked_files_dict)} paths.") # 로그 레벨 INFO -> DEBUG로 변경
         logger.debug(f"get_all_checked_paths called. Returning {len(self.checked_files_dict)} paths.")
         return list(self.checked_files_dict.keys())
 
 
     def get_checked_files(self) -> List[str]:
-        """Returns a list of checked paths that correspond to actual files."""
-        # checked_files_dict의 키 중에서 실제 파일인 것만 반환
-        checked_files = [path for path in self.checked_files_dict if os.path.isfile(path)]
-        # logger.info(f"get_checked_files called. Returning {len(checked_files)} file paths.") # 로그 레벨 INFO -> DEBUG로 변경
+        """
+        Returns a list of checked paths that correspond to actual files.
+        Uses os.path.isfile, which might be slow on network drives.
+        Consider caching or alternative approach if this becomes a bottleneck.
+        """
+        # This check might still be slow on network drives.
+        # If performance is still an issue, consider storing type (file/dir)
+        # in checked_files_dict when items are checked.
+        checked_files = []
+        for path in self.checked_files_dict.keys():
+            try:
+                if os.path.isfile(path):
+                    checked_files.append(path)
+            except OSError as e:
+                logger.warning(f"Error checking if path is file in get_checked_files: {path}, Error: {e}")
+
         logger.debug(f"get_checked_files called. Returning {len(checked_files)} file paths.")
         return checked_files

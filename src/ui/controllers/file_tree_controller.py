@@ -1,9 +1,9 @@
-
 import os
 import shutil
 from typing import Optional, List, Set
 from PyQt6.QtCore import Qt, QModelIndex, QItemSelection # PyQt5 -> PyQt6
 from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox # PyQt5 -> PyQt6
+import logging # 로깅 추가
 
 # 서비스 및 모델 import
 from core.services.filesystem_service import FilesystemService
@@ -13,6 +13,8 @@ from core.services.config_service import ConfigService
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
+
+logger = logging.getLogger(__name__) # 로거 설정
 
 class FileTreeController:
     """
@@ -35,6 +37,7 @@ class FileTreeController:
         folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", start_dir)
 
         if folder:
+            logger.info(f"Project folder selected: {folder}")
             # 폴더 선택 시 상태 초기화 (UI 및 내부 변수)
             self.mw.reset_state() # MainWindow 상태 초기화 (트리 리셋 포함)
             self.mw.current_project_folder = folder
@@ -45,14 +48,24 @@ class FileTreeController:
 
             # 모델에 루트 경로 설정 및 트리뷰 업데이트
             if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-                idx = self.mw.dir_model.setRootPathFiltered(folder)
+                # Use setRootPath directly on the source model
+                logger.info("Setting root path on source model...")
+                idx = self.mw.dir_model.setRootPath(folder) # Use setRootPath
+                if not idx.isValid():
+                     logger.warning(f"Source model returned invalid index for root path: {folder}")
+                # Map the source index to the proxy model index
                 root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
+                if not root_proxy_index.isValid():
+                     logger.warning(f"Proxy model returned invalid index for root path: {folder}")
+                # Set the root index for the tree view
                 self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 루트 인덱스 설정
+                logger.info(f"Tree view root index set. Proxy index valid: {root_proxy_index.isValid()}")
                 self.mw.status_bar.showMessage(f"Project Folder: {folder}")
 
                 # 루트 폴더 자동 체크 (선택적)
                 if root_proxy_index.isValid():
                     # Check the root folder by default
+                    logger.info("Setting root folder check state to Checked.")
                     self.mw.checkable_proxy.setData(root_proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole) # Qt.Checked -> Qt.CheckState.Checked, Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
 
             self.mw.update_window_title(folder_name)
@@ -76,11 +89,14 @@ class FileTreeController:
                         lines = f.read().splitlines()
                     gitignore_lines = [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith('#')]
                     patterns.update(gitignore_lines)
+                    logger.info(f"Loaded {len(gitignore_lines)} patterns from {self.gitignore_path}")
                 except Exception as e:
                     QMessageBox.warning(self.mw, "Error", f".gitignore 로드 중 오류: {str(e)}")
+                    logger.error(f"Error loading .gitignore: {e}", exc_info=True)
 
         # config.yml의 excluded_dirs 추가
         patterns.update(settings.excluded_dirs)
+        logger.info(f"Total ignore patterns (including defaults and excluded_dirs): {len(patterns)}")
 
         # 필터 모델에 패턴 설정
         if hasattr(self.mw, 'checkable_proxy'):
@@ -94,6 +110,7 @@ class FileTreeController:
 
     def reset_gitignore_and_filter(self):
         """Resets gitignore filter to defaults based on config.yml."""
+        logger.info("Resetting gitignore filter to defaults.")
         default_settings = self.config_service.get_settings()
         default_patterns = set(default_settings.default_ignore_list).union(default_settings.excluded_dirs)
         if hasattr(self.mw, 'checkable_proxy'):
@@ -102,12 +119,17 @@ class FileTreeController:
 
     def reset_file_tree(self):
         """Resets the file tree view to an empty state."""
+        logger.info("Resetting file tree view.")
         if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
+            # Set root path to empty string on the source model
             idx = self.mw.dir_model.setRootPath("")
+            # Set an invalid index as the root for the view
             self.mw.tree_view.setRootIndex(QModelIndex())
+            # Clear the internal check state dictionary
             self.mw.checkable_proxy.checked_files_dict.clear()
+            logger.debug("Cleared checked_files_dict during tree reset.")
             self.mw.tree_view.collapseAll()
-            print("File tree reset to empty state.")
+            logger.info("File tree reset to empty state.")
 
 
     def generate_directory_tree_structure(self):
@@ -129,10 +151,12 @@ class FileTreeController:
             self.mw.status_bar.showMessage("파일 트리를 생성할 항목이 없습니다!")
             return False
 
+        logger.info(f"Generating directory tree for {len(all_checked_paths)} checked items.")
         try:
             tree_string = self.fs_service.get_directory_tree(all_checked_paths, self.mw.current_project_folder)
         except Exception as e:
              QMessageBox.critical(self.mw, "오류", f"디렉토리 트리 생성 중 오류 발생: {e}")
+             logger.error(f"Error generating directory tree: {e}", exc_info=True)
              return False
 
         if hasattr(self.mw, "dir_structure_tab"):
@@ -140,6 +164,7 @@ class FileTreeController:
             self.mw.build_tabs.setCurrentWidget(self.mw.dir_structure_tab)
         self.mw.status_bar.showMessage("File tree generated!")
         self.mw.tree_generated = True # MainWindow 상태 업데이트
+        logger.info("Directory tree generation successful.")
         return True
 
     def rename_item(self, file_path):
@@ -161,17 +186,21 @@ class FileTreeController:
                  QMessageBox.warning(self.mw, "Error", f"'{new_name_stripped}' 이름이 이미 존재합니다.")
                  return
 
+            logger.info(f"Renaming item: '{file_path}' -> '{new_path}'")
             try:
                 os.rename(file_path, new_path)
                 self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
+                # Update check state dictionary if the renamed item was checked
                 if hasattr(self.mw, 'checkable_proxy'):
                     if file_path in self.mw.checkable_proxy.checked_files_dict:
                         is_checked = self.mw.checkable_proxy.checked_files_dict.pop(file_path)
                         self.mw.checkable_proxy.checked_files_dict[new_path] = is_checked
+                        logger.debug(f"Updated checked_files_dict for renamed item: {new_path}")
                 self.refresh_tree()
                 self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"이름 변경 중 오류 발생: {str(e)}")
+                logger.error(f"Error renaming item: {e}", exc_info=True)
         elif ok:
              QMessageBox.warning(self.mw, "Error", "새 이름은 비워둘 수 없습니다.")
 
@@ -189,35 +218,51 @@ class FileTreeController:
                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No) # QMessageBox.Yes/No -> QMessageBox.StandardButton.Yes/No
 
         if reply == QMessageBox.StandardButton.Yes: # QMessageBox.Yes -> QMessageBox.StandardButton.Yes
+            logger.info(f"Deleting item: {file_path}")
             try:
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path)
                 else:
                     os.remove(file_path)
                 self.mw.status_bar.showMessage(f"'{item_name}' 삭제 완료")
+                # Remove the deleted item and any children from the check state dictionary
                 if hasattr(self.mw, 'checkable_proxy'):
                     paths_to_remove = [p for p in self.mw.checkable_proxy.checked_files_dict if p == file_path or p.startswith(file_path + os.sep)]
+                    removed_count = 0
                     for p in paths_to_remove:
                         if p in self.mw.checkable_proxy.checked_files_dict:
                             del self.mw.checkable_proxy.checked_files_dict[p]
+                            removed_count += 1
+                    logger.debug(f"Removed {removed_count} items from checked_files_dict after deletion.")
                 self.refresh_tree()
                 self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"삭제 중 오류 발생: {str(e)}")
+                logger.error(f"Error deleting item: {e}", exc_info=True)
 
     def refresh_tree(self):
         """Refreshes the file explorer tree view."""
+        logger.info("Refreshing file tree view...")
         if self.mw.current_project_folder and hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
+            # Invalidate the proxy filter to re-evaluate items
             self.mw.checkable_proxy.invalidateFilter()
-            idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder)
+            # Set the root path again on the source model
+            idx = self.mw.dir_model.setRootPath(self.mw.current_project_folder) # Use setRootPath
+            # Map to proxy index and set as root for the view
             root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
             self.mw.tree_view.setRootIndex(root_proxy_index)
+            # Reapply check states based on the dictionary
             self._reapply_check_states(root_proxy_index)
             self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
+            logger.info("File tree refresh complete.")
+        else:
+             logger.warning("Cannot refresh tree: Project folder not set or models not available.")
 
 
     def _reapply_check_states(self, parent_proxy_index: QModelIndex):
          """Recursively reapply check states based on the dictionary after a refresh."""
+         # This function might be slow if it traverses the entire visible tree.
+         # It's necessary after invalidateFilter() or setRootPath().
          if not parent_proxy_index.isValid(): return
 
          parent_path = self.mw.checkable_proxy.get_file_path_from_index(parent_proxy_index)
@@ -226,8 +271,10 @@ class FileTreeController:
              current_state = self.mw.checkable_proxy.data(parent_proxy_index, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
              target_state = Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked # Qt.Checked/Unchecked -> Qt.CheckState.Checked/Unchecked
              if current_state != target_state:
+                 # Use setData to ensure signals are emitted correctly if state changes
                  self.mw.checkable_proxy.setData(parent_proxy_index, target_state, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
 
+         # Recursively check children (only those currently loaded/visible)
          row_count = self.mw.checkable_proxy.rowCount(parent_proxy_index)
          for row in range(row_count):
              child_proxy_index = self.mw.checkable_proxy.index(row, 0, parent_proxy_index)
@@ -238,18 +285,19 @@ class FileTreeController:
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
         if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-            checked_files = self.mw.checkable_proxy.get_checked_files()
+            # Get checked files (optimized version without os.path.getsize)
+            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses os.path.isfile
             self.mw.selected_files_data = []
-            total_size = 0
-            for fpath in checked_files:
-                try:
-                    size = os.path.getsize(fpath)
-                    self.mw.selected_files_data.append((fpath, size))
-                    total_size += size
-                except Exception:
-                    pass # 오류 무시
-            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
+            total_size = 0 # Size calculation removed for performance
+            # for fpath in checked_files:
+            #     try:
+            #         # size = os.path.getsize(fpath) # Removed size calculation
+            #         self.mw.selected_files_data.append((fpath, 0)) # Store path with size 0
+            #         # total_size += size
+            #     except Exception:
+            #         pass # 오류 무시
+            # self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
+            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.") # Update status bar without size
             # 토큰 계산은 버튼 클릭 시에만 수행되도록 변경됨
-            # self.mw.main_controller.update_char_count_for_active_tab() # Trigger update based on active tab
             # 파일 체크 상태 변경 시 상태 변경 시그널 발생 (자동 저장용) -> 시그널 연결 파일에서 처리
-
+            # logger.debug("Check state changed, state_changed_signal emitted.") # Signal emitted via connect_signals
