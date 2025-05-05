@@ -24,12 +24,7 @@
         "Y:/DB/DB/Upbit_Archiving_Candles/src/worker_manager/config.yml",
         "Y:/DB/DB/Upbit_Archiving_Candles/src/worker_manager/main.py",
         "Y:/DB/DB/Upbit_Archiving_Candles/src/worker_manager/models.py",
-        "Y:/DB/DB/Upbit_Archiving_Candles/src/__init__.py",
-        "Y:/DB/DB/Upbit_Archiving_Candles/conftest.py",
-        "Y:/DB/DB/Upbit_Archiving_Candles/pyproject.toml",
-        "Y:/DB/DB/Upbit_Archiving_Candles/README.md",
-        "Y:/DB/DB/Upbit_Archiving_Candles/pytest_results.txt",
-        "Y:/DB/DB/Upbit_Archiving_Candles/requirements.txt"
+        "Y:/DB/DB/Upbit_Archiving_Candles/src/__init__.py"
     ],
     "user_prompt": "",
     "attached_items": [],

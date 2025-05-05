@@ -48,9 +48,9 @@ class FileTreeController:
 
             # 모델에 루트 경로 설정 및 트리뷰 업데이트
             if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-                # Use setRootPath directly on the source model
+                # Use setRootPathFiltered directly on the source model
                 logger.info("Setting root path on source model...")
-                idx = self.mw.dir_model.setRootPath(folder) # Use setRootPath
+                idx = self.mw.dir_model.setRootPathFiltered(folder) # Use setRootPathFiltered
                 if not idx.isValid():
                      logger.warning(f"Source model returned invalid index for root path: {folder}")
                 # Map the source index to the proxy model index
@@ -122,7 +122,7 @@ class FileTreeController:
         logger.info("Resetting file tree view.")
         if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
             # Set root path to empty string on the source model
-            idx = self.mw.dir_model.setRootPath("")
+            idx = self.mw.dir_model.setRootPathFiltered("") # Use setRootPathFiltered
             # Set an invalid index as the root for the view
             self.mw.tree_view.setRootIndex(QModelIndex())
             # Clear the internal check state dictionary
@@ -247,7 +247,7 @@ class FileTreeController:
             # Invalidate the proxy filter to re-evaluate items
             self.mw.checkable_proxy.invalidateFilter()
             # Set the root path again on the source model
-            idx = self.mw.dir_model.setRootPath(self.mw.current_project_folder) # Use setRootPath
+            idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder) # Use setRootPathFiltered
             # Map to proxy index and set as root for the view
             root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
             self.mw.tree_view.setRootIndex(root_proxy_index)
@@ -286,9 +286,10 @@ class FileTreeController:
         """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
         if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
             # Get checked files (optimized version without os.path.getsize)
-            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses os.path.isfile
+            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses os.path.isfile or QFileInfo
             self.mw.selected_files_data = []
-            total_size = 0 # Size calculation removed for performance
+            # --- Removed file size calculation ---
+            # total_size = 0
             # for fpath in checked_files:
             #     try:
             #         # size = os.path.getsize(fpath) # Removed size calculation
@@ -297,6 +298,7 @@ class FileTreeController:
             #     except Exception:
             #         pass # 오류 무시
             # self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
+            # --- End of removal ---
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.") # Update status bar without size
             # 토큰 계산은 버튼 클릭 시에만 수행되도록 변경됨
             # 파일 체크 상태 변경 시 상태 변경 시그널 발생 (자동 저장용) -> 시그널 연결 파일에서 처리

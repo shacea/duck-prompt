@@ -321,8 +321,16 @@ class CheckableProxyModel(QSortFilterProxyModel):
         checked_files = []
         for path in self.checked_files_dict.keys():
             try:
-                if os.path.isfile(path):
-                    checked_files.append(path)
+                # Use QFileInfo from source model for potentially cached type info
+                src_index = self.fs_model.index(path)
+                if src_index.isValid():
+                    file_info: QFileInfo = self.fs_model.fileInfo(src_index)
+                    if file_info.isFile():
+                        checked_files.append(path)
+                else:
+                    # Fallback to os.path.isfile if index is invalid (less likely)
+                    if os.path.isfile(path):
+                        checked_files.append(path)
             except OSError as e:
                 logger.warning(f"Error checking if path is file in get_checked_files: {path}, Error: {e}")
 

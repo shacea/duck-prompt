@@ -118,13 +118,16 @@ class FilesystemService:
                 lines.append(f"{indent_str} 📁 {d}/")
                 lines.extend(print_tree(subtree[d], os.path.join(current_path, d), indent + 1))
             for f in files:
-                size = 0
-                full_file_path = os.path.join(current_path, f)
-                try:
-                    size = os.path.getsize(full_file_path)
-                except OSError:
-                    size = 0
-                lines.append(f"{indent_str} 📄 {f} ({size:,} bytes)")
+                # --- Removed file size calculation ---
+                # size = 0
+                # full_file_path = os.path.join(current_path, f)
+                # try:
+                #     size = os.path.getsize(full_file_path)
+                # except OSError:
+                #     size = 0
+                # lines.append(f"{indent_str} 📄 {f} ({size:,} bytes)")
+                # --- End of removal ---
+                lines.append(f"{indent_str} 📄 {f}") # Display only filename
             return lines
 
         root_folder_name = os.path.basename(project_root)
