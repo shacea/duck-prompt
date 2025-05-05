@@ -25,10 +25,12 @@ from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
 from core.services.token_service import TokenCalculationService
 from core.services.gemini_service import build_gemini_graph
+from core.services.directory_cache_service import DirectoryCacheService, CacheNode # Added
 from core.langgraph_state import GeminiGraphState
 
 # UI 관련 import
-from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
+# from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel # Removed QFileSystemModel based
+from ui.models.file_system_models import CachedFileSystemModel, CheckableProxyModel # Use new models
 from ui.controllers.main_controller import MainController # MainController import 수정
 from ui.controllers.resource_controller import ResourceController
 from ui.controllers.prompt_controller import PromptController
@@ -100,8 +102,8 @@ class MainWindow(QMainWindow):
         # --- 상태 변수 ---
         self.current_project_folder: Optional[str] = None
         self.last_generated_prompt: str = ""
-        self.selected_files_data: List[tuple] = []
-        self.tree_generated: bool = False
+        self.selected_files_data: List[tuple] = [] # Still used by PromptController? Maybe remove.
+        self.tree_generated: bool = False # Still used by PromptController? Maybe remove.
         self._is_saving_gemini_settings = False # Still needed to prevent signal loops
         self.attached_items: List[Dict[str, Any]] = []
         self.api_call_start_time: Optional[datetime.datetime] = None # API 호출 시작 시간 저장
@@ -133,13 +135,14 @@ class MainWindow(QMainWindow):
         self.xml_service = XmlService()
         self.fs_service = FilesystemService(self.config_service) # Pass DB-backed config
         self.token_service = TokenCalculationService(self.config_service) # Pass DB-backed config
+        self.cache_service = DirectoryCacheService(self.fs_service) # Added Cache Service
         self.gemini_graph = build_gemini_graph(self.config_service) # Pass DB-backed config
         self.gemini_thread: Optional[QThread] = None
         self.gemini_worker: Optional[GeminiWorker] = None
 
         # --- UI 구성 요소 생성 ---
         create_menu_bar(self)
-        create_widgets(self)
+        create_widgets(self) # This now creates CachedFileSystemModel and CheckableProxyModel
         create_layout(self)
         create_status_bar(self)
 
@@ -148,13 +151,19 @@ class MainWindow(QMainWindow):
         self.resource_controller = ResourceController(self, self.template_service, self.state_service)
         self.prompt_controller = PromptController(self, self.prompt_service)
         self.xml_controller = XmlController(self, self.xml_service)
-        self.file_tree_controller = FileTreeController(self, self.fs_service, self.config_service)
+        # Pass cache_service to FileTreeController
+        self.file_tree_controller = FileTreeController(self, self.fs_service, self.config_service, self.cache_service)
 
         # --- 시그널 연결 ---
         connect_signals(self)
         # 자동 저장 타이머 시그널 연결
         self.auto_save_timer.timeout.connect(self.resource_controller.save_state_to_default)
         self.state_changed_signal.connect(self.restart_auto_save_timer) # 상태 변경 시 타이머 재시작
+        # Connect cache update signal to model population slot
+        self.cache_service.cache_updated.connect(self.cached_model.update_model_from_cache_change)
+        # Connect check state changes in proxy model to state changed signal
+        self.checkable_proxy.check_state_changed.connect(self.state_changed_signal.emit)
+
 
         # --- 초기화 작업 ---
         self.resource_controller.load_templates_list()
@@ -203,7 +212,7 @@ class MainWindow(QMainWindow):
         # 4. Gemini 파라미터 UI 업데이트
         self.load_gemini_settings_to_ui()
 
-        # 5. 파일 필터링/gitignore 설정 로드
+        # 5. 파일 필터링/gitignore 설정 로드 (Controller가 CacheService 업데이트)
         self.file_tree_controller.load_gitignore_settings()
 
         # 6. 리소스 관리 버튼 레이블 업데이트
@@ -215,6 +224,8 @@ class MainWindow(QMainWindow):
         """Restarts the application with the specified mode."""
         self._initialized = False
         self.auto_save_timer.stop() # 타이머 중지
+        self.cache_service.stop_monitoring() # Stop monitoring
+        self.cache_service.stop_scan() # Stop scan
         self.db_service.disconnect() # Disconnect DB before closing
         self.close()
         # Note: Restarting might re-trigger DB connection errors if they persist
@@ -255,6 +266,8 @@ class MainWindow(QMainWindow):
         was_initialized = self._initialized
         self._initialized = False
         self.auto_save_timer.stop() # 리셋 시 타이머 중지
+        self.cache_service.stop_scan() # Stop scan on reset
+        self.cache_service.stop_monitoring() # Stop monitoring on reset
 
         self.current_project_folder = None
         self.last_generated_prompt = ""
@@ -272,7 +285,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'attachment_list_widget'): self.attachment_list_widget.clear()
         self.update_window_title()
 
-        # 파일 트리 리셋 (내부에서 checked_files_dict 초기화 포함)
+        # 파일 트리 리셋 (모델 클리어)
         if hasattr(self, 'file_tree_controller'):
             self.file_tree_controller.reset_file_tree()
 
@@ -359,6 +372,7 @@ class MainWindow(QMainWindow):
         """
         Sets the UI state based on the provided AppState model.
         If partial_load is True, only loads project folder, checked files, user prompt, and attachments.
+        Triggers background scan if project folder changes.
         """
         logger.info(f"Setting current state. Partial load: {partial_load}")
         # UI 업데이트 중 시그널/타이머 방지
@@ -366,209 +380,157 @@ class MainWindow(QMainWindow):
         self._initialized = False
         self.auto_save_timer.stop()
 
-        # --- 부분 로드 (마지막 작업 불러오기) ---
-        if partial_load:
-            # 1. 프로젝트 폴더 로드 (폴더 변경 시 트리 리셋 및 gitignore 로드 포함)
-            folder_name = None
-            if state.project_folder and os.path.isdir(state.project_folder):
-                if self.current_project_folder != state.project_folder:
-                    # reset_state 대신 필요한 부분만 초기화
-                    self.current_project_folder = state.project_folder
-                    folder_name = os.path.basename(state.project_folder)
-                    self.project_folder_label.setText(f"현재 프로젝트 폴더: {state.project_folder}")
-                    if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
-                        # 체크 상태 딕셔너리 초기화 (폴더 변경 시)
-                        self.checkable_proxy.checked_files_dict.clear()
-                        logger.debug("Cleared checked_files_dict due to project folder change (partial load).")
-                        idx = self.dir_model.setRootPathFiltered(state.project_folder)
-                        root_proxy_index = self.checkable_proxy.mapFromSource(idx)
-                        self.tree_view.setRootIndex(root_proxy_index)
-                    self.status_bar.showMessage(f"Project Folder: {state.project_folder}")
-                    self.file_tree_controller.load_gitignore_settings() # 폴더 변경 시 gitignore 다시 로드
-                    self.update_window_title(folder_name)
-                else:
-                    # 같은 폴더면 현재 폴더 이름 유지
-                    folder_name = os.path.basename(self.current_project_folder)
-            elif not state.project_folder and self.current_project_folder:
-                # 상태 파일에 폴더 정보가 없으면 현재 폴더 유지
-                folder_name = os.path.basename(self.current_project_folder)
-                pass
-            else:
-                # 상태 파일에도 없고 현재도 없으면 초기화
-                self.current_project_folder = None
-                self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
-                self.file_tree_controller.reset_file_tree() # 트리 및 체크 상태 초기화
-                self.update_window_title()
+        folder_changed = False
+        new_folder = state.project_folder
+        old_folder = self.current_project_folder
 
-            # 2. 사용자 프롬프트 로드
-            self.user_tab.setText(state.user_prompt)
-
-            # 3. 첨부 파일 로드
-            self.attached_items = state.attached_items or []
-            self._update_attachment_list_ui()
-
-            # 4. 체크된 파일 복원 (프로젝트 폴더 로드 후에 수행)
-            if self.current_project_folder and hasattr(self, 'checkable_proxy'):
-                # 부분 로드 시에도 체크 상태 딕셔너리 초기화 (폴더 변경 시 이미 초기화됨)
-                if self.current_project_folder == state.project_folder: # 같은 폴더일 때만 초기화
+        # Determine if folder needs update and trigger scan if necessary
+        if new_folder and os.path.isdir(new_folder):
+            if old_folder != new_folder:
+                logger.info(f"Project folder changed: {old_folder} -> {new_folder}")
+                folder_changed = True
+                self.current_project_folder = new_folder
+                folder_name = os.path.basename(new_folder)
+                self.project_folder_label.setText(f"현재 프로젝트 폴더: {new_folder}")
+                self.update_window_title(folder_name)
+                # Clear check state dict immediately on folder change
+                if hasattr(self, 'checkable_proxy'):
                     self.checkable_proxy.checked_files_dict.clear()
-                    logger.debug("Cleared checked_files_dict before restoring checks (partial load, same folder).")
+                    logger.debug("Cleared checked_files_dict due to project folder change.")
+                # Load gitignore and start scan
+                ignore_patterns = self.file_tree_controller.load_gitignore_settings()
+                self.cache_service.start_scan(new_folder, ignore_patterns)
+            else:
+                # Folder is the same, no need to rescan unless forced
+                folder_name = os.path.basename(new_folder)
+        elif not new_folder and old_folder:
+            # Folder removed in state
+            folder_changed = True
+            self.current_project_folder = None
+            self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
+            self.update_window_title()
+            self.file_tree_controller.reset_file_tree() # Clear model
+            self.cache_service.stop_scan()
+            self.cache_service.stop_monitoring()
+            if hasattr(self, 'checkable_proxy'): self.checkable_proxy.checked_files_dict.clear()
+        # else: new_folder is None and old_folder is None - no change
 
-                items_to_check = []
-                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
-                for fpath in state.checked_files:
-                    try:
-                        abs_fpath = os.path.abspath(fpath)
-                        abs_proj_folder = os.path.abspath(self.current_project_folder)
-                        if abs_fpath.startswith(abs_proj_folder):
-                            if os.path.exists(abs_fpath):
-                                src_index = self.dir_model.index(abs_fpath)
-                                if src_index.isValid():
-                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                                    if proxy_index.isValid():
-                                        # checked_files_dict 직접 수정 대신 setData 호출에 의존
-                                        # self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                        items_to_check.append(proxy_index)
-                                        logger.debug(f"  Queueing {abs_fpath} to be checked via setData.")
-                                    else: logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
-                                else: logger.warning(f"  Could not get source index for: {abs_fpath}")
-                            else: logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
-                        else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
-                    except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
+        # --- Load common fields (partial and full) ---
+        self.user_tab.setText(state.user_prompt)
+        self.attached_items = state.attached_items or []
+        self._update_attachment_list_ui()
 
-                # UI 업데이트 (setData 호출)
-                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
-                for proxy_index in items_to_check:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
-
-            # 부분 로드 시 다른 UI 요소는 변경하지 않음 (시스템 프롬프트, LLM 설정 등)
-            self.status_bar.showMessage("마지막 작업 상태 로드 완료.")
-
-        # --- 전체 로드 (상태 가져오기 등) ---
-        else:
+        # --- Full Load Specific Fields ---
+        if not partial_load:
             if self.mode != state.mode:
                 logger.info(f"Mode mismatch. Restarting...")
                 self._restart_with_mode(state.mode)
-                return # 재시작 후에는 이 함수 다시 호출 안 됨
-
-            # 전체 리셋 대신 필요한 부분만 업데이트
-            folder_name = None
-            if state.project_folder and os.path.isdir(state.project_folder):
-                if self.current_project_folder != state.project_folder:
-                    self.current_project_folder = state.project_folder
-                    folder_name = os.path.basename(state.project_folder)
-                    self.project_folder_label.setText(f"현재 프로젝트 폴더: {state.project_folder}")
-                    if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
-                        self.checkable_proxy.checked_files_dict.clear() # 폴더 변경 시 초기화
-                        logger.debug("Cleared checked_files_dict due to project folder change (full load).")
-                        idx = self.dir_model.setRootPathFiltered(state.project_folder)
-                        root_proxy_index = self.checkable_proxy.mapFromSource(idx)
-                        self.tree_view.setRootIndex(root_proxy_index)
-                    self.status_bar.showMessage(f"Project Folder: {state.project_folder}")
-                    self.file_tree_controller.load_gitignore_settings() # 폴더 변경 시 gitignore 다시 로드
-                else:
-                    folder_name = os.path.basename(self.current_project_folder)
-            else:
-                 self.current_project_folder = None
-                 self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
-                 self.file_tree_controller.reset_file_tree() # 트리 및 체크 상태 초기화
+                return # Restart handles everything
 
             self.system_tab.setText(state.system_prompt)
-            self.user_tab.setText(state.user_prompt)
 
             llm_index = self.llm_combo.findText(state.selected_llm)
             if llm_index != -1:
                 self.llm_combo.setCurrentIndex(llm_index)
-                # on_llm_selected 호출 전에 모델 목록 로드
-                available_models = self.config_service.get_available_models(state.selected_llm)
-                self.model_name_combo.blockSignals(True)
-                self.model_name_combo.clear()
-                self.model_name_combo.addItems(available_models)
-                self.model_name_combo.blockSignals(False)
-                # 저장된 모델명 선택 시도
+                # on_llm_selected updates model list and selects default/saved
+                self.main_controller.on_llm_selected() # Call this first
+                # Now try to select the specific model from the state
                 model_index = self.model_name_combo.findText(state.selected_model_name)
                 if model_index != -1:
                     self.model_name_combo.setCurrentIndex(model_index)
-                elif available_models:
-                    self.model_name_combo.setCurrentIndex(0) # 없으면 첫 번째 모델 선택
-                    logger.warning(f"Warning: Saved model '{state.selected_model_name}' not found for {state.selected_llm}. Selecting first available.")
                 else:
-                    logger.warning(f"No available models found for {state.selected_llm}.")
+                    logger.warning(f"Saved model '{state.selected_model_name}' not found for {state.selected_llm} after loading state.")
             else:
-                # 저장된 LLM 자체가 없으면 기본값으로 설정
+                # Saved LLM not found, default to Gemini
                 self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini"))
                 self.main_controller.on_llm_selected()
 
-            # 첨부 파일 복원
-            self.attached_items = state.attached_items or []
-            self._update_attachment_list_ui()
-
-            # 체크된 파일 복원 (부분 로드와 동일 로직)
-            if self.current_project_folder and hasattr(self, 'checkable_proxy'):
-                # 전체 로드 시에도 체크 상태 딕셔너리 초기화 (폴더 변경 시 이미 초기화됨)
-                if self.current_project_folder == state.project_folder: # 같은 폴더일 때만 초기화
-                    self.checkable_proxy.checked_files_dict.clear()
-                    logger.debug("Cleared checked_files_dict before restoring checks (full load, same folder).")
-
-                items_to_check = []
-                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
-                for fpath in state.checked_files:
-                    try:
-                        abs_fpath = os.path.abspath(fpath)
-                        abs_proj_folder = os.path.abspath(self.current_project_folder)
-                        if abs_fpath.startswith(abs_proj_folder):
-                            if os.path.exists(abs_fpath):
-                                src_index = self.dir_model.index(abs_fpath)
-                                if src_index.isValid():
-                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                                    if proxy_index.isValid():
-                                        # checked_files_dict 직접 수정 대신 setData 호출에 의존
-                                        # self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                        items_to_check.append(proxy_index)
-                                        logger.debug(f"  Queueing {abs_fpath} to be checked via setData.")
-                                    else: logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
-                                else: logger.warning(f"  Could not get source index for: {abs_fpath}")
-                            else: logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
-                        else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
-                    except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
-
-                # UI 업데이트 (setData 호출)
-                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
-                for proxy_index in items_to_check:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
-
-            # 전체 로드 시에는 gitignore 로드 및 Gemini 파라미터 로드 필요
-            if self.current_project_folder:
-                self.file_tree_controller.load_gitignore_settings() # gitignore 로드
-            self.update_window_title(folder_name)
+            # Load Gemini settings if needed (already done by on_llm_selected if Gemini)
+            # self.load_gemini_settings_to_ui()
             self.resource_controller.update_buttons_label()
-            self.load_gemini_settings_to_ui() # Gemini 파라미터 로드
 
-            self.status_bar.showMessage("State loaded successfully!")
+        # --- Restore Check States (Common for partial and full, AFTER scan potentially finishes) ---
+        # Check states should be restored *after* the model is populated by the scan.
+        # We store the desired check states and apply them once the scan finishes.
+        self._pending_check_states = set(state.checked_files or [])
+        if folder_changed:
+            # Connect to scan_finished signal to apply checks
+            logger.info(f"Scan triggered for folder change. Will apply {len(self._pending_check_states)} check states upon completion.")
+            # Ensure only one connection
+            try: self.cache_service.scan_finished.disconnect(self._apply_pending_check_states)
+            except TypeError: pass # Ignore if not connected
+            self.cache_service.scan_finished.connect(self._apply_pending_check_states)
+        elif self.current_project_folder:
+            # If folder didn't change, apply checks immediately (assuming model is already populated)
+            logger.info("Folder unchanged. Applying check states immediately.")
+            self._apply_pending_check_states()
+        else:
+            # No folder, clear pending checks
+            self._pending_check_states = set()
 
-        # 공통 마무리 작업
-        self._initialized = was_initialized # 원래 상태로 복원
+
+        # --- Final UI Updates ---
+        status_msg = "마지막 작업 상태 로드 완료." if partial_load else "상태 로드 완료."
+        self.status_bar.showMessage(status_msg)
+        self._initialized = was_initialized
         self.main_controller.update_char_count_for_active_tab()
         self.token_count_label.setText("토큰 계산: -")
         if hasattr(self, 'api_time_label'): self.api_time_label.setText("API 시간: -")
-        self.restart_auto_save_timer() # 상태 로드 후 자동 저장 재시작
+        self.restart_auto_save_timer()
+
+    def _apply_pending_check_states(self):
+        """Applies check states stored in self._pending_check_states to the current model."""
+        logger.info(f"Applying {len(self._pending_check_states)} pending check states...")
+        if not hasattr(self, 'checkable_proxy') or not hasattr(self, 'cached_model'):
+            logger.warning("Cannot apply check states: Models not available.")
+            self._pending_check_states = set()
+            return
+
+        # Disconnect the signal after applying
+        try: self.cache_service.scan_finished.disconnect(self._apply_pending_check_states)
+        except TypeError: pass
+
+        # Clear current checks before applying pending ones
+        self.checkable_proxy.checked_files_dict.clear()
+        items_to_check_indices = []
+
+        for path in self._pending_check_states:
+            item = self.cached_model.find_item_by_path(path)
+            if item:
+                source_index = self.cached_model.indexFromItem(item)
+                proxy_index = self.checkable_proxy.mapFromSource(source_index)
+                if proxy_index.isValid():
+                    items_to_check_indices.append(proxy_index)
+                else:
+                    logger.warning(f"Could not map source index to proxy for pending check: {path}")
+            else:
+                logger.warning(f"Item not found in model for pending check state: {path}")
+
+        # Apply checks using setData (will handle dictionary update and recursion)
+        logger.info(f"Applying check state for {len(items_to_check_indices)} restored items using setData.")
+        # Set data in batches or individually? Individual seems safer with recursion flag.
+        for proxy_index in items_to_check_indices:
+            self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+            # logger.debug(f"  Called setData(Checked) for pending state: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
+
+        self._pending_check_states = set() # Clear pending states
+        logger.info("Finished applying pending check states.")
+        # Emit state changed signal after applying checks
+        self.state_changed_signal.emit()
+
 
     def uncheck_all_files(self):
-        """Unchecks all items in the file tree view."""
+        """Unchecks all items in the file tree view by clearing the dictionary."""
         if not hasattr(self, 'checkable_proxy'): return
-        paths_to_uncheck = list(self.checkable_proxy.checked_files_dict.keys())
+        if not self.checkable_proxy.checked_files_dict: return # Nothing to uncheck
+
+        logger.info("Unchecking all files.")
+        # Clear the dictionary
         self.checkable_proxy.checked_files_dict.clear()
-        for fpath in paths_to_uncheck:
-            src_index = self.dir_model.index(fpath)
-            if src_index.isValid():
-                proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                if proxy_index.isValid():
-                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole]) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-        self.state_changed_signal.emit() # 상태 변경 시그널 발생
+        # Signal the proxy model to update the UI based on the cleared dictionary
+        self.checkable_proxy.update_check_states_from_dict()
+        # Emit state changed signal
+        self.state_changed_signal.emit()
 
     def create_tree_item(self, text, parent=None) -> QTreeWidgetItem:
         """Helper method to create items in the template/state tree."""
@@ -875,26 +837,32 @@ class MainWindow(QMainWindow):
         """Handles context menu requests on the file tree view."""
         index = self.tree_view.indexAt(position)
         if not index.isValid(): return
+        # Get path from proxy model using the new method
         file_path = self.checkable_proxy.get_file_path_from_index(index)
         if not file_path: return
         menu = QMenu()
         rename_action = QAction("이름 변경", self) # PyQt6: QAction(text, parent)
         delete_action = QAction("삭제", self) # PyQt6: QAction(text, parent)
+        refresh_action = QAction("새로고침", self) # Add refresh action
         menu.addAction(rename_action)
         menu.addAction(delete_action)
+        menu.addSeparator()
+        menu.addAction(refresh_action)
         action = menu.exec(self.tree_view.viewport().mapToGlobal(position)) # exec_() -> exec()
         if action == rename_action: self.file_tree_controller.rename_item(file_path)
         elif action == delete_action: self.file_tree_controller.delete_item(file_path)
+        elif action == refresh_action: self.file_tree_controller.refresh_tree() # Call refresh
 
     def on_tree_view_item_clicked(self, index: QModelIndex):
         """
         Handles item clicks in the tree view to toggle check state for selected items.
         Applies the toggled state of the clicked item to all currently selected items.
+        Uses the CheckableProxyModel's setData.
         """
         if not index.isValid() or index.column() != 0:
             return
 
-        # 클릭된 아이템의 현재 체크 상태 확인
+        # Get the target state based on the *clicked* item's current state
         current_state_value = self.checkable_proxy.data(index, Qt.ItemDataRole.CheckStateRole)
         if isinstance(current_state_value, Qt.CheckState):
             current_check_state = current_state_value
@@ -904,33 +872,27 @@ class MainWindow(QMainWindow):
             logger.warning(f"on_tree_view_item_clicked: Unexpected data type for CheckStateRole: {type(current_state_value)}")
             return
 
-        # 목표 체크 상태 결정 (클릭된 아이템 기준 토글)
+        # Determine the state to apply to all selected items (toggle of the clicked item)
         target_check_state = Qt.CheckState.Unchecked if current_check_state == Qt.CheckState.Checked else Qt.CheckState.Checked
 
-        # 현재 선택된 모든 아이템 가져오기
+        # Get all currently selected proxy indices
         selection_model = self.tree_view.selectionModel()
-        selected_indexes = selection_model.selectedIndexes()
+        selected_proxy_indices = selection_model.selectedIndexes()
 
-        logger.debug(f"Clicked item: {self.checkable_proxy.get_file_path_from_index(index)}, Target state: {target_check_state}, Selected count: {len(selected_indexes)}")
+        # Filter for unique column 0 indices
+        unique_col0_indices = {idx for idx in selected_proxy_indices if idx.column() == 0}
 
-        # 선택된 모든 아이템에 대해 목표 상태 적용
-        indices_processed = set() # 중복 처리 방지
+        logger.debug(f"Clicked item: {self.checkable_proxy.get_file_path_from_index(index)}, Target state: {target_check_state}, Selected count: {len(unique_col0_indices)}")
 
-        try:
-            for selected_index in selected_indexes:
-                # 0번 컬럼이고, 아직 처리되지 않은 인덱스만
-                if selected_index.isValid() and selected_index.column() == 0 and selected_index not in indices_processed:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    # setData 내부에서 실제 변경이 필요한지 확인하고 처리함
-                    logger.debug(f"  Calling setData for selected index: {self.checkable_proxy.get_file_path_from_index(selected_index)} with state {target_check_state}")
-                    self.checkable_proxy.setData(selected_index, target_check_state, Qt.ItemDataRole.CheckStateRole)
-                    indices_processed.add(selected_index) # 처리된 인덱스 기록
+        # Apply the target state to all unique selected items using setData
+        # setData will handle the dictionary update and recursive logic
+        for proxy_idx in unique_col0_indices:
+            if proxy_idx.isValid():
+                # logger.debug(f"  Calling setData for selected index: {self.checkable_proxy.get_file_path_from_index(proxy_idx)} with state {target_check_state}")
+                # Let setData handle the logic, including checking if state actually needs changing
+                self.checkable_proxy.setData(proxy_idx, target_check_state, Qt.ItemDataRole.CheckStateRole)
 
-        finally:
-            pass # 플래그 관리는 setData 내부에서 처리
-
-        # 체크 상태 변경 후 자동 저장 타이머 재시작
-        self.state_changed_signal.emit()
+        # No need to emit state_changed_signal here, it's connected to checkable_proxy.check_state_changed
 
 
     def restart_auto_save_timer(self):
@@ -995,6 +957,8 @@ class MainWindow(QMainWindow):
         logger.info("Closing MainWindow. Stopping threads and disconnecting database.")
         self.auto_save_timer.stop() # 윈도우 닫을 때 자동 저장 타이머 중지
         self.api_timer.stop() # 윈도우 닫을 때 API 타이머 중지
+        self.cache_service.stop_monitoring() # Stop monitoring
+        self.cache_service.stop_scan() # Stop scan
         # 진행 중인 스레드 중지 시도
         if hasattr(self, 'main_controller'):
             self.main_controller._stop_token_calculation_thread()
@@ -1017,3 +981,4 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'db_service'):
             self.db_service.disconnect()
         super().closeEvent(event)
+

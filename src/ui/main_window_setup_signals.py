@@ -19,9 +19,10 @@ def connect_signals(mw: 'MainWindow'):
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
     mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # 아이템 클릭 시 체크 상태 토글 (연결 복원)
-    mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
-    # 파일 체크 상태 변경 시 MainWindow의 상태 변경 시그널 발생
-    mw.checkable_proxy.dataChanged.connect(lambda topLeft, bottomRight, roles: mw.state_changed_signal.emit() if Qt.ItemDataRole.CheckStateRole in roles else None) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
+    # Connect proxy model's check_state_changed signal to FileTreeController's handler
+    mw.checkable_proxy.check_state_changed.connect(mw.file_tree_controller.on_data_changed)
+    # Connect proxy model's check_state_changed signal to MainWindow's state_changed_signal
+    mw.checkable_proxy.check_state_changed.connect(mw.state_changed_signal.emit)
 
 
     # 실행 버튼
@@ -123,3 +124,4 @@ def connect_signals(mw: 'MainWindow'):
     # 사용자 탭에 이벤트 필터 설치 (MainWindow 생성자에서 수행)
     # if hasattr(mw, 'user_tab'):
     #     mw.user_tab.installEventFilter(mw)
+

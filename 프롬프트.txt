@@ -1,14 +1,308 @@
 ===SYSTEM===
+# System Instruction Prompt
+
+## 1. Role Assignment
+
+You are a '**Code Patching Only** LLM'.
+Your primary mission is:
+
+1. Analyze existing Python code to identify the **bug location** down to the token level,
+2. Write a **minimally invasive** patch, add and pass regression tests, and
+3. Return the results as a **single XML document** (`<code_patch>`).
+
+## 2. Execution Steps
+
+### 2-1. Bug Diagnosis
+
+- Analyze stack traces, logs, and failed tests to identify the **root cause** and scope of impact.
+- Keep the identified cause in internal memory only (do not output).
+
+### 2-2. Develop Correction Strategy
+
+- Adhere to all clauses of the "Integrated Development Guide".
+- Follow the **TDD procedure** (Test-First): Write a new failing test case ➜ Implement code to make it pass.
+- Target **zero** warnings from **static analysis** (ruff/flake8).
+- Feature improvement is _secondary_; the primary goal is bug fixing.
+
+### 2-3. Implement Patch
+
+- Use **functional programming** (+ classes when necessary), type hints, and Pydantic models.
+- Split files exceeding 15,000 tokens by functionality.
+- When handling exceptions, log the full stack trace using `logger.exception()`.
+- Always use `encoding="utf-8"` for encoding.
+
+### 2-5. XML Output Rules (!!!)
+
+```xml
+<code_patch> <!-- Single Root Element -->
+<code_changes>
+<changed_files>
+<file>
+<file_summary>...</file_summary>
+<file_operation>CREATE|UPDATE|DELETE</file_operation>
+<file_path>...</file_path>
+<file_code><![CDATA[
+
+# Full source code (Omit if DELETE)
+
+        ]]></file_code>
+      </file>
+      <!-- Repeat for each modified file -->
+    </changed_files>
+
+</code_changes>
+
+  <summary>
+    <!-- ① Overall change summary ≤150 chars
+         ② Reason for change/deletion per file (1 sentence each)
+         ③ Git commit message (Korean, feat/fix/docs…) -->
+  </summary>
+</code_patch>
+```
+
+- Inside `<code_patch>`, the order **must be** `<code_changes>` → `<summary>`.
+- Do not include unmodified files in the XML.
+- Escape reserved characters (`&amp; &lt; &gt; &apos; &quot;`) or wrap them in CDATA. CDATA sections cannot contain `]]>`.
+
+### 2-6. Summary Writing Guidelines
+
+- Korean, maximum **1000 tokens**.
+- Separate the three blocks (Overview / Per-File / Commit) with blank lines.
+
+## 3. Output Example (For format reference only)
+
+```xml
+<code_patch>
+<code_changes>
+<changed_files>
+<file>
+<file_summary>Root main.py: Integrated common logging/config loader, improved FastAPIApp execution logic</file_summary>
+<file_operation>UPDATE</file_operation>
+<file_path>main.py</file_path>
+<file_code><![CDATA[
+
+# Modified full code …
+
+        ]]></file_code>
+      </file>
+      <!-- …other files… -->
+    </changed_files>
+
+</code_changes>
+
+  <summary>
+Overall change: Introduced logging/config utils and fixed bugs, achieving 100% test pass rate.
+
+- main.py: Integrated logging/config and exception handling (UPDATE)
+- src/utils/log_manager.py: Created common logging module (CREATE)
+- tests/stage_01_core/test_root.py: Added new regression test (CREATE)
+
+fix: 공통 로깅·설정 적용 및 xxx 버그 해결 (Applied common logging/config and resolved xxx bug)
+
+  </summary>
+</code_patch>
+```
+
+---
 
 
 ===USER===
+
 이 프로그램의 작동 방식이 아래의 문제가 있어서 네트워크 드라이브로 연결된 폴더를 프로젝트 폴더로 지정하면 로딩이 늦게 되거나 렉이 걸리는 문제가 발생함.
-이걸 처음 네트워크 드라이브의 폴더를 프로젝트 폴더로 선택했을 때, 디렉터리 구조를 캐시에 저장하고, 탐색기에는 캐시 내용만 보여주는거야. 그리고 실제 폴더의 변경사항은 watchdog 라이브러리 이용해서 모니터링 하고 있다가 변경 사항만 캐시를 업데이트 하는거지. 폴더에 처음 접속했을 때 모든 깊이의 디렉터리 구조를 한번에 불러오면 로딩이 너무 오래 걸리니깐 점진적으로 깊이를 깊게하면서 로딩하는거지. 그리고 탐색기에 보이는 내용은 로딩한 깊이에 따라 점진적으로 보이는 내용이 업데이트 되는걸로.
-그리고 로딩 상태표시가 있어서 지금 몇 단계 깊이 로딩 중인지 표시해주고, 전체 디렉터리 폴더 및 파일의 구조를 다 읽었다면 로딩 완료로 표시해주고.
-이렇게 코드 수정하면 어떨까?
+이 문제를 해결하기 위해 "docs\리팩토링\네트워크 드라이브 개선\_캐싱 및 watchdog 사용.md" 에서 제안된 방식으로 리팩토링을 진행해줘.
 
 
 ===FILES CONTENTS===
+
+======== main.py ========
+import sys
+import os
+
+# src 디렉토리를 sys.path에 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# src/app.py의 메인 함수 실행
+if __name__ == '__main__':
+    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
+    from app import main
+    main()
+
+
+
+======== pyproject.toml ========
+
+[project]
+name = "duck-prompt"
+version = "0.2.0"
+description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
+requires-python = ">=3.12"
+dependencies = [
+    "PyQt6>=6.7.0",
+    "PyQt6-Qt6>=6.7.0",
+    "google-generativeai>=0.5.4", # Gemini API
+    "langgraph>=0.0.69", # LangGraph for workflow
+    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
+    "anthropic>=0.28.0", # Anthropic API (Claude)
+    "psycopg2-binary>=2.9.9", # PostgreSQL driver
+    "PyYAML>=6.0.1", # YAML parsing (config)
+    "pydantic>=2.7.1", # Data validation and settings
+    "pillow>=10.3.0", # Image handling
+    "winotify>=1.1.0", # Windows notifications
+    "pyinstaller>=6.13.0",
+    "asyncssh>=2.21.0",
+    "python-dotenv>=1.1.0",
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.uv.sources]
+# Optional: Specify custom package sources if needed
+
+# Optional: Define project scripts or entry points
+# [project.scripts]
+# duckprompt = "src.app:main"
+
+# Optional: Project URLs
+# [project.urls]
+# homepage = "https://example.com"
+# documentation = "https://readthedocs.org"
+# repository = "https://github.com/user/duck-prompt.git"
+# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
+
+# Optional: Author and maintainer information
+# authors = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+# maintainers = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+
+# Optional: License information
+# license = { text = "MIT License" }
+
+# Optional: Keywords for PyPI
+# keywords = ["llm", "prompt", "gui", "pyqt"]
+
+# Optional: Classifiers for PyPI
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "License :: OSI Approved :: MIT License",
+#     "Programming Language :: Python :: 3",
+#     "Programming Language :: Python :: 3.12",
+#     "Operating System :: OS Independent",
+#     "Topic :: Software Development :: User Interfaces",
+# ]
+
+
+
+
+======== qt.conf ========
+[Platforms]
+WindowsArguments = dpiawareness=3 
+
+
+======== docs\리팩토링\네트워크 드라이브 개선_캐싱 및 watchdog 사용.md ========
+**속도 향상 방법**
+
+네트워크 드라이브 조회가 느려지는 이유는 다양할 수 있어요! 우선, PyQt6에서 파일 시스템을 탐색할 때 네트워크 드라이브는 로컬 드라이브보다 상대적으로 느릴 수 있답니다 😕. 속도를 높이기 위해 몇 가지 방법을 시도해볼 수 있어요:
+
+1. **비동기 처리**: UI가 멈추지 않도록 검색 작업을 비동기식으로 실행하면 속도를 높일 수 있어요! 🤗
+2. **캐시 사용**: 디렉터리의 데이터를 캐싱하여 다시 로딩할 때 시간을 절약할 수 있어요✨
+3. **네트워크 드라이브 최적화**: 네트워크 속도나 공유 폴더 설정을 점검해보세요!
+
+이렇게 해보면 속도 개선이 될 거예요! <3
+
+**속도 증가 방법**
+
+네트워크 드라이브에서 디렉터리 로딩을 빠르게 하려면 여러 가지 방법을 시도할 수 있어요! 😄
+
+1. **Lazy Loading & 비동기 스캐닝**: `fetchMore`와 `QModel`을 사용해 데이터를 조금씩 불러오는 방법이에요! 🐢
+2. **멀티쓰레드**: `concurrent.futures`나 `asyncio`로 스캔을 동시에 실행할 수 있어요! 🚀
+3. **캐시 & 인덱싱**: 변동이 있는 디렉터리만 업데이트하자구요! (Watchdog 사용) 📂
+4. **파일 정보 최소화**: `os.scandir`와 `follow links`를 `False`로 설정하세요! 🔍
+
+이 방법들이 성능을 높이는 데 도움이 될 거예요!💡
+
+27초 동안 생각함
+
+귀여운 아리 등장💕
+네트워크 드라이브 트리 펼칠 때 “왜 이렇게 굼뱅이 같지…?!” 하고 속 터졌지? 😖
+정리해 보니 ① Qt-모델 자체의 추가 I/O, ② SMB 네트워크 지연, ③ 아이콘·stat 조회 과다 — 세 요소가 병목이었어.
+아래 방법들을 조합하면 **2-10배 정도** 체감 속도가 확 올라간다는 실전 후기가 많아! 😉
+
+---
+
+## 1. QFileSystemModel 튜닝
+
+| 팁                          | 설명                                                                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **커스텀 아이콘 끄기**      | 모델 옵션 `DontUseCustomDirectoryIcons` 로 네트워크 아이콘 검색 차단 → 수 ms → 수 μs로 단축 ([Qt 문서][1])                    |
+| **IconProvider 제거**       | `setIconProvider(nullptr)` 로 완전 비활성화 (아이콘 안 쓰면 최강) ([Stack Overflow][2])                                       |
+| **NameFilters·stat 최소화** | `setNameFilters()` 대신 필터링은 나중에, `QDirIterator::NoSymLinks` 등으로 불필요한 `stat` 감소 ([Qt Forum][3])               |
+| **Lazy Fetch 구현**         | `canFetchMore/fetchMore` 오버라이드로 자식 노드 요구 시점에만 채움 (“lazy loading” 패턴) ([Stack Overflow][4], [Qt Forum][5]) |
+
+### 예시 코드 스케치
+
+```python
+class FastFSModel(QtCore.QFileSystemModel):
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.setIconProvider(None)                     # 아이콘 OFF
+        self.setOption(QtWidgets.QFileSystemModel.DontUseCustomDirectoryIcons, True)
+
+    def canFetchMore(self, index):
+        # 네트워크 경로는 children 카운트 미리 캐시
+        return not self.isDir(index) and super().canFetchMore(index)
+
+    def fetchMore(self, index):
+        QtCore.QTimer.singleShot(0, lambda: super().fetchMore(index))  # UI 블록 최소화
+```
+
+---
+
+## 2. 비동기·멀티쓰레드 스캐닝
+
+1. **Worker 스레드** ― `os.scandir()`를 별도 `QThread`에서 돌리고, 결과만 `pyqtSignal`로 UI에 머지
+
+   - `scandir`는 한 번의 sys call로 이름·속성 동시 취득이라 `listdir+stat`보다 훨씬 빠름 ([Stack Overflow][6], [Python Enhancement Proposals (PEPs)][7])
+
+2. **QtConcurrent** ― C++ 스레딩을 래핑하므로 GIL 제약이 덜하고 응답성이 높아져.
+
+> **팁** : 스캐닝 결과를 `QStandardItemModel`에 쌓은 뒤 최종 스왑하면, 트리뷰 재그리기 1회로 끝나서 깜빡임이 없다😊
+
+---
+
+## 3. 캐싱 & 변경 감시
+
+- **첫 스캔 캐시** → `pickle`이나 local SQLite에 디렉터리 스냅샷 저장 후, 다음 실행 때 바로 로드
+- **watchdog** 같은 FS 모니터로 변경분만 패치하면 드라이브 전체 재탐색을 피할 수 있어요.
+  (네트워크 share도 SMB 변경 알림 지원)
+
+---
+
+## 4. Windows SMB 자체 최적화
+
+| 설정                              | 효과                                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------------- |
+| **8.3 파일명 생성 끄기**          | DIR 열람시 짧은 DOS 이름 계산 안 함 → 목록 속도 ↑ ([Super User][8])                           |
+| **Directory Cache Time-out 조정** | 레지스트리 `DirectoryCacheLifetime` 늘려 중복 I/O 감소 ([TrueNAS Open Enterprise Storage][9]) |
+| **안티바이러스 제외**             | 실시간 검사가 dir stat를 가로채면 지연이 커져요(특히 공유 폴더).                              |
+
+---
+
+## 5. 파이썬 레벨 성능 부스트
+
+- **I/O 바운드에는 비동기** : `asyncio + aiofiles`로 여러 하위 폴더를 동시 열람 가능 (SMB 라운드트립 은닉).
+
+
 
 ======== src\core\pydantic_models\__init__.py ========
 # This file makes Python treat the directory pydantic_models as a package.
@@ -7998,104 +8292,12 @@ gemini_enable_search: false
 
 
 
-======== main.py ========
-import sys
-import os
-
-# src 디렉토리를 sys.path에 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(current_dir, "src")
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# src/app.py의 메인 함수 실행
-if __name__ == '__main__':
-    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
-    from app import main
-    main()
-
-
-
-======== pyproject.toml ========
-
-[project]
-name = "duck-prompt"
-version = "0.2.0"
-description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
-requires-python = ">=3.12"
-dependencies = [
-    "PyQt6>=6.7.0",
-    "PyQt6-Qt6>=6.7.0",
-    "google-generativeai>=0.5.4", # Gemini API
-    "langgraph>=0.0.69", # LangGraph for workflow
-    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
-    "anthropic>=0.28.0", # Anthropic API (Claude)
-    "psycopg2-binary>=2.9.9", # PostgreSQL driver
-    "PyYAML>=6.0.1", # YAML parsing (config)
-    "pydantic>=2.7.1", # Data validation and settings
-    "pillow>=10.3.0", # Image handling
-    "winotify>=1.1.0", # Windows notifications
-    "pyinstaller>=6.13.0",
-    "asyncssh>=2.21.0",
-    "python-dotenv>=1.1.0",
-]
-
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
-[tool.uv.sources]
-# Optional: Specify custom package sources if needed
-
-# Optional: Define project scripts or entry points
-# [project.scripts]
-# duckprompt = "src.app:main"
-
-# Optional: Project URLs
-# [project.urls]
-# homepage = "https://example.com"
-# documentation = "https://readthedocs.org"
-# repository = "https://github.com/user/duck-prompt.git"
-# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
-
-# Optional: Author and maintainer information
-# authors = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-# maintainers = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-
-# Optional: License information
-# license = { text = "MIT License" }
-
-# Optional: Keywords for PyPI
-# keywords = ["llm", "prompt", "gui", "pyqt"]
-
-# Optional: Classifiers for PyPI
-# classifiers = [
-#     "Development Status :: 3 - Alpha",
-#     "Intended Audience :: Developers",
-#     "License :: OSI Approved :: MIT License",
-#     "Programming Language :: Python :: 3",
-#     "Programming Language :: Python :: 3.12",
-#     "Operating System :: OS Independent",
-#     "Topic :: Software Development :: User Interfaces",
-# ]
-
-
-
-
-======== qt.conf ========
-[Platforms]
-WindowsArguments = dpiawareness=3 
-
-
 File Tree:
  📁 duck-prompt/
    📁 ./
+   📁 docs/
+     📁 리팩토링/
+       📄 네트워크 드라이브 개선_캐싱 및 watchdog 사용.md (5,600 bytes)
    📁 src/
      📁 core/
        📁 pydantic_models/
@@ -8114,6 +8316,7 @@ File Tree:
          📄 token_service.py (12,573 bytes)
          📄 xml_service.py (12,145 bytes)
        📁 utils/
+       📁 workers/
        📄 __init__.py (65 bytes)
        📄 langgraph_state.py (860 bytes)
      📁 ui/
@@ -8150,5 +8353,5 @@ File Tree:
      📄 app.py (5,313 bytes)
      📄 config.yml (1,155 bytes)
    📄 main.py (422 bytes)
-   📄 pyproject.toml (1,946 bytes)
+   📄 pyproject.toml (2,014 bytes)
    📄 qt.conf (47 bytes)

@@ -16,7 +16,8 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
 
 # 모델 및 위젯 import
-from .models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
+# from .models.file_system_models import FilteredFileSystemModel, CheckableProxyModel # Removed QFileSystemModel based
+from .models.file_system_models import CachedFileSystemModel, CheckableProxyModel # Use new models
 from .widgets.custom_text_edit import CustomTextEdit
 from .widgets.custom_tab_bar import CustomTabBar
 from utils.helpers import get_resource_path
@@ -107,18 +108,27 @@ def create_widgets(mw: 'MainWindow'):
     mw.project_folder_label.setFont(font_lbl)
 
     # --- 파일 탐색기 (왼쪽) ---
-    mw.dir_model = FilteredFileSystemModel()
-    mw.tree_view = FileTreeView()
+    # Use CachedFileSystemModel and CheckableProxyModel
+    mw.cached_model = CachedFileSystemModel() # Source model
+    mw.tree_view = FileTreeView() # Custom view
     project_folder_getter = lambda: mw.current_project_folder
-    mw.checkable_proxy = CheckableProxyModel(mw.dir_model, project_folder_getter, mw.fs_service, mw.tree_view)
-    mw.checkable_proxy.setSourceModel(mw.dir_model)
-    mw.tree_view.setModel(mw.checkable_proxy)
+    # Pass fs_service for potential fallback checks (though ideally not needed)
+    mw.checkable_proxy = CheckableProxyModel(project_folder_getter, mw.fs_service, mw.tree_view)
+    mw.checkable_proxy.setSourceModel(mw.cached_model) # Set source model
+    mw.checkable_proxy.setFilterKeyColumn(0) # Filter based on column 0 data (name/node)
+    mw.checkable_proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive) # Qt.CaseInsensitive -> Qt.CaseSensitivity.CaseInsensitive
+
+    mw.tree_view.setModel(mw.checkable_proxy) # Set proxy model to the view
     mw.tree_view.setColumnWidth(0, 250)
-    mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
+    # No need to hide columns as CachedFileSystemModel only has one
+    # mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
     mw.tree_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection) # QAbstractItemView.ExtendedSelection -> QAbstractItemView.SelectionMode.ExtendedSelection
     mw.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu) # Qt.CustomContextMenu -> Qt.ContextMenuPolicy.CustomContextMenu
     mw.tree_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) # QAbstractItemView.NoEditTriggers -> QAbstractItemView.EditTrigger.NoEditTriggers
     mw.tree_view.setItemDelegateForColumn(0, CheckBoxDelegate(mw.tree_view))
+    mw.tree_view.setHeaderHidden(True) # Hide header for single column model
+    mw.tree_view.setSortingEnabled(False) # Disable sorting for now
+
 
     # --- 리소스 관리 (오른쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리")
@@ -258,137 +268,4 @@ def create_widgets(mw: 'MainWindow'):
     gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
     mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
-
-
-def create_layout(mw: 'MainWindow'):
-    """Creates the layout and arranges widgets."""
-    central_widget = QWidget()
-    mw.setCentralWidget(central_widget)
-    main_layout = QVBoxLayout(central_widget)
-    main_layout.setContentsMargins(5, 2, 5, 5); main_layout.setSpacing(2)
-
-    # --- 상단 레이아웃 (버튼 + 프로젝트 경로 + LLM 컨트롤) ---
-    top_layout_wrapper = QVBoxLayout(); top_layout_wrapper.setSpacing(2); top_layout_wrapper.setContentsMargins(0, 0, 0, 0)
-
-    # 상단 버튼 행
-    top_button_container = QWidget()
-    top_button_layout = QHBoxLayout(top_button_container)
-    top_button_layout.setSpacing(10); top_button_layout.setContentsMargins(0, 0, 0, 0)
-    top_button_layout.addWidget(mw.mode_toggle_btn)
-    top_button_layout.addWidget(mw.reset_program_btn)
-    top_button_layout.addWidget(mw.load_previous_work_btn)
-    top_button_layout.addWidget(mw.save_current_work_btn) # 작업 저장 버튼 추가
-    top_button_layout.addWidget(mw.select_project_btn)
-    top_button_layout.addStretch(1)
-    top_layout_wrapper.addWidget(top_button_container)
-
-    # 프로젝트 경로 행
-    top_layout_wrapper.addWidget(mw.project_folder_label)
-
-    # LLM 컨트롤 행 (새로 추가)
-    llm_controls_container = QWidget()
-    llm_controls_layout = QHBoxLayout(llm_controls_container)
-    llm_controls_layout.setContentsMargins(0, 5, 0, 5); llm_controls_layout.setSpacing(10) # 상하 여백 추가
-    llm_controls_layout.addWidget(QLabel("Model:"))
-    llm_controls_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
-    llm_controls_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
-    llm_controls_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
-    llm_controls_layout.addStretch(1)
-    top_layout_wrapper.addWidget(llm_controls_container)
-
-    main_layout.addLayout(top_layout_wrapper, 0) # 상단 전체 레이아웃 추가
-
-    # --- 중앙 스플리터 ---
-    mw.center_splitter = QSplitter(Qt.Orientation.Horizontal) # Qt.Horizontal -> Qt.Orientation.Horizontal
-
-    # --- 왼쪽 영역 (파일 트리 + 첨부 파일) ---
-    left_side_widget = QWidget() # 컨테이너 위젯
-    left_side_layout = QVBoxLayout(left_side_widget) # 메인 레이아웃
-    left_side_layout.setContentsMargins(2, 2, 2, 2); left_side_layout.setSpacing(5)
-
-    # 세로 스플리터 생성
-    left_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
-    left_splitter.addWidget(mw.tree_view) # 파일 트리 추가
-    left_splitter.addWidget(mw.attachment_group) # 첨부 파일 그룹 추가
-    left_splitter.setSizes([400, 200]) # 초기 크기 설정 (조정 가능)
-
-    left_side_layout.addWidget(left_splitter) # 스플리터를 레이아웃에 추가
-
-    mw.center_splitter.addWidget(left_side_widget)
-
-    # --- 오른쪽 영역 (실행 버튼 + 상하 분할 영역) ---
-    right_side_widget = QWidget()
-    right_side_layout = QVBoxLayout(right_side_widget)
-    right_side_layout.setContentsMargins(0, 0, 0, 0); right_side_layout.setSpacing(0)
-
-    # 실행 버튼 컨테이너
-    run_buttons_container = QWidget()
-    run_layout = QHBoxLayout(run_buttons_container)
-    run_layout.setContentsMargins(5, 5, 5, 5); run_layout.setSpacing(10); run_layout.setAlignment(Qt.AlignmentFlag.AlignLeft) # Qt.AlignLeft -> Qt.AlignmentFlag.AlignLeft
-    for btn in mw.run_buttons: run_layout.addWidget(btn)
-    run_layout.addStretch(1)
-    right_side_layout.addWidget(run_buttons_container)
-
-    # 구분선
-    line_frame = QFrame(); line_frame.setFrameShape(QFrame.Shape.HLine); line_frame.setFrameShadow(QFrame.Shadow.Sunken) # QFrame.HLine -> QFrame.Shape.HLine, QFrame.Sunken -> QFrame.Shadow.Sunken
-    right_side_layout.addWidget(line_frame)
-
-    # 오른쪽 상하 분할 스플리터
-    right_content_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
-
-    # 오른쪽 상단: 탭 위젯
-    right_content_splitter.addWidget(mw.build_tabs)
-
-    # 오른쪽 하단: 리소스 관리만
-    bottom_right_widget = QWidget()
-    bottom_right_layout = QVBoxLayout(bottom_right_widget)
-    bottom_right_layout.setContentsMargins(0, 5, 0, 0) # 상단 여백 추가
-    bottom_right_layout.setSpacing(5)
-    bottom_right_layout.addWidget(mw.resource_manager_group) # 리소스 관리 그룹만 추가
-    right_content_splitter.addWidget(bottom_right_widget)
-
-    # 오른쪽 상하 스플리터 크기 비율 설정 (예: 2:1)
-    right_content_splitter.setSizes([400, 200]) # 초기 높이 설정 (조정 가능)
-
-    # 오른쪽 레이아웃에 상하 스플리터 추가
-    right_side_layout.addWidget(right_content_splitter)
-
-    # 중앙 스플리터에 오른쪽 영역 추가
-    mw.center_splitter.addWidget(right_side_widget)
-
-    # 중앙 스플리터 크기 비율 설정 (예: 1:3)
-    # setStretchFactor is deprecated in PyQt6, use setSizes or handle resize events
-    # mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
-    # mw.center_splitter.setStretchFactor(1, 3) # 오른쪽 영역 비율
-    # Instead, set initial sizes (already done above)
-
-    # 메인 레이아웃에 중앙 스플리터 추가
-    main_layout.addWidget(mw.center_splitter, 1)
-
-
-def create_status_bar(mw: 'MainWindow'):
-    """Creates the status bar."""
-    mw.status_bar = QStatusBar()
-    mw.setStatusBar(mw.status_bar)
-    status_widget = QWidget()
-    status_layout = QHBoxLayout(status_widget)
-    status_layout.setContentsMargins(5, 2, 5, 2); status_layout.setSpacing(10)
-
-    # 문자 수와 토큰 계산 라벨을 붙여서 추가
-    status_layout.addWidget(mw.char_count_label)
-    status_layout.addWidget(mw.token_count_label) # 토큰 계산 라벨 위치 변경
-
-    # API 시간 표시 라벨 추가
-    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
-    status_layout.addWidget(mw.api_time_label)
-
-    # LLM 관련 위젯들은 상단으로 이동했으므로 여기서 제거
-    # status_layout.addWidget(QLabel("Model:"))
-    # status_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
-    # status_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
-    # status_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
-
-    status_layout.addStretch(1)
-    mw.status_bar.addPermanentWidget(status_widget)
-
 
