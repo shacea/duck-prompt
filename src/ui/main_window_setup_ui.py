@@ -278,25 +278,27 @@ def create_layout(mw: 'MainWindow'):
     main_layout.setContentsMargins(5, 5, 5, 5)
     main_layout.setSpacing(5)
 
-    # --- Top Bar (Buttons and LLM selection) ---
-    top_bar_layout = QHBoxLayout()
-    top_bar_layout.addWidget(mw.mode_toggle_btn)
-    top_bar_layout.addWidget(mw.reset_program_btn)
-    top_bar_layout.addWidget(mw.load_previous_work_btn)
-    top_bar_layout.addWidget(mw.save_current_work_btn)
-    top_bar_layout.addStretch(1)
-    top_bar_layout.addWidget(QLabel("LLM:"))
-    top_bar_layout.addWidget(mw.llm_combo)
-    top_bar_layout.addWidget(QLabel("Model:"))
-    top_bar_layout.addWidget(mw.model_name_combo)
-    top_bar_layout.addWidget(mw.gemini_param_widget)
-    main_layout.addLayout(top_bar_layout)
+    # --- Row 1: Top Buttons ---
+    top_buttons_layout = QHBoxLayout()
+    top_buttons_layout.addWidget(mw.mode_toggle_btn)
+    top_buttons_layout.addWidget(mw.reset_program_btn)
+    top_buttons_layout.addWidget(mw.load_previous_work_btn)
+    top_buttons_layout.addWidget(mw.save_current_work_btn)
+    top_buttons_layout.addWidget(mw.select_project_btn)
+    top_buttons_layout.addStretch(1)
+    main_layout.addLayout(top_buttons_layout)
 
-    # --- Project Folder and Selection Button ---
-    project_folder_layout = QHBoxLayout()
-    project_folder_layout.addWidget(mw.select_project_btn)
-    project_folder_layout.addWidget(mw.project_folder_label, 1)
-    main_layout.addLayout(project_folder_layout)
+    # --- Row 2: Project Folder Label ---
+    main_layout.addWidget(mw.project_folder_label)
+
+    # --- Row 3: LLM Selection and Parameters ---
+    llm_params_layout = QHBoxLayout()
+    llm_params_layout.addWidget(QLabel("Model:"))
+    llm_params_layout.addWidget(mw.llm_combo)
+    llm_params_layout.addWidget(mw.model_name_combo)
+    llm_params_layout.addWidget(mw.gemini_param_widget)
+    llm_params_layout.addStretch(1)
+    main_layout.addLayout(llm_params_layout)
 
     # --- Center Splitter (Left: File Tree/Attachments, Right: Tabs/Resources) ---
     mw.center_splitter = QSplitter(Qt.Orientation.Horizontal)
