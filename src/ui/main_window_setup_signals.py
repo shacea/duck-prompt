@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 def connect_signals(mw: 'MainWindow'):
     """Connects widget signals to controller slots."""
     # 상단 버튼
-    mw.mode_toggle_btn.clicked.connect(mw._toggle_mode)
     mw.reset_program_btn.clicked.connect(mw.main_controller.reset_program) # MainController
     mw.load_previous_work_btn.clicked.connect(mw.resource_controller.load_state_from_default) # ResourceController (partial load)
     mw.save_current_work_btn.clicked.connect(mw.resource_controller.save_state_to_default) # ResourceController (save default)
@@ -26,18 +25,12 @@ def connect_signals(mw: 'MainWindow'):
 
 
     # 실행 버튼
-    if mw.mode != "Meta Prompt Builder":
-        mw.generate_tree_btn.clicked.connect(mw.file_tree_controller.generate_directory_tree_structure) # FileTreeController
-        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_prompt) # PromptController (Calculates tokens)
-        mw.send_to_gemini_btn.clicked.connect(mw.send_prompt_to_gemini) # MainWindow (LangGraph 호출)
-        mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
-        mw.run_xml_parser_btn.clicked.connect(mw.xml_controller.run_xml_parser) # XmlController
-        mw.generate_all_btn.clicked.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens via generate_prompt)
-    else:
-        mw.generate_btn.clicked.connect(mw.prompt_controller.generate_meta_prompt) # PromptController (Calculates tokens)
-        mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
-        if hasattr(mw, "generate_final_prompt_btn"):
-            mw.generate_final_prompt_btn.clicked.connect(mw.prompt_controller.generate_final_meta_prompt) # PromptController (Calculates tokens)
+    mw.generate_tree_btn.clicked.connect(mw.file_tree_controller.generate_directory_tree_structure) # FileTreeController
+    mw.generate_btn.clicked.connect(mw.prompt_controller.generate_prompt) # PromptController (Calculates tokens)
+    mw.send_to_gemini_btn.clicked.connect(mw.send_prompt_to_gemini) # MainWindow (LangGraph 호출)
+    mw.copy_btn.clicked.connect(mw.prompt_controller.copy_to_clipboard) # PromptController
+    mw.run_xml_parser_btn.clicked.connect(mw.xml_controller.run_xml_parser) # XmlController
+    mw.generate_all_btn.clicked.connect(mw.prompt_controller.generate_all_and_copy) # PromptController (Calculates tokens via generate_prompt)
 
     # 리소스 관리
     mw.resource_mode_combo.currentIndexChanged.connect(mw.resource_controller.load_templates_list) # ResourceController
@@ -124,4 +117,3 @@ def connect_signals(mw: 'MainWindow'):
     # 사용자 탭에 이벤트 필터 설치 (MainWindow 생성자에서 수행)
     # if hasattr(mw, 'user_tab'):
     #     mw.user_tab.installEventFilter(mw)
-

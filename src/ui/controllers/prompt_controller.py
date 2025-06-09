@@ -1,4 +1,3 @@
-
 import os
 import logging # 로깅 추가
 from PyQt6.QtWidgets import QMessageBox, QApplication # PyQt5 -> PyQt6
@@ -24,9 +23,6 @@ class PromptController:
 
     def generate_prompt(self):
         """Generates the prompt for the Code Enhancer mode and triggers token calculation."""
-        if self.mw.mode == "Meta Prompt Builder":
-            return self.generate_meta_prompt() # Meta 모드면 해당 함수 호출
-
         if not self.mw.current_project_folder:
              QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
              return False
@@ -93,79 +89,14 @@ class PromptController:
         self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
         return True
 
-    def generate_meta_prompt(self):
-        """Generates the intermediate meta prompt and triggers token calculation."""
-        system_text = self.mw.system_tab.toPlainText() # 메타 템플릿
-        user_text = self.mw.user_tab.toPlainText() # 메타 사용자 입력
-
-        final_output = self.prompt_service.generate_meta_prompt(
-            meta_template=system_text,
-            meta_user_input=user_text
-        )
-
-        self.mw.prompt_output_tab.setText(final_output) # 메타 프롬프트 출력 탭
-        self.mw.last_generated_prompt = final_output
-
-        # --- Trigger token calculation asynchronously ---
-        self.mw.main_controller.calculate_and_display_tokens(final_output) # Meta mode has no attachments
-        # -----------------------------------------------
-
-        self.mw.build_tabs.setCurrentWidget(self.mw.prompt_output_tab)
-        self.mw.status_bar.showMessage("META Prompt generated! Token calculation started...")
-        return True
-
-    def generate_final_meta_prompt(self):
-        """Generates the final prompt by replacing variables and triggers token calculation."""
-        meta_prompt_content = ""
-        user_prompt_content = ""
-        if hasattr(self.mw, 'meta_prompt_tab'):
-             meta_prompt_content = self.mw.meta_prompt_tab.toPlainText()
-        if hasattr(self.mw, 'user_prompt_tab'):
-             user_prompt_content = self.mw.user_prompt_tab.toPlainText()
-
-        variables = {}
-        if hasattr(self.mw, 'build_tabs'):
-            for i in range(self.mw.build_tabs.count()):
-                tab_name = self.mw.build_tabs.tabText(i)
-                if tab_name.startswith("var-"):
-                    var_name = tab_name[4:]
-                    tab_widget = self.mw.build_tabs.widget(i)
-                    if tab_widget and hasattr(tab_widget, 'toPlainText'):
-                        variables[var_name] = tab_widget.toPlainText()
-
-        final_prompt = self.prompt_service.generate_final_meta_prompt(
-            meta_prompt_content=meta_prompt_content,
-            user_prompt_content=user_prompt_content,
-            variables=variables
-        )
-
-        if hasattr(self.mw, 'final_prompt_tab'):
-            self.mw.final_prompt_tab.setText(final_prompt)
-            self.mw.last_generated_prompt = final_prompt
-
-            # --- Trigger token calculation asynchronously ---
-            self.mw.main_controller.calculate_and_display_tokens(final_prompt) # Meta mode has no attachments
-            # -----------------------------------------------
-
-            self.mw.build_tabs.setCurrentWidget(self.mw.final_prompt_tab)
-            self.mw.status_bar.showMessage("Final Prompt generated! Token calculation started...")
-        else:
-             QMessageBox.warning(self.mw, "오류", "최종 프롬프트 탭을 찾을 수 없습니다.")
-
     def copy_to_clipboard(self):
         """Copies the content of the active prompt output tab to the clipboard."""
         current_widget = self.mw.build_tabs.currentWidget()
         prompt_to_copy = ""
 
-        # Code Enhancer 모드의 프롬프트 출력 탭
-        if current_widget == self.mw.prompt_output_tab and self.mw.mode != "Meta Prompt Builder":
+        # 프롬프트 출력 탭
+        if current_widget == self.mw.prompt_output_tab:
             prompt_to_copy = self.mw.prompt_output_tab.toPlainText()
-        # Meta 모드의 메타 프롬프트 출력 탭
-        elif current_widget == self.mw.prompt_output_tab and self.mw.mode == "Meta Prompt Builder":
-             prompt_to_copy = self.mw.prompt_output_tab.toPlainText()
-        # Meta 모드의 최종 프롬프트 탭
-        elif hasattr(self.mw, 'final_prompt_tab') and current_widget == self.mw.final_prompt_tab:
-             prompt_to_copy = self.mw.final_prompt_tab.toPlainText()
         # 파일 트리 탭 (선택적)
         elif hasattr(self.mw, 'dir_structure_tab') and current_widget == self.mw.dir_structure_tab:
              prompt_to_copy = self.mw.dir_structure_tab.toPlainText()
@@ -188,10 +119,6 @@ class PromptController:
         Returns True if prompt generation was successful, False otherwise.
         Clipboard copy failure only logs a warning but doesn't cause the function to return False.
         """
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 이 기능을 사용할 수 없습니다.")
-            return False # 작업 수행 안 함
-
         # FileTreeController의 트리 생성 메서드 호출
         tree_success = self.mw.file_tree_controller.generate_directory_tree_structure()
         if not tree_success:

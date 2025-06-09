@@ -50,10 +50,6 @@ class FileTreeController:
 
     def select_project_folder(self):
         """Opens a dialog to select the project folder and triggers a background scan."""
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 프로젝트 폴더 선택이 필요 없습니다.")
-            return
-
         start_dir = self.mw.current_project_folder if self.mw.current_project_folder else os.path.expanduser("~")
         folder = QFileDialog.getExistingDirectory(self.mw, "프로젝트 폴더 선택", start_dir)
 
@@ -152,10 +148,6 @@ class FileTreeController:
 
     def generate_directory_tree_structure(self):
         """Generates the directory tree structure based on checked items from the cache."""
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 디렉토리 트리 기능이 필요 없습니다.")
-            return False
-
         if not self.mw.current_project_folder:
             QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return False
@@ -189,7 +181,6 @@ class FileTreeController:
 
     def rename_item(self, file_path):
         """Renames a file or directory. Watchdog should handle the update."""
-        if self.mw.mode == "Meta Prompt Builder": return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "파일 또는 디렉토리가 존재하지 않습니다.")
             return
@@ -227,7 +218,6 @@ class FileTreeController:
 
     def delete_item(self, file_path):
         """Deletes a file or directory. Watchdog should handle the update."""
-        if self.mw.mode == "Meta Prompt Builder": return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "파일 또는 디렉토리가 존재하지 않습니다.")
             return
@@ -286,20 +276,13 @@ class FileTreeController:
         logger.debug("Refresh flag reset.")
 
 
-    def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
-        """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
-        # This method might still be useful for reacting to check state changes,
-        # but file size calculation is removed.
-        if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-            # Get checked files (optimized version without os.path.getsize)
-            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses cache/model info
-            self.mw.selected_files_data = []
-            # Store paths only, size is not relevant here anymore
-            for fpath in checked_files:
-                self.mw.selected_files_data.append((fpath, 0)) # Store path with dummy size 0
-
-            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.") # Update status bar without size
-            # Token calculation is triggered by button clicks
-            # State change signal is emitted directly from the proxy model connection
-            # logger.debug("Check state changed, state_changed_signal emitted.") # Signal emitted via connect_signals
-
+    def on_data_changed(self):
+        """Handles updates when the check state dictionary changes."""
+        # This method is now parameter-less. Its main job is to update UI elements
+        # that depend on the list of checked files, but not on the specifics of the change.
+        if hasattr(self.mw, 'checkable_proxy'):
+            checked_files = self.mw.checkable_proxy.get_checked_files()
+            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.")
+            # The state changed signal is now emitted directly from the proxy model
+            # so no need to emit it here.
+            # self.mw.state_changed_signal.emit()

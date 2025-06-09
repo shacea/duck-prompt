@@ -1,4 +1,3 @@
-
 import os
 import base64 # 추가
 import mimetypes # 추가
@@ -289,10 +288,6 @@ class MainController:
     # --- Attachment Handling ---
     def attach_files(self):
         """Opens a file dialog to select multiple files for attachment."""
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "정보", "Meta Prompt Builder 모드에서는 파일 첨부가 필요 없습니다.")
-            return
-
         start_dir = self.mw.current_project_folder if self.mw.current_project_folder else os.path.expanduser("~")
         # getOpenFileNames는 파일 경로 리스트와 필터 문자열을 반환
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -337,10 +332,6 @@ class MainController:
 
     def paste_from_clipboard(self):
         """Pastes image or file paths from the clipboard."""
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "정보", "Meta Prompt Builder 모드에서는 클립보드 첨부가 필요 없습니다.")
-            return
-
         clipboard = QApplication.clipboard()
         mime_data = clipboard.mimeData()
         added_count = 0
@@ -469,4 +460,3 @@ class MainController:
             self.mw.state_changed_signal.emit() # 상태 변경 시그널 발생
         else:
              self.mw.status_bar.showMessage("첨부 파일 제거 중 오류 발생.")
-

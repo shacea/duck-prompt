@@ -90,10 +90,9 @@ class MainWindow(QMainWindow):
     # 자동 저장 타이머 시그널 (상태 변경 시 타이머 재시작용)
     state_changed_signal = pyqtSignal()
 
-    def __init__(self, mode="Code Enhancer Prompt Builder"):
+    def __init__(self):
         super().__init__()
         self._initialized = False
-        self.mode = mode
         self.base_title = "DuckPrompt"
         self.update_window_title()
 
@@ -195,47 +194,19 @@ class MainWindow(QMainWindow):
         # 1. 기본 시스템 프롬프트 적용
         apply_default_system_prompt(self)
 
-        # 2. Meta 모드일 경우 기본 메타 프롬프트 로드
-        if self.mode == "Meta Prompt Builder":
-            meta_prompt_path_relative = os.path.join("prompts", "system", "META_Prompt.md")
-            try:
-                meta_prompt_path = get_resource_path(meta_prompt_path_relative)
-                if os.path.exists(meta_prompt_path):
-                    with open(meta_prompt_path, "r", encoding="utf-8") as f:
-                        self.system_tab.setText(f.read())
-            except Exception as e: logger.error(f"Error loading default META prompt: {e}")
-
-        # 3. LLM 및 모델 콤보박스 설정 (기본값 선택)
+        # 2. LLM 및 모델 콤보박스 설정 (기본값 선택)
         self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini")) # 기본 LLM 설정
         self.main_controller.on_llm_selected() # 모델 목록 로드 및 기본 모델 선택
 
-        # 4. Gemini 파라미터 UI 업데이트
+        # 3. Gemini 파라미터 UI 업데이트
         self.load_gemini_settings_to_ui()
 
-        # 5. 파일 필터링/gitignore 설정 로드 (Controller가 CacheService 업데이트)
+        # 4. 파일 필터링/gitignore 설정 로드 (Controller가 CacheService 업데이트)
         self.file_tree_controller.load_gitignore_settings()
 
-        # 6. 리소스 관리 버튼 레이블 업데이트
+        # 5. 리소스 관리 버튼 레이블 업데이트
         self.resource_controller.update_buttons_label()
         logger.info("Initial settings applied.")
-
-
-    def _restart_with_mode(self, new_mode: str):
-        """Restarts the application with the specified mode."""
-        self._initialized = False
-        self.auto_save_timer.stop() # 타이머 중지
-        self.cache_service.stop_monitoring() # Stop monitoring
-        self.cache_service.stop_scan() # Stop scan
-        self.db_service.disconnect() # Disconnect DB before closing
-        self.close()
-        # Note: Restarting might re-trigger DB connection errors if they persist
-        new_window = MainWindow(mode=new_mode)
-        new_window.show()
-
-    def _toggle_mode(self):
-        """Toggles between application modes."""
-        new_mode = "Meta Prompt Builder" if self.mode == "Code Enhancer Prompt Builder" else "Code Enhancer Prompt Builder"
-        self._restart_with_mode(new_mode)
 
     def _open_readme(self):
         """Opens the README.md file."""
@@ -343,7 +314,6 @@ class MainWindow(QMainWindow):
 
         # AppState 모델 생성 (모든 필드 포함)
         state_data = {
-            "mode": self.mode,
             "project_folder": self.current_project_folder,
             "system_prompt": self.system_tab.toPlainText(),
             "user_prompt": self.user_tab.toPlainText(),
@@ -359,7 +329,6 @@ class MainWindow(QMainWindow):
              logger.error(f"Error creating AppState model: {e}")
              # 오류 발생 시 최소한의 정보로 기본 상태 반환
              return AppState(
-                 mode=self.mode,
                  project_folder=self.current_project_folder,
                  user_prompt=self.user_tab.toPlainText(),
                  checked_files=checked_paths,
@@ -422,11 +391,6 @@ class MainWindow(QMainWindow):
 
         # --- Full Load Specific Fields ---
         if not partial_load:
-            if self.mode != state.mode:
-                logger.info(f"Mode mismatch. Restarting...")
-                self._restart_with_mode(state.mode)
-                return # Restart handles everything
-
             self.system_tab.setText(state.system_prompt)
 
             llm_index = self.llm_combo.findText(state.selected_llm)
@@ -611,9 +575,6 @@ class MainWindow(QMainWindow):
     # --- LangGraph 관련 메서드 ---
     def send_prompt_to_gemini(self):
         """ Sends the prompt and attachments to Gemini via LangGraph worker thread. """
-        if self.mode == "Meta Prompt Builder":
-            QMessageBox.information(self, "정보", "Meta Prompt Builder 모드에서는 Gemini 전송 기능을 사용할 수 없습니다.")
-            return
         if not hasattr(self, 'prompt_output_tab'):
             QMessageBox.warning(self, "오류", "프롬프트 출력 탭을 찾을 수 없습니다.")
             return
@@ -919,32 +880,27 @@ class MainWindow(QMainWindow):
                 if is_control_pressed and is_enter_key:
                     logger.info("Ctrl+Enter detected in user_tab. Triggering 'Generate All' then 'Send to Gemini'.")
 
-                    # Code Enhancer 모드에서만 동작
-                    if self.mode == "Code Enhancer Prompt Builder":
-                        logger.info("Running 'Generate All'...")
-                        # generate_all_and_copy는 프롬프트 생성 성공 시 True 반환
-                        success_generate_all = self.prompt_controller.generate_all_and_copy()
+                    logger.info("Running 'Generate All'...")
+                    # generate_all_and_copy는 프롬프트 생성 성공 시 True 반환
+                    success_generate_all = self.prompt_controller.generate_all_and_copy()
 
-                        # 프롬프트가 실제로 생성되었는지 확인 (last_generated_prompt 사용)
-                        prompt_generated = bool(self.last_generated_prompt and self.last_generated_prompt.strip())
+                    # 프롬프트가 실제로 생성되었는지 확인 (last_generated_prompt 사용)
+                    prompt_generated = bool(self.last_generated_prompt and self.last_generated_prompt.strip())
 
-                        if prompt_generated:
-                            logger.info("Prompt generated. Proceeding to 'Send to Gemini'.")
-                            if not success_generate_all:
-                                # 프롬프트는 생성되었지만, 트리 생성 또는 복사 실패 시 정보 메시지
-                                logger.warning("'Generate All' returned False, but prompt was generated. Sending to Gemini anyway.")
-                                # 사용자에게 알릴 필요는 없을 수 있음 (상태바 메시지로 대체 가능)
-                                # QMessageBox.information(self, "정보", "일부 작업(트리 생성 또는 복사)에 실패했지만 Gemini 전송을 시도합니다.")
-                                self.status_bar.showMessage("일부 작업 실패, Gemini 전송 시도...")
-                            # Gemini 전송 실행
-                            self.send_prompt_to_gemini()
-                        else:
-                            # 프롬프트 생성 자체가 실패한 경우
-                            logger.error("'Generate All' failed to generate a prompt. Skipping 'Send to Gemini'.")
-                            QMessageBox.warning(self, "실패", "'한번에 실행' 작업 중 프롬프트 생성에 실패하여 Gemini로 전송하지 못했습니다.")
+                    if prompt_generated:
+                        logger.info("Prompt generated. Proceeding to 'Send to Gemini'.")
+                        if not success_generate_all:
+                            # 프롬프트는 생성되었지만, 트리 생성 또는 복사 실패 시 정보 메시지
+                            logger.warning("'Generate All' returned False, but prompt was generated. Sending to Gemini anyway.")
+                            # 사용자에게 알릴 필요는 없을 수 있음 (상태바 메시지로 대체 가능)
+                            # QMessageBox.information(self, "정보", "일부 작업(트리 생성 또는 복사)에 실패했지만 Gemini 전송을 시도합니다.")
+                            self.status_bar.showMessage("일부 작업 실패, Gemini 전송 시도...")
+                        # Gemini 전송 실행
+                        self.send_prompt_to_gemini()
                     else:
-                        # Meta 모드에서는 다른 동작 또는 비활성화
-                        logger.info("Ctrl+Enter ignored in Meta Prompt Builder mode.")
+                        # 프롬프트 생성 자체가 실패한 경우
+                        logger.error("'Generate All' failed to generate a prompt. Skipping 'Send to Gemini'.")
+                        QMessageBox.warning(self, "실패", "'한번에 실행' 작업 중 프롬프트 생성에 실패하여 Gemini로 전송하지 못했습니다.")
 
                     return True # 이벤트 처리 완료 (기본 동작 방지)
 
@@ -981,4 +937,3 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'db_service'):
             self.db_service.disconnect()
         super().closeEvent(event)
-

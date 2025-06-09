@@ -31,15 +31,16 @@ class CachedFileSystemModel(QStandardItemModel):
         self._file_icon = self._icon_provider.standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
 
     def populate_from_cache(self, root_node: Optional[CacheNode]):
-        """Clears the model and populates it from the CacheNode structure."""
-        self.beginResetModel()
+        """
+        Clears the model and populates it from the CacheNode structure.
+        The root folder itself is not shown; its children are the top-level items.
+        """
         self.clear()
         self.setHorizontalHeaderLabels(['Name']) # Reset header after clear
         if root_node and not root_node.ignored: # Only populate if root exists and is not ignored
-            root_item = self._create_item_from_node(root_node)
-            self.invisibleRootItem().appendRow(root_item)
-            self._populate_children(root_item, root_node)
-        self.endResetModel()
+            # Don't create a visible item for the root folder itself.
+            # Instead, populate its children directly under the invisible root.
+            self._populate_children(self.invisibleRootItem(), root_node)
         logger.info("CachedFileSystemModel populated from cache.")
 
     def _populate_children(self, parent_item: QStandardItem, parent_node: CacheNode):
@@ -398,4 +399,3 @@ class CheckableProxyModel(QSortFilterProxyModel):
         #             self.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole])
         self.endResetModel()
         logger.debug("Finished updating visual check states.")
-

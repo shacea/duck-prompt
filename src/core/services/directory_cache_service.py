@@ -140,7 +140,7 @@ class ScannerWorker(QObject):
 
 
 # --- Watchdog Event Handler ---
-class CacheUpdateHandler(FileSystemEventHandler):
+class CacheUpdateHandler(QObject, FileSystemEventHandler):
     """Handles filesystem events and signals the DirectoryCacheService."""
     # Signals to notify the main service about specific changes
     needs_rescan = pyqtSignal(str) # path
@@ -150,7 +150,8 @@ class CacheUpdateHandler(FileSystemEventHandler):
     item_modified = pyqtSignal(str) # path (for files)
 
     def __init__(self, cache_service: 'DirectoryCacheService'):
-        super().__init__()
+        QObject.__init__(self)
+        FileSystemEventHandler.__init__(self)
         self.cache_service = cache_service
         self._ignore_patterns = set()
         self._root_path = None

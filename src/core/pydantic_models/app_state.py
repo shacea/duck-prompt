@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any # Dict, Any 추가
 
@@ -14,7 +13,6 @@ class AppState(BaseModel):
     attached_items: List[Dict[str, Any]] = Field(default_factory=list) # 첨부 파일/이미지 메타데이터 목록
 
     # --- 기타 상태 필드 (전체 상태 저장/로드 시 사용) ---
-    mode: str = "Code Enhancer Prompt Builder"
     system_prompt: str = "" # 시스템 탭 내용 (기본값 로드 로직 있음)
     selected_llm: str = "Gemini" # 선택된 LLM
     selected_model_name: str = "" # 선택된 모델명
@@ -27,4 +25,3 @@ class AppState(BaseModel):
 
     class Config:
         validate_assignment = True
-

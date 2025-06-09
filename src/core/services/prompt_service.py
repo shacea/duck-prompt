@@ -1,4 +1,3 @@
-
 import os
 from typing import List, Tuple, Dict, Any # Dict, Any 추가
 
@@ -68,27 +67,3 @@ class PromptService:
             final_prompt_parts.append(dir_structure_content)
 
         return "\n".join(final_prompt_parts)
-
-    def generate_meta_prompt(
-        self,
-        meta_template: str,
-        meta_user_input: str
-    ) -> str:
-        """Generates the prompt for the Meta Prompt Builder mode."""
-        final_output = meta_template.replace("{{user-input}}", meta_user_input)
-        return final_output
-
-    def generate_final_meta_prompt(
-        self,
-        meta_prompt_content: str,
-        user_prompt_content: str,
-        variables: dict
-    ) -> str:
-        """Generates the final prompt by replacing variables in the meta prompt."""
-        final_prompt = meta_prompt_content.replace("[[user-prompt]]", user_prompt_content)
-
-        for k, v in variables.items():
-            if k != "user-prompt":
-                final_prompt = final_prompt.replace(f"[[{k}]]", v)
-
-        return final_prompt

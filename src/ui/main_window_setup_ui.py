@@ -36,14 +36,6 @@ def create_menu_bar(mw: 'MainWindow'):
     settings_menu.addSeparator() # 필요 시 구분선 추가
 
     # 나머지 메뉴들
-    mode_menu = mw.menubar.addMenu("모드")
-    switch_to_code_action = QAction("코드 강화 빌더로 전환", mw) # PyQt6: QAction(text, parent)
-    switch_to_meta_action = QAction("메타 프롬프트 빌더로 전환", mw) # PyQt6: QAction(text, parent)
-    switch_to_code_action.triggered.connect(lambda: mw._restart_with_mode("Code Enhancer Prompt Builder"))
-    switch_to_meta_action.triggered.connect(lambda: mw._restart_with_mode("Meta Prompt Builder"))
-    mode_menu.addAction(switch_to_code_action)
-    mode_menu.addAction(switch_to_meta_action)
-
     state_menu = mw.menubar.addMenu("상태")
     mw.save_state_action = QAction("상태 저장(기본)", mw) # PyQt6: QAction(text, parent)
     mw.load_state_action = QAction("상태 불러오기(기본)", mw) # PyQt6: QAction(text, parent)
@@ -95,12 +87,11 @@ def create_widgets(mw: 'MainWindow'):
     print(f"Applying default font: {font_family_name}, Size: {default_font.pointSize()}")
 
     # --- 상단 버튼 및 레이블 ---
-    mw.mode_toggle_btn = QPushButton("🔄 모드 전환")
     mw.reset_program_btn = QPushButton("🗑️ 전체 프로그램 리셋")
     mw.load_previous_work_btn = QPushButton("⏪ 마지막 작업 불러오기") # 버튼 텍스트 변경
     mw.save_current_work_btn = QPushButton("💾 현재 작업 저장") # 작업 저장 버튼 추가
     mw.select_project_btn = QPushButton("📁 프로젝트 폴더 선택")
-    for btn in [mw.mode_toggle_btn, mw.reset_program_btn, mw.load_previous_work_btn, mw.save_current_work_btn, mw.select_project_btn]: # 새 버튼 포함
+    for btn in [mw.reset_program_btn, mw.load_previous_work_btn, mw.save_current_work_btn, mw.select_project_btn]: # 새 버튼 포함
         btn.setFixedHeight(30)
     mw.project_folder_label = QLabel("현재 프로젝트 폴더: (선택 안 됨)")
     font_lbl = mw.project_folder_label.font()
@@ -198,46 +189,34 @@ def create_widgets(mw: 'MainWindow'):
     attachment_layout.addWidget(mw.attachment_list_widget, 1) # 리스트 위젯이 공간 차지
     mw.attachment_group.setLayout(attachment_layout)
     # Code Enhancer 모드에서만 보이도록 설정 (초기 상태)
-    mw.attachment_group.setVisible(mw.mode == "Code Enhancer Prompt Builder")
+    mw.attachment_group.setVisible(True)
 
 
     # --- 탭 위젯 (오른쪽 상단) ---
     mw.build_tabs = QTabWidget()
     custom_tab_bar = CustomTabBar(mw.build_tabs, mw)
     mw.build_tabs.setTabBar(custom_tab_bar)
-    system_tab_label = "메타 프롬프트 템플릿" if mw.mode == "Meta Prompt Builder" else "시스템"
-    user_tab_label = "메타 사용자 입력" if mw.mode == "Meta Prompt Builder" else "사용자"
-    prompt_output_label = "메타 프롬프트 출력" if mw.mode == "Meta Prompt Builder" else "프롬프트 출력"
+    system_tab_label = "시스템"
+    user_tab_label = "사용자"
+    prompt_output_label = "프롬프트 출력"
     mw.system_tab = CustomTextEdit(); mw.system_tab.setPlaceholderText(f"{system_tab_label} 내용 입력..."); mw.system_tab.setFont(default_font); mw.build_tabs.addTab(mw.system_tab, system_tab_label)
     mw.user_tab = CustomTextEdit(); mw.user_tab.setPlaceholderText(f"{user_tab_label} 내용 입력..."); mw.user_tab.setFont(default_font); mw.build_tabs.addTab(mw.user_tab, user_tab_label)
-    if mw.mode != "Meta Prompt Builder":
-        mw.dir_structure_tab = CustomTextEdit(); mw.dir_structure_tab.setReadOnly(True); mw.dir_structure_tab.setFont(default_font); mw.build_tabs.addTab(mw.dir_structure_tab, "파일 트리")
+    mw.dir_structure_tab = CustomTextEdit(); mw.dir_structure_tab.setReadOnly(True); mw.dir_structure_tab.setFont(default_font); mw.build_tabs.addTab(mw.dir_structure_tab, "파일 트리")
     mw.prompt_output_tab = CustomTextEdit()
     output_font = QFont("Consolas", 10) if sys.platform == "win32" else QFont("Monaco", 11) if sys.platform == "darwin" else QFont("Monospace", 10); output_font.setStyleHint(QFont.StyleHint.Monospace) # QFont.Monospace -> QFont.StyleHint.Monospace
     mw.prompt_output_tab.setFont(output_font); mw.prompt_output_tab.setStyleSheet("QTextEdit { padding: 10px; }"); mw.build_tabs.addTab(mw.prompt_output_tab, prompt_output_label)
-    if mw.mode != "Meta Prompt Builder":
-        mw.xml_input_tab = CustomTextEdit(); mw.xml_input_tab.setPlaceholderText("XML 내용 입력..."); mw.xml_input_tab.setFont(default_font); mw.build_tabs.addTab(mw.xml_input_tab, "XML 입력")
-        mw.summary_tab = CustomTextEdit(); mw.summary_tab.setPlaceholderText("Gemini 응답 요약..."); mw.summary_tab.setReadOnly(True); mw.summary_tab.setFont(default_font); mw.build_tabs.addTab(mw.summary_tab, "Summary")
-    if mw.mode == "Meta Prompt Builder":
-        mw.meta_prompt_tab = CustomTextEdit(); mw.meta_prompt_tab.setPlaceholderText("메타 프롬프트 내용..."); mw.meta_prompt_tab.setFont(default_font); mw.build_tabs.addTab(mw.meta_prompt_tab, "메타 프롬프트")
-        mw.user_prompt_tab = CustomTextEdit(); mw.user_prompt_tab.setPlaceholderText("사용자 프롬프트 내용 입력..."); mw.user_prompt_tab.setFont(default_font); mw.build_tabs.addTab(mw.user_prompt_tab, "사용자 프롬프트")
-        mw.final_prompt_tab = CustomTextEdit(); mw.final_prompt_tab.setFont(output_font); mw.final_prompt_tab.setStyleSheet("QTextEdit { padding: 10px; }"); mw.build_tabs.addTab(mw.final_prompt_tab, "최종 프롬프트")
+    mw.xml_input_tab = CustomTextEdit(); mw.xml_input_tab.setPlaceholderText("XML 내용 입력..."); mw.xml_input_tab.setFont(default_font); mw.build_tabs.addTab(mw.xml_input_tab, "XML 입력")
+    mw.summary_tab = CustomTextEdit(); mw.summary_tab.setPlaceholderText("Gemini 응답 요약..."); mw.summary_tab.setReadOnly(True); mw.summary_tab.setFont(default_font); mw.build_tabs.addTab(mw.summary_tab, "Summary")
 
     # --- 실행 버튼 (오른쪽 상단) ---
-    copy_btn_label = "📋 메타 프롬프트 복사" if mw.mode == "Meta Prompt Builder" else "📋 클립보드에 복사"
-    if mw.mode != "Meta Prompt Builder":
-        mw.generate_tree_btn = QPushButton("🌳 트리 생성")
-        mw.generate_btn = QPushButton("✨ 프롬프트 생성")
-        mw.send_to_gemini_btn = QPushButton("♊ Gemini로 전송")
-        mw.copy_btn = QPushButton(copy_btn_label)
-        mw.run_xml_parser_btn = QPushButton("▶️ XML 파서 실행")
-        mw.generate_all_btn = QPushButton("⚡️ 한번에 실행")
-        mw.run_buttons = [mw.generate_tree_btn, mw.generate_btn, mw.send_to_gemini_btn, mw.copy_btn, mw.run_xml_parser_btn, mw.generate_all_btn]
-    else:
-        mw.generate_btn = QPushButton("🚀 메타 프롬프트 생성")
-        mw.copy_btn = QPushButton(copy_btn_label)
-        mw.generate_final_prompt_btn = QPushButton("🚀 최종 프롬프트 생성")
-        mw.run_buttons = [mw.generate_btn, mw.copy_btn, mw.generate_final_prompt_btn]
+    copy_btn_label = "📋 클립보드에 복사"
+    mw.generate_tree_btn = QPushButton("🌳 트리 생성")
+    mw.generate_btn = QPushButton("✨ 프롬프트 생성")
+    mw.send_to_gemini_btn = QPushButton("♊ Gemini로 전송")
+    mw.copy_btn = QPushButton(copy_btn_label)
+    mw.run_xml_parser_btn = QPushButton("▶️ XML 파서 실행")
+    mw.generate_all_btn = QPushButton("⚡️ 한번에 실행")
+    mw.run_buttons = [mw.generate_tree_btn, mw.generate_btn, mw.send_to_gemini_btn, mw.copy_btn, mw.run_xml_parser_btn, mw.generate_all_btn]
 
     # --- 상태 표시줄 위젯 ---
     mw.char_count_label = QLabel("Chars: 0")
@@ -280,7 +259,6 @@ def create_layout(mw: 'MainWindow'):
 
     # --- Row 1: Top Buttons ---
     top_buttons_layout = QHBoxLayout()
-    top_buttons_layout.addWidget(mw.mode_toggle_btn)
     top_buttons_layout.addWidget(mw.reset_program_btn)
     top_buttons_layout.addWidget(mw.load_previous_work_btn)
     top_buttons_layout.addWidget(mw.save_current_work_btn)

@@ -1,4 +1,3 @@
-
 import os
 from PyQt6.QtWidgets import QMessageBox # PyQt5 -> PyQt6
 
@@ -20,10 +19,6 @@ class XmlController:
         self.xml_service = xml_service
     def run_xml_parser(self):
         """Parses XML input and applies changes to the project files."""
-        if self.mw.mode == "Meta Prompt Builder":
-            QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 XML 파서 기능이 필요 없습니다.")
-            return
-
         xml_str = ""
         if hasattr(self.mw, "xml_input_tab"):
             xml_str = self.mw.xml_input_tab.toPlainText()
@@ -62,4 +57,3 @@ class XmlController:
         if hasattr(self.mw, 'file_tree_controller'):
             self.mw.file_tree_controller.refresh_tree()
         self.mw.status_bar.showMessage("XML 파싱 완료!")
-

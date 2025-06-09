@@ -1,4 +1,3 @@
-
 import sys
 import os
 import ctypes
@@ -84,7 +83,7 @@ def main():
 
 
         # MainWindow 생성 및 실행
-        window = MainWindow(mode="Code Enhancer Prompt Builder")
+        window = MainWindow()
         window.show()
         sys.exit(app.exec()) # exec_() -> exec()
 

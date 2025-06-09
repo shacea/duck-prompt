@@ -7,7 +7,7 @@ Actively reuse existing code, functions, and modules.
 
 ## 0. Your Role & Core Mission
 
-You are a **specialized AI assistant whose core mission is to modify code according to user requests, using the provided latest SDK markdown technical document as the sole source of truth, and to output the results in a strict XML format**. If your prior knowledge or information from your training data conflicts with the user-provided SDK document, you **must, and explicitly, prioritize the SDK document**. When generating XML, you must take special care to avoid errors such as unclosed tags, improper CDATA usage, or missing special character escapes. **You must never change the content of specified 'read-only files'; they are for reference only.** You SHOULD response in KOREAN. 
+You are a **specialized AI assistant whose core mission is to modify code according to user requests, using the provided latest SDK markdown technical document as the sole source of truth, and to output the results in a strict XML format**. If your prior knowledge or information from your training data conflicts with the user-provided SDK document, you **must, and explicitly, prioritize the SDK document**. When generating XML, you must take special care to avoid errors such as unclosed tags, improper CDATA usage, or missing special character escapes. **You must never change the content of specified 'read-only files'; they are for reference only.** You SHOULD response in KOREAN.
 
 ## 1. Input Data Specification
 
@@ -323,32 +323,7 @@ feat: Refactor project structure and common utilities (logging, config)
 
 
 ===USER===
-아래 오류 해결해줘
-그리고 ssh 관련 내용 모두 제거해줘.
----
-Microsoft Windows [Version 10.0.26100.4061]
-(c) Microsoft Corporation. All rights reserved.
-
-(duck-prompt) E:\Projects\duck-prompt>e:/Projects/duck-prompt/.venv/Scripts/python.exe e:/Projects/duck-prompt/main.py
-Loading tiktoken encoding: o200k_base...
-Tiktoken encoding 'o200k_base' loaded.
-Traceback (most recent call last):
-  File "e:\Projects\duck-prompt\main.py", line 13, in <module>
-    from app import main
-  File "e:\Projects\duck-prompt\src\app.py", line 9, in <module>
-    from ui.main_window import MainWindow
-  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 41, in <module>
-    from .main_window_setup_ui import create_menu_bar, create_widgets, create_layout, create_status_bar
-ImportError: cannot import name 'create_layout' from 'ui.main_window_setup_ui' (e:\Projects\duck-prompt\src\ui\main_window_setup_ui.py)
-
-(duck-prompt) E:\Projects\duck-prompt>
-
-
-
-
-
-
-
+현재 코드는 코드 강화, 메타 프롬프트 생성 두가지 모드가 있는데, 메타 프롬프트 생성 모드 내용 모두 제거하고 코드 강화 빌더 모드만 남겨줘. 그리고 메뉴에서 "모드"는 제거해주고.
 
 ===FILES CONTENTS===
 
@@ -1489,7 +1464,7 @@ class ScannerWorker(QObject):
 
 
 # --- Watchdog Event Handler ---
-class CacheUpdateHandler(FileSystemEventHandler):
+class CacheUpdateHandler(QObject, FileSystemEventHandler):
     """Handles filesystem events and signals the DirectoryCacheService."""
     # Signals to notify the main service about specific changes
     needs_rescan = pyqtSignal(str) # path
@@ -1499,7 +1474,8 @@ class CacheUpdateHandler(FileSystemEventHandler):
     item_modified = pyqtSignal(str) # path (for files)
 
     def __init__(self, cache_service: 'DirectoryCacheService'):
-        super().__init__()
+        QObject.__init__(self)
+        FileSystemEventHandler.__init__(self)
         self.cache_service = cache_service
         self._ignore_patterns = set()
         self._root_path = None
@@ -3725,23 +3701,16 @@ class FileTreeController:
         logger.debug("Refresh flag reset.")
 
 
-    def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
-        """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
-        # This method might still be useful for reacting to check state changes,
-        # but file size calculation is removed.
-        if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-            # Get checked files (optimized version without os.path.getsize)
-            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses cache/model info
-            self.mw.selected_files_data = []
-            # Store paths only, size is not relevant here anymore
-            for fpath in checked_files:
-                self.mw.selected_files_data.append((fpath, 0)) # Store path with dummy size 0
-
-            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.") # Update status bar without size
-            # Token calculation is triggered by button clicks
-            # State change signal is emitted directly from the proxy model connection
-            # logger.debug("Check state changed, state_changed_signal emitted.") # Signal emitted via connect_signals
-
+    def on_data_changed(self):
+        """Handles updates when the check state dictionary changes."""
+        # This method is now parameter-less. Its main job is to update UI elements
+        # that depend on the list of checked files, but not on the specifics of the change.
+        if hasattr(self.mw, 'checkable_proxy'):
+            checked_files = self.mw.checkable_proxy.get_checked_files()
+            self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.")
+            # The state changed signal is now emitted directly from the proxy model
+            # so no need to emit it here.
+            # self.mw.state_changed_signal.emit()
 
 
 
@@ -4976,15 +4945,16 @@ class CachedFileSystemModel(QStandardItemModel):
         self._file_icon = self._icon_provider.standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
 
     def populate_from_cache(self, root_node: Optional[CacheNode]):
-        """Clears the model and populates it from the CacheNode structure."""
-        self.beginResetModel()
+        """
+        Clears the model and populates it from the CacheNode structure.
+        The root folder itself is not shown; its children are the top-level items.
+        """
         self.clear()
         self.setHorizontalHeaderLabels(['Name']) # Reset header after clear
         if root_node and not root_node.ignored: # Only populate if root exists and is not ignored
-            root_item = self._create_item_from_node(root_node)
-            self.invisibleRootItem().appendRow(root_item)
-            self._populate_children(root_item, root_node)
-        self.endResetModel()
+            # Don't create a visible item for the root folder itself.
+            # Instead, populate its children directly under the invisible root.
+            self._populate_children(self.invisibleRootItem(), root_node)
         logger.info("CachedFileSystemModel populated from cache.")
 
     def _populate_children(self, parent_item: QStandardItem, parent_node: CacheNode):
@@ -5343,7 +5313,6 @@ class CheckableProxyModel(QSortFilterProxyModel):
         #             self.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole])
         self.endResetModel()
         logger.debug("Finished updating visual check states.")
-
 
 
 
@@ -6716,7 +6685,6 @@ def connect_signals(mw: 'MainWindow'):
 
 
 
-
 ======== src\ui\main_window_setup_ui.py ========
 import os
 import sys
@@ -6989,6 +6957,88 @@ def create_widgets(mw: 'MainWindow'):
     gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
     mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
 
+
+def create_layout(mw: 'MainWindow'):
+    """Creates the main layout and arranges widgets."""
+    central_widget = QWidget()
+    mw.setCentralWidget(central_widget)
+    main_layout = QVBoxLayout(central_widget)
+    main_layout.setContentsMargins(5, 5, 5, 5)
+    main_layout.setSpacing(5)
+
+    # --- Row 1: Top Buttons ---
+    top_buttons_layout = QHBoxLayout()
+    top_buttons_layout.addWidget(mw.mode_toggle_btn)
+    top_buttons_layout.addWidget(mw.reset_program_btn)
+    top_buttons_layout.addWidget(mw.load_previous_work_btn)
+    top_buttons_layout.addWidget(mw.save_current_work_btn)
+    top_buttons_layout.addWidget(mw.select_project_btn)
+    top_buttons_layout.addStretch(1)
+    main_layout.addLayout(top_buttons_layout)
+
+    # --- Row 2: Project Folder Label ---
+    main_layout.addWidget(mw.project_folder_label)
+
+    # --- Row 3: LLM Selection and Parameters ---
+    llm_params_layout = QHBoxLayout()
+    llm_params_layout.addWidget(QLabel("Model:"))
+    llm_params_layout.addWidget(mw.llm_combo)
+    llm_params_layout.addWidget(mw.model_name_combo)
+    llm_params_layout.addWidget(mw.gemini_param_widget)
+    llm_params_layout.addStretch(1)
+    main_layout.addLayout(llm_params_layout)
+
+    # --- Center Splitter (Left: File Tree/Attachments, Right: Tabs/Resources) ---
+    mw.center_splitter = QSplitter(Qt.Orientation.Horizontal)
+
+    # --- Left Panel ---
+    left_panel = QWidget()
+    left_layout = QVBoxLayout(left_panel)
+    left_layout.setContentsMargins(0, 0, 0, 0)
+    left_splitter = QSplitter(Qt.Orientation.Vertical)
+    left_splitter.addWidget(mw.tree_view)
+    left_splitter.addWidget(mw.attachment_group)
+    # Set initial sizes for the left vertical splitter
+    left_splitter.setSizes([400, 150])
+    left_layout.addWidget(left_splitter)
+    mw.center_splitter.addWidget(left_panel)
+
+    # --- Right Panel ---
+    right_panel = QWidget()
+    right_layout = QVBoxLayout(right_panel)
+    right_layout.setContentsMargins(0, 0, 0, 0)
+    right_splitter = QSplitter(Qt.Orientation.Vertical)
+
+    # Top part of the right panel (run buttons and tabs)
+    right_top_widget = QWidget()
+    right_top_layout = QVBoxLayout(right_top_widget)
+    right_top_layout.setContentsMargins(0, 0, 0, 0)
+    right_top_layout.setSpacing(5)
+
+    run_buttons_layout = QHBoxLayout()
+    for btn in mw.run_buttons:
+        run_buttons_layout.addWidget(btn)
+    run_buttons_layout.addStretch()
+    right_top_layout.addLayout(run_buttons_layout)
+    right_top_layout.addWidget(mw.build_tabs, 1)
+
+    right_splitter.addWidget(right_top_widget)
+    right_splitter.addWidget(mw.resource_manager_group)
+    # Set initial sizes for the right vertical splitter
+    right_splitter.setSizes([500, 250])
+    right_layout.addWidget(right_splitter)
+    mw.center_splitter.addWidget(right_panel)
+
+    main_layout.addWidget(mw.center_splitter, 1)
+
+def create_status_bar(mw: 'MainWindow'):
+    """Creates and configures the status bar."""
+    mw.status_bar = QStatusBar()
+    mw.setStatusBar(mw.status_bar)
+    # Add permanent widgets from right to left
+    mw.status_bar.addPermanentWidget(mw.api_time_label)
+    mw.status_bar.addPermanentWidget(mw.token_count_label)
+    mw.status_bar.addPermanentWidget(mw.char_count_label)
 
 
 
@@ -8795,24 +8845,6 @@ gemini_enable_search: false
 
 
 
-======== main.py ========
-import sys
-import os
-
-# src 디렉토리를 sys.path에 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(current_dir, "src")
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# src/app.py의 메인 함수 실행
-if __name__ == '__main__':
-    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
-    from app import main
-    main()
-
-
-
 ======== pyproject.toml ========
 [project]
 name = "duck-prompt"
@@ -8832,8 +8864,6 @@ dependencies = [
     "pillow>=10.3.0", # Image handling
     "winotify>=1.1.0", # Windows notifications
     "pyinstaller>=6.13.0",
-    "asyncssh>=2.21.0",
-    "python-dotenv>=1.1.0",
     "watchdog>=4.0.0", # Added for filesystem monitoring
 ]
 
@@ -8884,81 +8914,86 @@ profile = "black"
 
 
 
+======== main.py ========
+import sys
+import os
+
+# src 디렉토리를 sys.path에 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# src/app.py의 메인 함수 실행
+if __name__ == '__main__':
+    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
+    from app import main
+    main()
+
+
 
 ======== qt.conf ========
 [Platforms]
 WindowsArguments = dpiawareness=3 
 
 
-======== .env ========
-SSH_ID=2
-SSH_ALIAS=Lab_79
-SSH_HOST=lab.miraker.me
-SSH_PORT=7922
-SSH_USERNAME=shacea
-SSH_AUTH_TYPE=password
-SSH_PASSWORD=alfkzj9389#
-
-
 File Tree:
  📁 duck-prompt/
-   📁 ./
    📁 src/
      📁 core/
        📁 pydantic_models/
-         📄 __init__.py (76 bytes)
-         📄 app_state.py (1,319 bytes)
-         📄 config_settings.py (3,409 bytes)
+         📄 __init__.py
+         📄 app_state.py
+         📄 config_settings.py
        📁 services/
-         📄 __init__.py (990 bytes)
-         📄 config_service.py (11,753 bytes)
-         📄 db_service.py (32,083 bytes)
-         📄 directory_cache_service.py (27,887 bytes)
-         📄 filesystem_service.py (6,069 bytes)
-         📄 gemini_service.py (30,577 bytes)
-         📄 prompt_service.py (3,956 bytes)
-         📄 state_service.py (7,779 bytes)
-         📄 template_service.py (3,394 bytes)
-         📄 token_service.py (12,573 bytes)
-         📄 xml_service.py (12,145 bytes)
+         📄 __init__.py
+         📄 config_service.py
+         📄 db_service.py
+         📄 directory_cache_service.py
+         📄 filesystem_service.py
+         📄 gemini_service.py
+         📄 prompt_service.py
+         📄 state_service.py
+         📄 template_service.py
+         📄 token_service.py
+         📄 xml_service.py
        📁 utils/
        📁 workers/
-       📄 __init__.py (65 bytes)
-       📄 langgraph_state.py (860 bytes)
+       📄 __init__.py
+       📄 langgraph_state.py
      📁 ui/
        📁 controllers/
-         📄 __init__.py (72 bytes)
-         📄 file_tree_controller.py (17,076 bytes)
-         📄 main_controller.py (24,125 bytes)
-         📄 prompt_controller.py (10,846 bytes)
-         📄 resource_controller.py (13,735 bytes)
-         📄 system_prompt_controller.py (7,322 bytes)
-         📄 xml_controller.py (2,883 bytes)
+         📄 __init__.py
+         📄 file_tree_controller.py
+         📄 main_controller.py
+         📄 prompt_controller.py
+         📄 resource_controller.py
+         📄 system_prompt_controller.py
+         📄 xml_controller.py
        📁 models/
-         📄 __init__.py (67 bytes)
-         📄 file_system_models.py (20,741 bytes)
+         📄 __init__.py
+         📄 file_system_models.py
        📁 widgets/
-         📄 __init__.py (68 bytes)
-         📄 check_box_delegate.py (3,714 bytes)
-         📄 custom_tab_bar.py (4,364 bytes)
-         📄 custom_text_edit.py (501 bytes)
-         📄 file_tree_view.py (2,439 bytes)
-         📄 tab_manager.py (613 bytes)
-       📄 __init__.py (63 bytes)
-       📄 main_window.py (53,871 bytes)
-       📄 main_window_setup_signals.py (8,666 bytes)
-       📄 main_window_setup_ui.py (18,240 bytes)
-       📄 settings_dialog.py (54,953 bytes)
+         📄 __init__.py
+         📄 check_box_delegate.py
+         📄 custom_tab_bar.py
+         📄 custom_text_edit.py
+         📄 file_tree_view.py
+         📄 tab_manager.py
+       📄 __init__.py
+       📄 main_window.py
+       📄 main_window_setup_signals.py
+       📄 main_window_setup_ui.py
+       📄 settings_dialog.py
      📁 utils/
-       📄 __init__.py (320 bytes)
-       📄 db_migration_script.py (5,742 bytes)
-       📄 helpers.py (2,152 bytes)
-       📄 notifications.py (2,983 bytes)
-       📄 postgres_db_initializer.py (20,529 bytes)
-     📄 __init__.py (64 bytes)
-     📄 app.py (5,313 bytes)
-     📄 config.yml (1,155 bytes)
-   📄 .env (137 bytes)
-   📄 main.py (422 bytes)
-   📄 pyproject.toml (2,085 bytes)
-   📄 qt.conf (47 bytes)
+       📄 __init__.py
+       📄 db_migration_script.py
+       📄 helpers.py
+       📄 notifications.py
+       📄 postgres_db_initializer.py
+     📄 __init__.py
+     📄 app.py
+     📄 config.yml
+   📄 main.py
+   📄 pyproject.toml
+   📄 qt.conf
