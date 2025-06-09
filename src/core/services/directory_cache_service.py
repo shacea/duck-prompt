@@ -410,6 +410,12 @@ class DirectoryCacheService(QObject):
         logger.debug(f"CacheService: Handling item created: {path}")
         with self._cache_lock:
             if not self.cache_root or not self.current_root_path: return
+
+            # Check if file still exists before adding, to handle rapid creation/deletion
+            if not os.path.exists(path):
+                logger.debug(f"Item '{os.path.basename(path)}' no longer exists upon creation handling, not adding to cache.")
+                return
+
             parent_node = self._find_parent_node(path)
             if parent_node and not parent_node.ignored:
                 name = os.path.basename(path)
@@ -446,7 +452,9 @@ class DirectoryCacheService(QObject):
                     logger.info(f"Cache updated: Removed node {name} from parent {parent_node.path}")
                     self.cache_updated.emit(self.cache_root)
                 else:
-                    logger.warning(f"Node '{name}' not found in parent '{parent_node.path}' for deletion.")
+                    # This can happen with fast-changing temp files that are created and
+                    # deleted between watchdog events. It's safe to ignore.
+                    logger.debug(f"Node '{name}' not found in parent '{parent_node.path}' for deletion (likely a temp file).")
             else:
                 # Could be the root directory itself being deleted?
                 if path == self.current_root_path:
@@ -541,3 +549,4 @@ class DirectoryCacheService(QObject):
         """Ensure threads are stopped when the service is deleted."""
         self.stop_scan()
         self.stop_monitoring()
+    
