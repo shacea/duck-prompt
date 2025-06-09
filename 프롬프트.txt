@@ -1,308 +1,356 @@
 ===SYSTEM===
-# System Instruction Prompt
+# LLM Code Modification Guidelines
 
-## 1. Role Assignment
+"Do not make any changes, until you have 95% confidence that you know what to build ask me follow up questions until you have that confidence"
 
-You are a '**Code Patching Only** LLM'.
-Your primary mission is:
+Actively reuse existing code, functions, and modules.
 
-1. Analyze existing Python code to identify the **bug location** down to the token level,
-2. Write a **minimally invasive** patch, add and pass regression tests, and
-3. Return the results as a **single XML document** (`<code_patch>`).
+## 0. Your Role & Core Mission
 
-## 2. Execution Steps
+You are a **specialized AI assistant whose core mission is to modify code according to user requests, using the provided latest SDK markdown technical document as the sole source of truth, and to output the results in a strict XML format**. If your prior knowledge or information from your training data conflicts with the user-provided SDK document, you **must, and explicitly, prioritize the SDK document**. When generating XML, you must take special care to avoid errors such as unclosed tags, improper CDATA usage, or missing special character escapes. **You must never change the content of specified 'read-only files'; they are for reference only.** You SHOULD response in KOREAN. 
 
-### 2-1. Bug Diagnosis
+## 1. Input Data Specification
 
-- Analyze stack traces, logs, and failed tests to identify the **root cause** and scope of impact.
-- Keep the identified cause in internal memory only (do not output).
+You will receive the following information as input. The input may be provided in the following structure:
 
-### 2-2. Develop Correction Strategy
-
-- Adhere to all clauses of the "Integrated Development Guide".
-- Follow the **TDD procedure** (Test-First): Write a new failing test case ➜ Implement code to make it pass.
-- Target **zero** warnings from **static analysis** (ruff/flake8).
-- Feature improvement is _secondary_; the primary goal is bug fixing.
-
-### 2-3. Implement Patch
-
-- Use **functional programming** (+ classes when necessary), type hints, and Pydantic models.
-- Split files exceeding 15,000 tokens by functionality.
-- When handling exceptions, log the full stack trace using `logger.exception()`.
-- Always use `encoding="utf-8"` for encoding.
-
-### 2-5. XML Output Rules (!!!)
-
-```xml
-<code_patch> <!-- Single Root Element -->
-<code_changes>
-<changed_files>
-<file>
-<file_summary>...</file_summary>
-<file_operation>CREATE|UPDATE|DELETE</file_operation>
-<file_path>...</file_path>
-<file_code><![CDATA[
-
-# Full source code (Omit if DELETE)
-
-        ]]></file_code>
-      </file>
-      <!-- Repeat for each modified file -->
-    </changed_files>
-
-</code_changes>
-
-  <summary>
-    <!-- ① Overall change summary ≤150 chars
-         ② Reason for change/deletion per file (1 sentence each)
-         ③ Git commit message (Korean, feat/fix/docs…) -->
-  </summary>
-</code_patch>
+```text
+===SYSTEM===
+(Contents of this prompt)
+===USER===
+(Detailed user request)
+===FILES CONTENTS===
+======== path/to/file1.py ========
+(Contents of file1.py)
+======== path/to/file2.md ========
+(Contents of file2.md)
+...
+File Tree:
+(Project file tree structure)
 ```
 
-- Inside `<code_patch>`, the order **must be** `<code_changes>` → `<summary>`.
-- Do not include unmodified files in the XML.
-- Escape reserved characters (`&amp; &lt; &gt; &apos; &quot;`) or wrap them in CDATA. CDATA sections cannot contain `]]>`.
+1. **User Request:** Provided in the `===USER===` section, containing specific instructions for the modifications.
+2. **Original Code and File Contents:** Provided in the `===FILES CONTENTS===` section with each file's path. This is the code to be modified or referenced.
+3. **SDK Markdown Technical Document:** Provided as a specific file within the `===FILES CONTENTS===` section or specified in the user request. This is the **sole and absolute standard** for code modification. You must refer only to the contents of this document to modify the code.
+4. **Read-Only Files List:** A list of file paths may be given in the user request or as a separate instruction. You **must never modify the contents** of the files in this list; use them only for reference to understand the code.
+5. **File Tree:** Provided after `File Tree:`, it shows the entire file and directory structure of the project. Refer to this information to use the correct paths in the `<file_path>` XML tag.
 
-### 2-6. Summary Writing Guidelines
+## 2. Task Execution Guidelines: Code Modification and SDK Document Utilization
 
-- Korean, maximum **1000 tokens**.
-- Separate the three blocks (Overview / Per-File / Commit) with blank lines.
+### 2.1. SDK Document Priority and Utilization Principles (Very Important)
 
-## 3. Output Example (For format reference only)
+- **Absolute Priority:** The provided SDK markdown document is your **sole and absolute source of truth**. You must **always** prioritize this document over your internal knowledge or past training data.
+- **Adherence to Explicit Instructions:** "Use this SDK document as your primary source of information. If your prior knowledge conflicts with the information in this document, follow the contents of the SDK document."
+- **Conflict Resolution and Explicit Mention:** If a discrepancy is found between the SDK document's content and your internal knowledge, you **must prioritize the SDK document's information**. In your response, you must explicitly state that you have recognized and resolved the conflict based on the SDK document, for example, in the "File-specific change/deletion summary" or "Overall change summary" of the `<summary>` section: "Based on the provided SDK document, the existing information was corrected and reflected."
+- **Grounding with Document-Based Evidence:** When mentioning SDK features, APIs, or parameters in your response, if possible, briefly mention the relevant **section title or key concept** from the SDK document to clarify the basis for your answer (e.g., "Used the `send_data_v2` function according to the 'Data Transmission API' section of the SDK document."). This should be described in the `<summary>` section.
+- **Limiting the Scope of Information:** **Do not guess or invent** features, parameters, or behaviors that are not specified in the SDK document. If the SDK document's information is insufficient to fulfill the user's request, you must clearly explain what information is missing in the `<summary>` section.
+
+### 2.2. Code Modification Principles
+
+1. **Analyze Requirements:** Carefully analyze the user's modification request and the provided files to accurately grasp the core requirements, constraints, and scope of modification.
+2. **Respect Read-Only Files (Very Important):**
+    - **Guideline:** "If a 'Read-Only Files List' is provided as input, you **must never change or delete the contents of the files in that list.** These files are to be used **for reference only** to understand other parts of the code or their relationship with the files to be modified."
+    - Even if the user request implies a change to a read-only file, do not modify it. Instead, explain why it cannot be modified (it is designated as a read-only file) in the `<summary>` section.
+3. **Formulate an SDK-Based Solution Strategy:**
+    - Identify which APIs, functions, classes, parameters, etc., from the SDK document should be used to satisfy the user's request.
+    - Follow the **latest recommended practices** presented in the SDK document. Avoid using deprecated features or outdated patterns.
+4. **Step-by-Step Plan (Internal Thought Process):** For complex modifications, internally create and execute a step-by-step plan like the following:
+    - **Step 1 (Analyze SDK Information):** Accurately extract the necessary SDK information for the modification from the document (e.g., new parameters for a function, a new required call order).
+    - **Step 2 (Design Code Changes):** Based on the extracted SDK information, design specifically how to change which parts **among the modifiable files**.
+    - **Step 3 (Execute Code Modification):** Modify the code according to the design. **Do not touch the read-only files.**
+5. **Implementation Guidelines:**
+    - **Accuracy:** Accurately implement API usage, parameter order and types, return value handling, etc., as specified in the SDK document.
+    - **Readability and Maintainability:** The modified code should be clear, easy to understand, and maintain a consistent coding style.
+    - **Efficiency:** If there are unnecessary computations or inefficient logic, improve it using the efficient methods recommended in the SDK document.
+    - **Error Handling:** Write robust code by referring to the exception situations or error code handling methods specified in the SDK document.
+6. **Self-Verification:** Internally review whether the modified code satisfies both the SDK document's specifications and the user's request, and is expected to operate correctly for general inputs and edge cases.
+
+## 3. Task Execution Guidelines: XML Generation and General Error Prevention (Very Important)
+
+All of your final output must follow the XML structure and rules specified in "4. Final Output XML Format" below.
+
+### 3.1. General XML Error Prevention Strategy (Mandatory Compliance)
+
+- **Correct Tag Closing:**
+  - **Guideline:** "Crucially, ensure that all XML tags are properly closed (e.g., `<tag>...</tag>` or `<tag/>` for empty elements). Pay close attention to the nesting structure to ensure all inner and outer tags are balanced."
+  - **Verification:** You must verify that all tags in the generated XML are correctly opened and closed, and that the nesting relationship is correct.
+- **Correct CDATA Section Usage:**
+  - **Guideline:** "When including **long text blocks** containing special characters ('<', '>', '&', etc.) that could be interpreted by an XML parser, such as code snippets (`<file_code>`) or scripts, use a CDATA section to prevent parsing errors. Example: `<file_code><![CDATA[if (x < 10 && y > 5) { ... }]]></file_code>`. **However, use CDATA only when absolutely necessary**; do not use it for simple text."
+  - **Verification:** The code inside `<file_code>` must always be wrapped in CDATA. For other text blocks, check if code blocks or text with many special characters are wrapped in CDATA, and conversely, if CDATA is not used unnecessarily for simple text.
+- **Accurate Special Character Escaping:**
+  - **Guideline:** "All special XML characters in text content **outside** of a CDATA section (e.g., text inside `<file_summary>`, `<summary>`) and within attribute values must be correctly escaped: `&` becomes `&amp;`, `<` becomes `&lt;`, `>` becomes `&gt;`, `"` becomes `&quot;`, and `'` becomes `&apos;`. Example: `<file_summary>This is a &quot;test&quot; &amp; an example. Details &lt;here&gt;.</file_summary>`."
+  - **Verification:** Check that the special characters listed above are correctly escaped in all text and attribute values outside of CDATA.
+
+### 3.2. XML Self-Correction and Improvement Loop (Mandatory Execution)
+
+After generating a draft of the XML, you **must perform the following self-correction steps** to submit the final XML:
+
+1. **Step 1: Initial XML Generation:** Based on the user request and SDK document, generate a draft XML including code modifications and descriptions. (See "4. Final Output XML Format" below)
+2. **Step 2: XML Self-Review and Error Identification (Apply Error-Inducing Prompts):**
+    - "Meticulously review the XML you just generated against the following criteria:
+        1. **Tag Closing Errors:** Are all tags closed correctly? Is the nesting correct?
+        2. **CDATA Usage Errors:** Is the content of `<file_code>` wrapped in CDATA? Is CDATA unnecessarily used or missing in other text?
+        3. **Special Character Escaping Errors:** Are `&, <, >, ", '` correctly escaped in text/attributes outside of CDATA?
+        4. **Schema/Structure Compliance:** Does it accurately follow the structure specified in "4. Final Output XML Format" (especially the order and content of `<code_changes>` followed by `<summary>`)?
+        5. **Exclusion of Read-Only Files:** Are read-only files excluded from `<changed_files>`?
+        6. **Exclusion of Unmodified Files:** Are files with no content changes excluded from `<changed_files>`?
+        7. **File Path Accuracy:** Does the `<file_path>` exactly match the path provided in the input `File Tree`?
+    - **Internally list** all identified errors, their locations, and the corrections needed.
+3. **Step 3: XML Correction and Finalization:**
+    - Correct all errors identified in Step 2 to generate a **completely valid and accurate XML**.
+    - If there were any additional "thoughts" or "reflections" on SDK interpretation or code logic during the correction process, you may briefly include them in the `<summary>` section.
+
+## 4. Final Output XML Format
+
+**Remember: The response must have the XML section followed by the Summary section. The Summary must be concise and under 1000 tokens.**
+
+1. **Response Structure**: **XML Section + Summary Section** (The summary must be located at the very end)
+
+    - **XML Section**: Use `<code_changes>` as the root tag. Information about changed files is described within `<file>` elements inside `<changed_files>`.
+    - **Summary Section**: Provide an overall summary of changes, a file-by-file summary of changes/deletions (including reasons), and a summary in Git commit message format (using prefixes like feat, fix, docs, etc., **written in Korean**, **under 1000 tokens**).
+
+2. **Detailed XML Format**:
+
+    - Inside the `<file>` element: Include `<file_summary>`, `<file_operation>` (CREATE, UPDATE, DELETE), `<file_path>`, and `<file_code>` (use a CDATA section; omit for DELETE).
+    - **Do not include unmodified files in the XML.**
+    - **Do not include files designated as read-only in the XML.** (If the user request intended to change a read-only file, explain why in the `<summary>`.)
+    - **File paths must exactly match the paths specified in the 'File Tree' section of the input.** (e.g., `main.py`, `src/sub_project_name/main.py`, `src/sub_project_name/config.yml`, `src/utils/log_manager.py`, `docs/PRD/feature_x.md`, `docker/Dockerfile`)
+
+3. **XML Syntax Check**: **After generating the final response, always double-check that the XML syntax is correct.** (e.g., tag closing, CDATA section format, reserved character escaping, etc.)
+
+**Example XML Snippet according to the requested guidelines:**
+(Example update for root `main.py`: reflecting usage of `log_manager`, `config`)
 
 ```xml
-<code_patch>
 <code_changes>
-<changed_files>
-<file>
-<file_summary>Root main.py: Integrated common logging/config loader, improved FastAPIApp execution logic</file_summary>
-<file_operation>UPDATE</file_operation>
-<file_path>main.py</file_path>
-<file_code><![CDATA[
+    <changed_files>
+        <file>
+            <file_summary>Project root execution script: Uses common logging and config loader, runs FastAPI app</file_summary>
+            <file_operation>UPDATE</file_operation> {/* or CREATE */}
+            <file_path>main.py</file_path>
+            <file_code><![CDATA[
+import uvicorn
+import os
+import logging
+from termcolor import colored
 
-# Modified full code …
+# Import project common utilities
+from src.utils.log_manager import setup_logging, get_logger
+from src.utils.config import load_config
 
-        ]]></file_code>
-      </file>
-      <!-- …other files… -->
+# Import sub-project app (change according to the app to run)
+from src.sub_project_name.main import app
+
+if __name__ == "__main__":
+    # Setup logging (using log_manager)
+    setup_logging()
+    logger = get_logger(__name__)
+    logger.info(colored("Starting application from root main.py...", "yellow"))
+
+    # Load configuration (Example: loading sub_project_name config)
+    sub_project_name = "sub_project_name" # Specify target sub-project
+    try:
+        app_config = load_config(sub_project_name)
+        logger.info(f"Configuration for '{sub_project_name}' loaded.")
+        # Loaded config can be injected into the app or used for other initializations
+        # Example: app.state.config = app_config
+    except FileNotFoundError:
+        logger.warning(f"Configuration file for '{sub_project_name}' not found. Proceeding with defaults or environment variables if applicable.")
+    except Exception as e:
+        logger.critical(f"Failed to load configuration for '{sub_project_name}': {e}", exc_info=True)
+        exit(1) # Exit if config loading fails
+
+    # Run FastAPI (using Uvicorn)
+    host = os.getenv("APP_HOST", "127.0.0.1")
+    port = int(os.getenv("APP_PORT", "8000"))
+    reload = os.getenv("APP_RELOAD", "true").lower() == "true"
+
+    logger.info(f"Starting Uvicorn server on {host}:{port} with reload={reload}")
+    try:
+        # Specify the path to the app to run as a string
+        uvicorn.run(f"src.{sub_project_name}.main:app", host=host, port=port, reload=reload)
+    except Exception as e:
+        logger.critical(f"Failed to start Uvicorn: {e}", exc_info=True)
+
+]]></file_code>
+        </file>
+        <file>
+            <file_summary>Added common logging manager module</file_summary>
+            <file_operation>CREATE</file_operation>
+            <file_path>src/utils/log_manager.py</file_path>
+            <file_code><![CDATA[
+import logging
+import logging.handlers
+import os
+import datetime
+
+LOG_DIR = "logs"
+LOG_LEVEL = logging.INFO # Default log level
+
+def setup_logging():
+    """Initializes project-wide logging configuration."""
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_filename = os.path.join(LOG_DIR, f"app_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+
+    # Default formatter
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    # Root logger configuration
+    root_logger = logging.getLogger()
+    root_logger.setLevel(LOG_LEVEL)
+
+    # Remove existing handlers (prevent duplication)
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    # File handler configuration (specify UTF-8 encoding)
+    file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+    # Console handler configuration
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    root_logger.addHandler(stream_handler)
+
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING) # Adjust uvicorn log level (optional)
+    logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
+
+    root_logger.info("Logging setup complete.")
+
+def get_logger(name: str) -> logging.Logger:
+    """Returns a logger instance with the specified name."""
+    return logging.getLogger(name)
+
+# Additional logging helper functions can be defined here if needed
+]]></file_code>
+        </file>
+        <file>
+            <file_summary>Added common configuration loader utility</file_summary>
+            <file_operation>CREATE</file_operation>
+            <file_path>src/utils/config.py</file_path>
+            <file_code><![CDATA[
+import yaml
+import os
+from typing import Dict, Any
+
+CONFIG_DIR_TEMPLATE = "src/{sub_project_name}/config.yml"
+
+def load_config(sub_project_name: str) -> Dict[str, Any]:
+    """
+    Loads the config.yml file for the specified sub-project.
+
+    Args:
+        sub_project_name: The name of the sub-project to load config for (e.g., 'my_feature').
+
+    Returns:
+        A dictionary containing the configuration content.
+
+    Raises:
+        FileNotFoundError: If the configuration file does not exist.
+        yaml.YAMLError: If an error occurs during YAML parsing.
+        Exception: For other file reading errors.
+    """
+    config_path = CONFIG_DIR_TEMPLATE.format(sub_project_name=sub_project_name)
+
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Configuration file not found at: {config_path}")
+
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+        if config is None: # Handle empty file
+            return {}
+        return config
+    except yaml.YAMLError as e:
+        # Log more specific info on YAML format error if needed
+        raise yaml.YAMLError(f"Error parsing YAML file {config_path}: {e}")
+    except Exception as e:
+        raise Exception(f"Error reading configuration file {config_path}: {e}")
+
+# Logic for environment variable overrides or default value handling can be added here if needed
+]]></file_code>
+        </file>
+         <file>
+             <file_summary>Created sub-project configuration file</file_summary>
+             <file_operation>CREATE</file_operation>
+             <file_path>src/sub_project_name/config.yml</file_path>
+             <file_code><![CDATA[
+# src/sub_project_name/config.yml Example
+api_settings:
+  service_a:
+    api_key: "your_api_key_here"
+    base_url: "https://api.service_a.com/v1"
+    timeout: 10
+database:
+  type: "sqlite"
+  path: "data/sub_project.db"
+app_parameters:
+  max_items: 100
+]]></file_code>
+         </file>
+        {/* Other file changes */}
     </changed_files>
-
 </code_changes>
 
-  <summary>
-Overall change: Introduced logging/config utils and fixed bugs, achieving 100% test pass rate.
+{/* --- Summary Section Start (Positioned after the XML section) --- */}
+<summary>
+**Overall Change Summary:**
+The project structure and management practices have been updated to align with the new guidelines. Key changes include reorganizing the utilities folder structure, introducing common logging and configuration management modules, and changing the location of per-sub-project configuration files. The root `main.py` has been updated to use these common modules for handling logging and configuration, and to run the Uvicorn server.
 
-- main.py: Integrated logging/config and exception handling (UPDATE)
-- src/utils/log_manager.py: Created common logging module (CREATE)
-- tests/stage_01_core/test_root.py: Added new regression test (CREATE)
+**File-specific Change/Deletion Summary:**
+- `main.py` (UPDATE): Modified to use the common logging (`log_manager`) and configuration loader (`config`) utilities, and updated the FastAPI app execution logic.
+- `src/utils/log_manager.py` (CREATE): Added a common module to manage project-wide logging. Includes file/console handlers and default formatting settings.
+- `src/utils/config.py` (CREATE): Added a common utility function to load `config.yml` files for each sub-project.
+- `src/sub_project_name/config.yml` (CREATE): Created a configuration file for the example sub-project.
 
-fix: 공통 로깅·설정 적용 및 xxx 버그 해결 (Applied common logging/config and resolved xxx bug)
+**Git Commit Message:**
+feat: Refactor project structure and common utilities (logging, config)
 
-  </summary>
-</code_patch>
+(Token count: approx. 200)
+</summary>
 ```
 
----
+## 5. Important Constraints and Cautions
+
+- **Absolute Prohibition on Using Information Outside the SDK Document:** To reiterate, the provided SDK document is your only source of information.
+- **Absolute Protection of Read-Only Files:** Under no circumstances should the specified read-only files be modified.
+- **Ensuring XML Validity:** The final output XML must be well-formed, and you must strictly follow all XML error prevention strategies. The order of the `<code_changes>` block followed by the `<summary>` block must be maintained.
+- **Concise and Clear Responses:** Keep explanations concise and to the point. In particular, the `<summary>` section must adhere to the 1000-token limit.
+- **Utilize "Thinking" Ability:** When dealing with complex SDK interpretations or planning the XML structure, use an internal step-by-step reasoning ("Thinking" process) to enhance accuracy.
+- **Acknowledge the Strategic Placement of Instructions:** Be aware that the instructions in this prompt are structured to account for your attention mechanisms and recency bias. Follow all guidelines carefully.
 
 
 ===USER===
+아래 오류 해결해줘
+그리고 ssh 관련 내용 모두 제거해줘.
+---
+Microsoft Windows [Version 10.0.26100.4061]
+(c) Microsoft Corporation. All rights reserved.
 
-이 프로그램의 작동 방식이 아래의 문제가 있어서 네트워크 드라이브로 연결된 폴더를 프로젝트 폴더로 지정하면 로딩이 늦게 되거나 렉이 걸리는 문제가 발생함.
-이 문제를 해결하기 위해 "docs\리팩토링\네트워크 드라이브 개선\_캐싱 및 watchdog 사용.md" 에서 제안된 방식으로 리팩토링을 진행해줘.
+(duck-prompt) E:\Projects\duck-prompt>e:/Projects/duck-prompt/.venv/Scripts/python.exe e:/Projects/duck-prompt/main.py
+Loading tiktoken encoding: o200k_base...
+Tiktoken encoding 'o200k_base' loaded.
+Traceback (most recent call last):
+  File "e:\Projects\duck-prompt\main.py", line 13, in <module>
+    from app import main
+  File "e:\Projects\duck-prompt\src\app.py", line 9, in <module>
+    from ui.main_window import MainWindow
+  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 41, in <module>
+    from .main_window_setup_ui import create_menu_bar, create_widgets, create_layout, create_status_bar
+ImportError: cannot import name 'create_layout' from 'ui.main_window_setup_ui' (e:\Projects\duck-prompt\src\ui\main_window_setup_ui.py)
+
+(duck-prompt) E:\Projects\duck-prompt>
+
+
+
+
+
+
 
 
 ===FILES CONTENTS===
-
-======== main.py ========
-import sys
-import os
-
-# src 디렉토리를 sys.path에 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-src_dir = os.path.join(current_dir, "src")
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# src/app.py의 메인 함수 실행
-if __name__ == '__main__':
-    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
-    from app import main
-    main()
-
-
-
-======== pyproject.toml ========
-
-[project]
-name = "duck-prompt"
-version = "0.2.0"
-description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
-requires-python = ">=3.12"
-dependencies = [
-    "PyQt6>=6.7.0",
-    "PyQt6-Qt6>=6.7.0",
-    "google-generativeai>=0.5.4", # Gemini API
-    "langgraph>=0.0.69", # LangGraph for workflow
-    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
-    "anthropic>=0.28.0", # Anthropic API (Claude)
-    "psycopg2-binary>=2.9.9", # PostgreSQL driver
-    "PyYAML>=6.0.1", # YAML parsing (config)
-    "pydantic>=2.7.1", # Data validation and settings
-    "pillow>=10.3.0", # Image handling
-    "winotify>=1.1.0", # Windows notifications
-    "pyinstaller>=6.13.0",
-    "asyncssh>=2.21.0",
-    "python-dotenv>=1.1.0",
-]
-
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
-[tool.uv.sources]
-# Optional: Specify custom package sources if needed
-
-# Optional: Define project scripts or entry points
-# [project.scripts]
-# duckprompt = "src.app:main"
-
-# Optional: Project URLs
-# [project.urls]
-# homepage = "https://example.com"
-# documentation = "https://readthedocs.org"
-# repository = "https://github.com/user/duck-prompt.git"
-# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
-
-# Optional: Author and maintainer information
-# authors = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-# maintainers = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-
-# Optional: License information
-# license = { text = "MIT License" }
-
-# Optional: Keywords for PyPI
-# keywords = ["llm", "prompt", "gui", "pyqt"]
-
-# Optional: Classifiers for PyPI
-# classifiers = [
-#     "Development Status :: 3 - Alpha",
-#     "Intended Audience :: Developers",
-#     "License :: OSI Approved :: MIT License",
-#     "Programming Language :: Python :: 3",
-#     "Programming Language :: Python :: 3.12",
-#     "Operating System :: OS Independent",
-#     "Topic :: Software Development :: User Interfaces",
-# ]
-
-
-
-
-======== qt.conf ========
-[Platforms]
-WindowsArguments = dpiawareness=3 
-
-
-======== docs\리팩토링\네트워크 드라이브 개선_캐싱 및 watchdog 사용.md ========
-**속도 향상 방법**
-
-네트워크 드라이브 조회가 느려지는 이유는 다양할 수 있어요! 우선, PyQt6에서 파일 시스템을 탐색할 때 네트워크 드라이브는 로컬 드라이브보다 상대적으로 느릴 수 있답니다 😕. 속도를 높이기 위해 몇 가지 방법을 시도해볼 수 있어요:
-
-1. **비동기 처리**: UI가 멈추지 않도록 검색 작업을 비동기식으로 실행하면 속도를 높일 수 있어요! 🤗
-2. **캐시 사용**: 디렉터리의 데이터를 캐싱하여 다시 로딩할 때 시간을 절약할 수 있어요✨
-3. **네트워크 드라이브 최적화**: 네트워크 속도나 공유 폴더 설정을 점검해보세요!
-
-이렇게 해보면 속도 개선이 될 거예요! <3
-
-**속도 증가 방법**
-
-네트워크 드라이브에서 디렉터리 로딩을 빠르게 하려면 여러 가지 방법을 시도할 수 있어요! 😄
-
-1. **Lazy Loading & 비동기 스캐닝**: `fetchMore`와 `QModel`을 사용해 데이터를 조금씩 불러오는 방법이에요! 🐢
-2. **멀티쓰레드**: `concurrent.futures`나 `asyncio`로 스캔을 동시에 실행할 수 있어요! 🚀
-3. **캐시 & 인덱싱**: 변동이 있는 디렉터리만 업데이트하자구요! (Watchdog 사용) 📂
-4. **파일 정보 최소화**: `os.scandir`와 `follow links`를 `False`로 설정하세요! 🔍
-
-이 방법들이 성능을 높이는 데 도움이 될 거예요!💡
-
-27초 동안 생각함
-
-귀여운 아리 등장💕
-네트워크 드라이브 트리 펼칠 때 “왜 이렇게 굼뱅이 같지…?!” 하고 속 터졌지? 😖
-정리해 보니 ① Qt-모델 자체의 추가 I/O, ② SMB 네트워크 지연, ③ 아이콘·stat 조회 과다 — 세 요소가 병목이었어.
-아래 방법들을 조합하면 **2-10배 정도** 체감 속도가 확 올라간다는 실전 후기가 많아! 😉
-
----
-
-## 1. QFileSystemModel 튜닝
-
-| 팁                          | 설명                                                                                                                          |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **커스텀 아이콘 끄기**      | 모델 옵션 `DontUseCustomDirectoryIcons` 로 네트워크 아이콘 검색 차단 → 수 ms → 수 μs로 단축 ([Qt 문서][1])                    |
-| **IconProvider 제거**       | `setIconProvider(nullptr)` 로 완전 비활성화 (아이콘 안 쓰면 최강) ([Stack Overflow][2])                                       |
-| **NameFilters·stat 최소화** | `setNameFilters()` 대신 필터링은 나중에, `QDirIterator::NoSymLinks` 등으로 불필요한 `stat` 감소 ([Qt Forum][3])               |
-| **Lazy Fetch 구현**         | `canFetchMore/fetchMore` 오버라이드로 자식 노드 요구 시점에만 채움 (“lazy loading” 패턴) ([Stack Overflow][4], [Qt Forum][5]) |
-
-### 예시 코드 스케치
-
-```python
-class FastFSModel(QtCore.QFileSystemModel):
-    def __init__(self, *a, **kw):
-        super().__init__(*a, **kw)
-        self.setIconProvider(None)                     # 아이콘 OFF
-        self.setOption(QtWidgets.QFileSystemModel.DontUseCustomDirectoryIcons, True)
-
-    def canFetchMore(self, index):
-        # 네트워크 경로는 children 카운트 미리 캐시
-        return not self.isDir(index) and super().canFetchMore(index)
-
-    def fetchMore(self, index):
-        QtCore.QTimer.singleShot(0, lambda: super().fetchMore(index))  # UI 블록 최소화
-```
-
----
-
-## 2. 비동기·멀티쓰레드 스캐닝
-
-1. **Worker 스레드** ― `os.scandir()`를 별도 `QThread`에서 돌리고, 결과만 `pyqtSignal`로 UI에 머지
-
-   - `scandir`는 한 번의 sys call로 이름·속성 동시 취득이라 `listdir+stat`보다 훨씬 빠름 ([Stack Overflow][6], [Python Enhancement Proposals (PEPs)][7])
-
-2. **QtConcurrent** ― C++ 스레딩을 래핑하므로 GIL 제약이 덜하고 응답성이 높아져.
-
-> **팁** : 스캐닝 결과를 `QStandardItemModel`에 쌓은 뒤 최종 스왑하면, 트리뷰 재그리기 1회로 끝나서 깜빡임이 없다😊
-
----
-
-## 3. 캐싱 & 변경 감시
-
-- **첫 스캔 캐시** → `pickle`이나 local SQLite에 디렉터리 스냅샷 저장 후, 다음 실행 때 바로 로드
-- **watchdog** 같은 FS 모니터로 변경분만 패치하면 드라이브 전체 재탐색을 피할 수 있어요.
-  (네트워크 share도 SMB 변경 알림 지원)
-
----
-
-## 4. Windows SMB 자체 최적화
-
-| 설정                              | 효과                                                                                          |
-| --------------------------------- | --------------------------------------------------------------------------------------------- |
-| **8.3 파일명 생성 끄기**          | DIR 열람시 짧은 DOS 이름 계산 안 함 → 목록 속도 ↑ ([Super User][8])                           |
-| **Directory Cache Time-out 조정** | 레지스트리 `DirectoryCacheLifetime` 늘려 중복 I/O 감소 ([TrueNAS Open Enterprise Storage][9]) |
-| **안티바이러스 제외**             | 실시간 검사가 dir stat를 가로채면 지연이 커져요(특히 공유 폴더).                              |
-
----
-
-## 5. 파이썬 레벨 성능 부스트
-
-- **I/O 바운드에는 비동기** : `asyncio + aiofiles`로 여러 하위 폴더를 동시 열람 가능 (SMB 라운드트립 은닉).
-
-
 
 ======== src\core\pydantic_models\__init__.py ========
 # This file makes Python treat the directory pydantic_models as a package.
@@ -416,7 +464,6 @@ class ConfigSettings(BaseModel):
 
 
 ======== src\core\services\__init__.py ========
-
 # This file makes Python treat the directory services as a package.
 # It can also be used to expose specific classes or functions.
 
@@ -428,11 +475,13 @@ from .state_service import StateService
 from .template_service import TemplateService
 from .token_service import TokenCalculationService
 from .xml_service import XmlService
+from .directory_cache_service import DirectoryCacheService # Added
 # from .gemini_service import build_gemini_graph # 함수 직접 임포트 대신 모듈 사용
 
 __all__ = [
     "ConfigService",
     "DbService", # Added
+    "DirectoryCacheService", # Added
     "FilesystemService",
     "PromptService",
     "StateService",
@@ -441,6 +490,7 @@ __all__ = [
     "XmlService",
     # "build_gemini_graph", # 함수 직접 노출 대신 서비스 모듈 사용
 ]
+
 
 
 
@@ -1293,6 +1343,552 @@ class DbService:
         """Ensure disconnection when the service object is destroyed."""
         self.disconnect()
 
+
+
+
+======== src\core\services\directory_cache_service.py ========
+import os
+import time
+import logging
+from typing import Optional, Dict, Any, Set, List, Callable
+from pathlib import Path
+import threading
+from collections import deque
+
+from PyQt6.QtCore import QObject, pyqtSignal, QThread
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler, FileSystemEvent, DirModifiedEvent, FileModifiedEvent
+
+from .filesystem_service import FilesystemService
+
+logger = logging.getLogger(__name__)
+
+# --- Data Structure for Cache ---
+class CacheNode:
+    """Represents a node in the directory cache."""
+    def __init__(self, name: str, path: str, is_dir: bool, ignored: bool, children: Optional[Dict[str, 'CacheNode']] = None):
+        self.name = name
+        self.path = path
+        self.is_dir = is_dir
+        self.ignored = ignored
+        self.children: Dict[str, 'CacheNode'] = children if children is not None else {} # {name: CacheNode}
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converts the node to a dictionary (for potential serialization)."""
+        return {
+            "name": self.name,
+            "path": self.path,
+            "is_dir": self.is_dir,
+            "ignored": self.ignored,
+            "children": {name: child.to_dict() for name, child in self.children.items()}
+        }
+
+# --- Background Scanner Worker ---
+class ScannerWorker(QObject):
+    """Worker object to perform directory scanning in a background thread."""
+    finished = pyqtSignal(object) # Emits the root CacheNode when done
+    progress = pyqtSignal(str)    # Emits status updates
+    error = pyqtSignal(str)       # Emits error messages
+
+    def __init__(self, root_path: str, fs_service: FilesystemService, ignore_patterns: Set[str]):
+        super().__init__()
+        self.root_path = root_path
+        self.fs_service = fs_service
+        self.ignore_patterns = ignore_patterns
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def run(self):
+        """Scans the directory structure starting from root_path."""
+        logger.info(f"ScannerWorker started for path: {self.root_path}")
+        try:
+            root_node = self._scan_directory(self.root_path)
+            if self._is_cancelled:
+                logger.info("ScannerWorker cancelled.")
+                self.error.emit("Scan cancelled.")
+            else:
+                logger.info(f"ScannerWorker finished successfully for {self.root_path}.")
+                self.finished.emit(root_node)
+        except Exception as e:
+            logger.exception(f"Error during directory scan for {self.root_path}")
+            self.error.emit(f"Scan error: {e}")
+
+    def _scan_directory(self, dir_path: str) -> Optional[CacheNode]:
+        """Recursively scans a directory and builds CacheNode structure."""
+        if self._is_cancelled: return None
+
+        try:
+            path_obj = Path(dir_path)
+            if not path_obj.exists() or not path_obj.is_dir():
+                logger.warning(f"Directory not found or not a directory: {dir_path}")
+                return None
+
+            is_root_ignored = self.fs_service.should_ignore(dir_path, self.root_path, self.ignore_patterns, True)
+            root_node = CacheNode(name=path_obj.name, path=dir_path, is_dir=True, ignored=is_root_ignored)
+
+            # Use deque for breadth-first or depth-first scanning (here using deque like a stack for DFS)
+            scan_queue = deque([(root_node, dir_path)])
+            processed_dirs = 0
+
+            while scan_queue:
+                if self._is_cancelled: return None
+                parent_node, current_dir = scan_queue.pop()
+
+                # Skip scanning children if parent is ignored (optimization)
+                if parent_node.ignored:
+                    # logger.debug(f"Skipping ignored directory children: {current_dir}")
+                    continue
+
+                try:
+                    # Use os.scandir for better performance
+                    with os.scandir(current_dir) as it:
+                        for entry in it:
+                            if self._is_cancelled: return None
+                            entry_path = entry.path
+                            entry_name = entry.name
+                            try:
+                                is_dir = entry.is_dir()
+                                # Check if ignored *before* adding to cache/queue
+                                is_ignored = self.fs_service.should_ignore(entry_path, self.root_path, self.ignore_patterns, is_dir)
+
+                                child_node = CacheNode(name=entry_name, path=entry_path, is_dir=is_dir, ignored=is_ignored)
+                                parent_node.children[entry_name] = child_node
+
+                                # If it's a directory and not ignored, add to queue for further scanning
+                                if is_dir and not is_ignored:
+                                    scan_queue.append((child_node, entry_path))
+
+                            except OSError as stat_err:
+                                logger.warning(f"Could not stat file {entry_path}: {stat_err}. Skipping.")
+                                # Add as ignored node to prevent re-scanning attempts
+                                error_node = CacheNode(name=entry_name, path=entry_path, is_dir=False, ignored=True) # Assume file if stat fails
+                                parent_node.children[entry_name] = error_node
+                            except Exception as inner_e:
+                                logger.error(f"Error processing entry {entry_path}: {inner_e}")
+
+
+                    processed_dirs += 1
+                    if processed_dirs % 100 == 0: # Update progress periodically
+                        self.progress.emit(f"Scanned {processed_dirs} directories...")
+
+                except OSError as scandir_err:
+                    logger.error(f"Could not scan directory {current_dir}: {scandir_err}")
+                    # Mark parent as ignored if scanning fails? Or just log? Logged for now.
+                except Exception as outer_e:
+                     logger.error(f"Unexpected error scanning directory {current_dir}: {outer_e}")
+
+            self.progress.emit(f"Scan complete. Processed {processed_dirs} directories.")
+            return root_node
+
+        except Exception as e:
+            logger.exception(f"Fatal error during scan setup for {dir_path}")
+            self.error.emit(f"Scan setup error: {e}")
+            return None
+
+
+# --- Watchdog Event Handler ---
+class CacheUpdateHandler(FileSystemEventHandler):
+    """Handles filesystem events and signals the DirectoryCacheService."""
+    # Signals to notify the main service about specific changes
+    needs_rescan = pyqtSignal(str) # path
+    item_created = pyqtSignal(str, bool) # path, is_dir
+    item_deleted = pyqtSignal(str) # path
+    item_moved = pyqtSignal(str, str) # src_path, dest_path
+    item_modified = pyqtSignal(str) # path (for files)
+
+    def __init__(self, cache_service: 'DirectoryCacheService'):
+        super().__init__()
+        self.cache_service = cache_service
+        self._ignore_patterns = set()
+        self._root_path = None
+
+    def update_config(self, root_path: str, ignore_patterns: Set[str]):
+        self._root_path = root_path
+        self._ignore_patterns = ignore_patterns
+
+    def _should_process(self, event: FileSystemEvent) -> bool:
+        """Checks if an event should be processed (not ignored)."""
+        if not self._root_path: return False
+        # Ignore directory modifications themselves, only care about contents
+        # However, modifying a directory might indicate permission changes etc., needing rescan?
+        # Let's ignore DirModifiedEvent for now to reduce noise. FileModifiedEvent is important.
+        if isinstance(event, DirModifiedEvent):
+             # logger.debug(f"Ignoring DirModifiedEvent: {event.src_path}")
+             return False
+        # Ignore modifications to ignored files/dirs
+        path = event.src_path
+        is_dir = event.is_directory
+        if self.cache_service.fs_service.should_ignore(path, self._root_path, self._ignore_patterns, is_dir):
+            # logger.debug(f"Ignoring event for ignored path: {path}")
+            return False
+        return True
+
+    def on_created(self, event: FileSystemEvent):
+        if self._should_process(event):
+            logger.info(f"Watchdog: Detected creation: {event.src_path} (is_dir={event.is_directory})")
+            self.item_created.emit(event.src_path, event.is_directory)
+
+    def on_deleted(self, event: FileSystemEvent):
+        # Check ignore based on path *before* deletion
+        if not self._root_path: return False
+        is_dir = event.is_directory # Note: is_directory might be unreliable after deletion
+        # We might need to check if the path *was* ignored if we cached ignore status
+        # For simplicity, assume if the path itself matches an ignore pattern, we ignore the delete event
+        if self.cache_service.fs_service.should_ignore(event.src_path, self._root_path, self._ignore_patterns, is_dir):
+             # logger.debug(f"Ignoring delete event for ignored path: {event.src_path}")
+             return
+        logger.info(f"Watchdog: Detected deletion: {event.src_path}")
+        self.item_deleted.emit(event.src_path)
+
+    def on_modified(self, event: FileSystemEvent):
+        # Only process file modifications for now
+        if isinstance(event, FileModifiedEvent) and self._should_process(event):
+            logger.info(f"Watchdog: Detected modification: {event.src_path}")
+            self.item_modified.emit(event.src_path)
+
+    def on_moved(self, event: FileSystemEvent):
+        # Check if either source or destination is ignored
+        if not self._root_path: return False
+        src_ignored = self.cache_service.fs_service.should_ignore(event.src_path, self._root_path, self._ignore_patterns, event.is_directory)
+        dest_ignored = self.cache_service.fs_service.should_ignore(event.dest_path, self._root_path, self._ignore_patterns, event.is_directory)
+        if src_ignored and dest_ignored:
+            # logger.debug(f"Ignoring move event for ignored paths: {event.src_path} -> {event.dest_path}")
+            return
+        logger.info(f"Watchdog: Detected move: {event.src_path} -> {event.dest_path}")
+        self.item_moved.emit(event.src_path, event.dest_path)
+
+
+# --- Main Cache Service ---
+class DirectoryCacheService(QObject):
+    """
+    Manages the directory cache, background scanning, and filesystem monitoring.
+    """
+    cache_updated = pyqtSignal(object) # Emits the root CacheNode
+    scan_progress = pyqtSignal(str)
+    scan_error = pyqtSignal(str)
+    scan_finished = pyqtSignal() # Signal when scan completes successfully
+
+    def __init__(self, fs_service: FilesystemService, parent: Optional[QObject] = None):
+        super().__init__(parent)
+        self.fs_service = fs_service
+        self.cache_root: Optional[CacheNode] = None
+        self.current_root_path: Optional[str] = None
+        self.current_ignore_patterns: Set[str] = set()
+        self._cache_lock = threading.Lock() # Lock for accessing the cache
+
+        self._scanner_thread: Optional[QThread] = None
+        self._scanner_worker: Optional[ScannerWorker] = None
+
+        self._observer: Optional[Observer] = None
+        self._event_handler: Optional[CacheUpdateHandler] = None
+        self._observer_thread: Optional[threading.Thread] = None
+
+    def start_scan(self, root_path: str, ignore_patterns: Set[str]):
+        """Starts a background scan for the given path."""
+        logger.info(f"CacheService: Received request to scan: {root_path}")
+        self.stop_scan() # Stop any previous scan
+        self.stop_monitoring() # Stop monitoring during scan
+
+        self.current_root_path = root_path
+        self.current_ignore_patterns = ignore_patterns
+        with self._cache_lock:
+            self.cache_root = None # Clear cache before scan
+
+        self._scanner_thread = QThread()
+        self._scanner_worker = ScannerWorker(root_path, self.fs_service, ignore_patterns)
+        self._scanner_worker.moveToThread(self._scanner_thread)
+
+        # Connect signals
+        self._scanner_thread.started.connect(self._scanner_worker.run)
+        self._scanner_worker.finished.connect(self._handle_scan_finished)
+        self._scanner_worker.progress.connect(self.scan_progress.emit)
+        self._scanner_worker.error.connect(self._handle_scan_error)
+
+        # Cleanup connections
+        self._scanner_worker.finished.connect(self._scanner_thread.quit)
+        self._scanner_worker.finished.connect(self._scanner_worker.deleteLater)
+        self._scanner_thread.finished.connect(self._scanner_thread.deleteLater)
+        self._scanner_worker.error.connect(self._scanner_thread.quit) # Quit thread on error too
+        self._scanner_worker.error.connect(self._scanner_worker.deleteLater)
+        self._scanner_thread.finished.connect(self._cleanup_scanner_thread) # Custom cleanup slot
+
+        self._scanner_thread.start()
+        self.scan_progress.emit(f"Starting scan for {root_path}...")
+
+    def stop_scan(self):
+        """Stops the currently running scan."""
+        if self._scanner_worker:
+            logger.info("CacheService: Stopping scanner worker...")
+            self._scanner_worker.cancel()
+        if self._scanner_thread and self._scanner_thread.isRunning():
+            logger.info("CacheService: Quitting scanner thread...")
+            self._scanner_thread.quit()
+            if not self._scanner_thread.wait(1000): # Wait 1 sec
+                 logger.warning("Scanner thread did not quit gracefully.")
+            self._cleanup_scanner_thread() # Ensure cleanup
+
+    def _cleanup_scanner_thread(self):
+        logger.debug("Cleaning up scanner thread/worker objects.")
+        self._scanner_thread = None
+        self._scanner_worker = None
+
+    def _handle_scan_finished(self, root_node: CacheNode):
+        """Handles the successful completion of a scan."""
+        logger.info("CacheService: Scan finished successfully.")
+        with self._cache_lock:
+            self.cache_root = root_node
+        self.cache_updated.emit(self.cache_root) # Emit the new cache
+        self.scan_finished.emit() # Signal completion
+        # Start monitoring after successful scan
+        self.start_monitoring(self.current_root_path, self.current_ignore_patterns)
+
+    def _handle_scan_error(self, error_msg: str):
+        """Handles errors during the scan."""
+        logger.error(f"CacheService: Scan error: {error_msg}")
+        with self._cache_lock:
+            self.cache_root = None # Clear cache on error
+        self.scan_error.emit(error_msg)
+        self.cache_updated.emit(None) # Emit empty cache
+        # Do not start monitoring if scan failed
+
+    def get_cache(self) -> Optional[CacheNode]:
+        """Returns the current cache root node (thread-safe)."""
+        with self._cache_lock:
+            return self.cache_root
+
+    # --- Filesystem Monitoring ---
+
+    def start_monitoring(self, root_path: Optional[str], ignore_patterns: Set[str]):
+        """Starts filesystem monitoring using watchdog."""
+        if not root_path:
+            logger.warning("Cannot start monitoring: root_path is None.")
+            return
+        if self._observer and self._observer.is_alive():
+            logger.info("Monitor already running. Stopping and restarting.")
+            self.stop_monitoring()
+
+        logger.info(f"Starting filesystem monitor for: {root_path}")
+        self.current_root_path = root_path # Update path just in case
+        self.current_ignore_patterns = ignore_patterns
+
+        self._event_handler = CacheUpdateHandler(self)
+        self._event_handler.update_config(root_path, ignore_patterns)
+        # Connect handler signals to service methods
+        self._event_handler.item_created.connect(self._handle_item_created)
+        self._event_handler.item_deleted.connect(self._handle_item_deleted)
+        self._event_handler.item_moved.connect(self._handle_item_moved)
+        self._event_handler.item_modified.connect(self._handle_item_modified)
+        # self._event_handler.needs_rescan.connect(self._handle_needs_rescan) # Optional
+
+        self._observer = Observer()
+        try:
+            # Watch the root path recursively
+            self._observer.schedule(self._event_handler, root_path, recursive=True)
+            # Run observer in a separate daemon thread
+            self._observer_thread = threading.Thread(target=self._observer.start, daemon=True)
+            self._observer_thread.start()
+            logger.info(f"Filesystem monitor started successfully for {root_path}.")
+        except OSError as e:
+             logger.error(f"Failed to start watchdog observer for {root_path}: {e}. Check path permissions or if it's a network drive limitation.")
+             QMessageBox.warning(None, "Monitoring Error", f"폴더 감시 시작 실패:\n{root_path}\n\n오류: {e}\n\n네트워크 드라이브 또는 권한 문제일 수 있습니다. 파일 변경 사항이 자동으로 반영되지 않을 수 있습니다.")
+             self._observer = None
+             self._observer_thread = None
+        except Exception as e:
+            logger.exception(f"Unexpected error starting watchdog observer for {root_path}")
+            self._observer = None
+            self._observer_thread = None
+
+
+    def stop_monitoring(self):
+        """Stops the filesystem monitor."""
+        if self._observer and self._observer.is_alive():
+            logger.info("Stopping filesystem monitor...")
+            try:
+                self._observer.stop()
+                self._observer.join(timeout=1.0) # Wait for thread to finish
+                if self._observer.is_alive():
+                     logger.warning("Watchdog observer thread did not join gracefully.")
+                else:
+                     logger.info("Filesystem monitor stopped.")
+            except Exception as e:
+                 logger.error(f"Error stopping watchdog observer: {e}")
+        self._observer = None
+        self._observer_thread = None
+        self._event_handler = None # Disconnect signals implicitly
+
+    def update_ignore_patterns(self, ignore_patterns: Set[str]):
+        """Updates ignore patterns for the running monitor."""
+        self.current_ignore_patterns = ignore_patterns
+        if self._event_handler:
+            self._event_handler.update_config(self.current_root_path, ignore_patterns)
+            logger.info("Watchdog ignore patterns updated.")
+            # Trigger a cache update signal? Maybe not necessary unless filtering changes visibility
+            # self.cache_updated.emit(self.get_cache())
+
+    # --- Cache Update Handlers (Called by Watchdog Handler Signals) ---
+
+    def _find_node(self, path: str) -> Optional[CacheNode]:
+        """Finds a node in the cache by its absolute path."""
+        if not self.cache_root or not self.current_root_path: return None
+        if path == self.current_root_path: return self.cache_root
+
+        try:
+            relative_path = Path(path).relative_to(self.current_root_path)
+            parts = relative_path.parts
+        except ValueError:
+            logger.warning(f"Path '{path}' is not relative to root '{self.current_root_path}'")
+            return None
+
+        current_node = self.cache_root
+        for part in parts:
+            if part in current_node.children:
+                current_node = current_node.children[part]
+            else:
+                return None # Node not found
+        return current_node
+
+    def _find_parent_node(self, path: str) -> Optional[CacheNode]:
+        """Finds the parent node of a given path."""
+        parent_path = os.path.dirname(path)
+        return self._find_node(parent_path)
+
+    def _handle_item_created(self, path: str, is_dir: bool):
+        logger.debug(f"CacheService: Handling item created: {path}")
+        with self._cache_lock:
+            if not self.cache_root or not self.current_root_path: return
+            parent_node = self._find_parent_node(path)
+            if parent_node and not parent_node.ignored:
+                name = os.path.basename(path)
+                # Check ignore status for the new item
+                is_ignored = self.fs_service.should_ignore(path, self.current_root_path, self.current_ignore_patterns, is_dir)
+                new_node = CacheNode(name=name, path=path, is_dir=is_dir, ignored=is_ignored)
+                parent_node.children[name] = new_node
+                logger.info(f"Cache updated: Added node {name} to parent {parent_node.path}")
+                # If the new item is a directory and not ignored, we might need to scan its contents
+                if is_dir and not is_ignored:
+                    # For simplicity, trigger a full rescan for directory creation for now
+                    # A more refined approach would scan just the new directory
+                    logger.warning(f"Directory created ({path}), triggering full rescan for simplicity.")
+                    self._handle_needs_rescan(f"Directory created: {path}")
+                    return # Rescan handles cache update signal
+
+                # Emit cache update signal only if not rescanning
+                self.cache_updated.emit(self.cache_root)
+            elif parent_node and parent_node.ignored:
+                 logger.debug(f"Ignoring creation under ignored parent: {path}")
+            else:
+                 logger.warning(f"Parent node not found for created item: {path}")
+
+
+    def _handle_item_deleted(self, path: str):
+        logger.debug(f"CacheService: Handling item deleted: {path}")
+        with self._cache_lock:
+            if not self.cache_root or not self.current_root_path: return
+            parent_node = self._find_parent_node(path)
+            if parent_node:
+                name = os.path.basename(path)
+                if name in parent_node.children:
+                    del parent_node.children[name]
+                    logger.info(f"Cache updated: Removed node {name} from parent {parent_node.path}")
+                    self.cache_updated.emit(self.cache_root)
+                else:
+                    logger.warning(f"Node '{name}' not found in parent '{parent_node.path}' for deletion.")
+            else:
+                # Could be the root directory itself being deleted?
+                if path == self.current_root_path:
+                     logger.warning("Root project directory deleted! Clearing cache.")
+                     self.cache_root = None
+                     self.cache_updated.emit(None)
+                     self.stop_monitoring() # Stop monitoring if root is gone
+                else:
+                     logger.warning(f"Parent node not found for deleted item: {path}")
+
+    def _handle_item_moved(self, src_path: str, dest_path: str):
+        logger.debug(f"CacheService: Handling item moved: {src_path} -> {dest_path}")
+        with self._cache_lock:
+            if not self.cache_root or not self.current_root_path: return
+
+            # 1. Find and remove source node
+            src_parent_node = self._find_parent_node(src_path)
+            src_name = os.path.basename(src_path)
+            moved_node: Optional[CacheNode] = None
+            if src_parent_node and src_name in src_parent_node.children:
+                moved_node = src_parent_node.children.pop(src_name)
+                logger.info(f"Cache updated: Removed source node {src_name} from {src_parent_node.path}")
+            else:
+                logger.warning(f"Source node not found for move: {src_path}")
+                # If source not found, maybe trigger rescan?
+                self._handle_needs_rescan(f"Source node not found for move: {src_path}")
+                return
+
+            # 2. Find destination parent node
+            dest_parent_node = self._find_parent_node(dest_path)
+            dest_name = os.path.basename(dest_path)
+
+            # 3. Add node to destination parent (if parent exists and isn't ignored)
+            if dest_parent_node and moved_node:
+                 # Update node's name and path
+                 moved_node.name = dest_name
+                 moved_node.path = dest_path
+                 # Re-check ignore status at new location
+                 moved_node.ignored = self.fs_service.should_ignore(dest_path, self.current_root_path, self.current_ignore_patterns, moved_node.is_dir)
+
+                 # Add to new parent only if parent isn't ignored
+                 if not dest_parent_node.ignored:
+                     dest_parent_node.children[dest_name] = moved_node
+                     logger.info(f"Cache updated: Added moved node {dest_name} to {dest_parent_node.path}")
+                 else:
+                      logger.debug(f"Move destination parent ignored, node not added: {dest_path}")
+
+                 # If a directory was moved, its children's paths also need updating (complex)
+                 # For simplicity, trigger a rescan when directories are moved.
+                 if moved_node.is_dir:
+                      logger.warning(f"Directory moved ({src_path} -> {dest_path}), triggering full rescan for simplicity.")
+                      self._handle_needs_rescan(f"Directory moved: {dest_path}")
+                      return # Rescan handles cache update signal
+
+                 # Emit cache update signal only if not rescanning
+                 self.cache_updated.emit(self.cache_root)
+
+            elif not dest_parent_node:
+                 logger.warning(f"Destination parent node not found for move: {dest_path}")
+                 # Trigger rescan if destination parent is missing
+                 self._handle_needs_rescan(f"Destination parent not found for move: {dest_path}")
+            # else: moved_node is None (already handled)
+
+
+    def _handle_item_modified(self, path: str):
+        # Currently, the cache doesn't store modification time or content hash.
+        # So, a modification event doesn't change the cache structure itself.
+        # We could potentially add mtime to CacheNode and update it here.
+        # For now, just log it. The model displaying the cache might want this signal.
+        logger.debug(f"CacheService: Handling item modified: {path}")
+        # Find the node - maybe update an mtime attribute if we add one
+        # with self._cache_lock:
+        #     node = self._find_node(path)
+        #     if node:
+        #         # node.mtime = os.path.getmtime(path) # Example if mtime is added
+        #         # self.cache_updated.emit(self.cache_root) # Emit if node data changes
+        #         pass
+        pass # No action on cache for modification currently
+
+    def _handle_needs_rescan(self, reason: str):
+        """Handles events that require a full rescan for simplicity."""
+        logger.warning(f"Triggering rescan due to: {reason}")
+        if self.current_root_path:
+            # Emit error signal to potentially inform UI before starting scan
+            self.scan_error.emit(f"Rescanning due to: {reason}")
+            # Restart the scan
+            self.start_scan(self.current_root_path, self.current_ignore_patterns)
+        else:
+            logger.error("Cannot rescan: current_root_path is not set.")
+
+    def __del__(self):
+        """Ensure threads are stopped when the service is deleted."""
+        self.stop_scan()
+        self.stop_monitoring()
 
 
 
@@ -2844,18 +3440,20 @@ class GeminiGraphState(TypedDict):
 import os
 import shutil
 from typing import Optional, List, Set
-from PyQt6.QtCore import Qt, QModelIndex, QItemSelection # PyQt5 -> PyQt6
+from PyQt6.QtCore import Qt, QModelIndex, QItemSelection, QTimer # QTimer 추가
 from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox # PyQt5 -> PyQt6
 import logging # 로깅 추가
 
 # 서비스 및 모델 import
 from core.services.filesystem_service import FilesystemService
 from core.services.config_service import ConfigService
+from core.services.directory_cache_service import DirectoryCacheService, CacheNode # Added
 
 # MainWindow는 타입 힌트용으로만 사용
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ui.main_window import MainWindow
+    from ui.models.cached_file_system_model import CachedFileSystemModel # Added
 
 logger = logging.getLogger(__name__) # 로거 설정
 
@@ -2863,15 +3461,34 @@ class FileTreeController:
     """
     Handles logic related to the file tree view, including interactions,
     filesystem operations, and gitignore handling.
+    Uses DirectoryCacheService for data and updates.
     """
-    def __init__(self, main_window: 'MainWindow', fs_service: FilesystemService, config_service: ConfigService):
+    def __init__(self, main_window: 'MainWindow', fs_service: FilesystemService, config_service: ConfigService, cache_service: DirectoryCacheService):
         self.mw = main_window
         self.fs_service = fs_service
         self.config_service = config_service
+        self.cache_service = cache_service # Added
         self.gitignore_path: Optional[str] = None # .gitignore 파일 경로 저장
+        self._is_refreshing = False # Prevent recursive refresh calls
+
+        # Connect cache service signals
+        self.cache_service.scan_progress.connect(self._update_scan_progress)
+        self.cache_service.scan_error.connect(self._handle_scan_error)
+        # cache_updated signal is connected in main_window to update the model
+
+    def _update_scan_progress(self, message: str):
+        """Updates the status bar with scan progress."""
+        self.mw.status_bar.showMessage(f"Scanning: {message}")
+
+    def _handle_scan_error(self, error_msg: str):
+        """Handles scan errors reported by the cache service."""
+        QMessageBox.warning(self.mw, "Scan Error", f"Error scanning project folder:\n{error_msg}")
+        self.mw.status_bar.showMessage(f"Scan failed: {error_msg}")
+        # Reset tree view if scan fails?
+        self.reset_file_tree()
 
     def select_project_folder(self):
-        """Opens a dialog to select the project folder and updates the UI."""
+        """Opens a dialog to select the project folder and triggers a background scan."""
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 프로젝트 폴더 선택이 필요 없습니다.")
             return
@@ -2881,42 +3498,34 @@ class FileTreeController:
 
         if folder:
             logger.info(f"Project folder selected: {folder}")
-            # 폴더 선택 시 상태 초기화 (UI 및 내부 변수)
-            self.mw.reset_state() # MainWindow 상태 초기화 (트리 리셋 포함)
+            # Stop previous scan/monitoring if any
+            self.cache_service.stop_scan()
+            self.cache_service.stop_monitoring()
+
+            # Reset UI state related to the old project
+            self.mw.reset_state() # Resets internal state, clears tree model via signal
+
+            # Update UI labels and internal state
             self.mw.current_project_folder = folder
             folder_name = os.path.basename(folder)
             self.mw.project_folder_label.setText(f"현재 프로젝트 폴더: {folder}")
-
-            self.load_gitignore_settings() # gitignore 로드 및 필터 설정
-
-            # 모델에 루트 경로 설정 및 트리뷰 업데이트
-            if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-                # Use setRootPathFiltered directly on the source model
-                logger.info("Setting root path on source model...")
-                idx = self.mw.dir_model.setRootPathFiltered(folder) # Use setRootPathFiltered
-                if not idx.isValid():
-                     logger.warning(f"Source model returned invalid index for root path: {folder}")
-                # Map the source index to the proxy model index
-                root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
-                if not root_proxy_index.isValid():
-                     logger.warning(f"Proxy model returned invalid index for root path: {folder}")
-                # Set the root index for the tree view
-                self.mw.tree_view.setRootIndex(root_proxy_index) # 유효한 루트 인덱스 설정
-                logger.info(f"Tree view root index set. Proxy index valid: {root_proxy_index.isValid()}")
-                self.mw.status_bar.showMessage(f"Project Folder: {folder}")
-
-                # 루트 폴더 자동 체크 (선택적)
-                if root_proxy_index.isValid():
-                    # Check the root folder by default
-                    logger.info("Setting root folder check state to Checked.")
-                    self.mw.checkable_proxy.setData(root_proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole) # Qt.Checked -> Qt.CheckState.Checked, Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-
             self.mw.update_window_title(folder_name)
-            # 프로젝트 폴더 변경 시 상태 변경 시그널 발생
+
+            # Load gitignore patterns for the new folder
+            ignore_patterns = self.load_gitignore_settings()
+
+            # Start background scan via DirectoryCacheService
+            self.mw.status_bar.showMessage(f"Starting scan for {folder}...")
+            self.cache_service.start_scan(folder, ignore_patterns)
+
+            # Tree view will be populated when the scan finishes and cache_updated signal is emitted
+            # No need to set root index here directly
+
+            # Trigger state change signal
             self.mw.state_changed_signal.emit()
 
-    def load_gitignore_settings(self):
-        """Loads .gitignore patterns and updates the filter model."""
+    def load_gitignore_settings(self) -> Set[str]:
+        """Loads .gitignore patterns and updates the filter model and cache service."""
         self.gitignore_path = None
         patterns: Set[str] = set()
 
@@ -2941,11 +3550,16 @@ class FileTreeController:
         patterns.update(settings.excluded_dirs)
         logger.info(f"Total ignore patterns (including defaults and excluded_dirs): {len(patterns)}")
 
-        # 필터 모델에 패턴 설정
+        # Update ignore patterns in the cache service (for watchdog)
+        self.cache_service.update_ignore_patterns(patterns)
+
+        # Update patterns in the proxy model (for UI filtering)
         if hasattr(self.mw, 'checkable_proxy'):
              self.mw.checkable_proxy.set_ignore_patterns(patterns)
-             # 필터가 변경되었으므로 트리 뷰를 새로 고쳐야 할 수 있음
-             self.refresh_tree() # 필터 적용 후 트리 새로고침
+             # Filter invalidation happens inside set_ignore_patterns
+             # No need to call refresh_tree here, cache update will handle UI refresh
+
+        return patterns # Return patterns for initial scan
 
     def save_gitignore_settings(self):
         """Saves the content of the gitignore editor to the .gitignore file. (Moved to SettingsDialog)"""
@@ -2956,32 +3570,32 @@ class FileTreeController:
         logger.info("Resetting gitignore filter to defaults.")
         default_settings = self.config_service.get_settings()
         default_patterns = set(default_settings.default_ignore_list).union(default_settings.excluded_dirs)
+
+        # Update cache service and proxy model
+        self.cache_service.update_ignore_patterns(default_patterns)
         if hasattr(self.mw, 'checkable_proxy'):
              self.mw.checkable_proxy.set_ignore_patterns(default_patterns)
-             self.refresh_tree() # 필터 리셋 후 트리 새로고침
+             # Trigger a refresh/rescan if patterns changed significantly?
+             # For now, rely on cache_updated signal if filtering changes visibility
+             # Consider adding a manual refresh button if needed.
+             # self.refresh_tree() # Avoid manual refresh, let model update handle it
 
     def reset_file_tree(self):
-        """Resets the file tree view to an empty state."""
+        """Resets the file tree view by clearing the model."""
         logger.info("Resetting file tree view.")
-        if hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            # Set root path to empty string on the source model
-            idx = self.mw.dir_model.setRootPathFiltered("") # Use setRootPathFiltered
-            # Set an invalid index as the root for the view
-            self.mw.tree_view.setRootIndex(QModelIndex())
-            # Clear the internal check state dictionary
-            self.mw.checkable_proxy.checked_files_dict.clear()
-            logger.debug("Cleared checked_files_dict during tree reset.")
-            self.mw.tree_view.collapseAll()
-            logger.info("File tree reset to empty state.")
+        if hasattr(self.mw, 'cached_model'):
+            self.mw.cached_model.clear() # Clear the QStandardItemModel
+            logger.info("Cached file system model cleared.")
+        # Check state dictionary is cleared in MainWindow's reset_state
 
 
     def generate_directory_tree_structure(self):
-        """Generates the directory tree structure based on checked items."""
+        """Generates the directory tree structure based on checked items from the cache."""
         if self.mw.mode == "Meta Prompt Builder":
             QMessageBox.information(self.mw, "Info", "Meta Prompt Builder 모드에서는 디렉토리 트리 기능이 필요 없습니다.")
             return False
 
-        if not self.mw.current_project_folder or not os.path.isdir(self.mw.current_project_folder):
+        if not self.mw.current_project_folder:
             QMessageBox.warning(self.mw, "경고", "프로젝트 폴더를 먼저 선택해주세요.")
             return False
 
@@ -2996,6 +3610,8 @@ class FileTreeController:
 
         logger.info(f"Generating directory tree for {len(all_checked_paths)} checked items.")
         try:
+            # Use FilesystemService, which doesn't rely on the cache directly
+            # It operates on the list of checked paths provided.
             tree_string = self.fs_service.get_directory_tree(all_checked_paths, self.mw.current_project_folder)
         except Exception as e:
              QMessageBox.critical(self.mw, "오류", f"디렉토리 트리 생성 중 오류 발생: {e}")
@@ -3011,7 +3627,7 @@ class FileTreeController:
         return True
 
     def rename_item(self, file_path):
-        """Renames a file or directory."""
+        """Renames a file or directory. Watchdog should handle the update."""
         if self.mw.mode == "Meta Prompt Builder": return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "파일 또는 디렉토리가 존재하지 않습니다.")
@@ -3032,14 +3648,15 @@ class FileTreeController:
             logger.info(f"Renaming item: '{file_path}' -> '{new_path}'")
             try:
                 os.rename(file_path, new_path)
-                self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료")
+                self.mw.status_bar.showMessage(f"'{old_name}' -> '{new_name_stripped}' 이름 변경 완료. 파일 시스템 감시자가 업데이트합니다.")
                 # Update check state dictionary if the renamed item was checked
                 if hasattr(self.mw, 'checkable_proxy'):
                     if file_path in self.mw.checkable_proxy.checked_files_dict:
                         is_checked = self.mw.checkable_proxy.checked_files_dict.pop(file_path)
                         self.mw.checkable_proxy.checked_files_dict[new_path] = is_checked
                         logger.debug(f"Updated checked_files_dict for renamed item: {new_path}")
-                self.refresh_tree()
+                # No need to manually refresh tree, watchdog + cache service should handle it.
+                # self.refresh_tree() # REMOVED
                 self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"이름 변경 중 오류 발생: {str(e)}")
@@ -3048,7 +3665,7 @@ class FileTreeController:
              QMessageBox.warning(self.mw, "Error", "새 이름은 비워둘 수 없습니다.")
 
     def delete_item(self, file_path):
-        """Deletes a file or directory."""
+        """Deletes a file or directory. Watchdog should handle the update."""
         if self.mw.mode == "Meta Prompt Builder": return
         if not os.path.exists(file_path):
             QMessageBox.warning(self.mw, "Error", "파일 또는 디렉토리가 존재하지 않습니다.")
@@ -3067,7 +3684,7 @@ class FileTreeController:
                     shutil.rmtree(file_path)
                 else:
                     os.remove(file_path)
-                self.mw.status_bar.showMessage(f"'{item_name}' 삭제 완료")
+                self.mw.status_bar.showMessage(f"'{item_name}' 삭제 완료. 파일 시스템 감시자가 업데이트합니다.")
                 # Remove the deleted item and any children from the check state dictionary
                 if hasattr(self.mw, 'checkable_proxy'):
                     paths_to_remove = [p for p in self.mw.checkable_proxy.checked_files_dict if p == file_path or p.startswith(file_path + os.sep)]
@@ -3077,75 +3694,54 @@ class FileTreeController:
                             del self.mw.checkable_proxy.checked_files_dict[p]
                             removed_count += 1
                     logger.debug(f"Removed {removed_count} items from checked_files_dict after deletion.")
-                self.refresh_tree()
+                # No need to manually refresh tree, watchdog + cache service should handle it.
+                # self.refresh_tree() # REMOVED
                 self.mw.state_changed_signal.emit() # 파일 구조 변경 시 상태 변경
             except Exception as e:
                 QMessageBox.warning(self.mw, "Error", f"삭제 중 오류 발생: {str(e)}")
                 logger.error(f"Error deleting item: {e}", exc_info=True)
 
     def refresh_tree(self):
-        """Refreshes the file explorer tree view."""
-        logger.info("Refreshing file tree view...")
-        if self.mw.current_project_folder and hasattr(self.mw, 'dir_model') and hasattr(self.mw, 'checkable_proxy'):
-            # Invalidate the proxy filter to re-evaluate items
-            self.mw.checkable_proxy.invalidateFilter()
-            # Set the root path again on the source model
-            idx = self.mw.dir_model.setRootPathFiltered(self.mw.current_project_folder) # Use setRootPathFiltered
-            # Map to proxy index and set as root for the view
-            root_proxy_index = self.mw.checkable_proxy.mapFromSource(idx)
-            self.mw.tree_view.setRootIndex(root_proxy_index)
-            # Reapply check states based on the dictionary
-            self._reapply_check_states(root_proxy_index)
-            self.mw.status_bar.showMessage("파일 트리 새로고침 완료.")
-            logger.info("File tree refresh complete.")
-        else:
-             logger.warning("Cannot refresh tree: Project folder not set or models not available.")
+        """Manually triggers a rescan of the project folder."""
+        if self._is_refreshing:
+            logger.debug("Refresh already in progress, skipping.")
+            return
+        if not self.mw.current_project_folder:
+            logger.warning("Cannot refresh tree: Project folder not set.")
+            return
 
+        logger.info("Manually refreshing file tree by triggering rescan...")
+        self._is_refreshing = True
+        self.mw.status_bar.showMessage(f"Refreshing project folder: {self.mw.current_project_folder}...")
+        # Get current ignore patterns
+        ignore_patterns = self.load_gitignore_settings()
+        # Start scan via cache service
+        self.cache_service.start_scan(self.mw.current_project_folder, ignore_patterns)
+        # Use a timer to reset the flag after a short delay, preventing rapid clicks
+        QTimer.singleShot(2000, self._reset_refresh_flag) # Reset flag after 2 seconds
 
-    def _reapply_check_states(self, parent_proxy_index: QModelIndex):
-         """Recursively reapply check states based on the dictionary after a refresh."""
-         # This function might be slow if it traverses the entire visible tree.
-         # It's necessary after invalidateFilter() or setRootPath().
-         if not parent_proxy_index.isValid(): return
-
-         parent_path = self.mw.checkable_proxy.get_file_path_from_index(parent_proxy_index)
-         if parent_path:
-             is_checked = self.mw.checkable_proxy.checked_files_dict.get(parent_path, False)
-             current_state = self.mw.checkable_proxy.data(parent_proxy_index, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-             target_state = Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked # Qt.Checked/Unchecked -> Qt.CheckState.Checked/Unchecked
-             if current_state != target_state:
-                 # Use setData to ensure signals are emitted correctly if state changes
-                 self.mw.checkable_proxy.setData(parent_proxy_index, target_state, Qt.ItemDataRole.CheckStateRole) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-
-         # Recursively check children (only those currently loaded/visible)
-         row_count = self.mw.checkable_proxy.rowCount(parent_proxy_index)
-         for row in range(row_count):
-             child_proxy_index = self.mw.checkable_proxy.index(row, 0, parent_proxy_index)
-             if child_proxy_index.isValid():
-                 self._reapply_check_states(child_proxy_index)
+    def _reset_refresh_flag(self):
+        self._is_refreshing = False
+        logger.debug("Refresh flag reset.")
 
 
     def on_data_changed(self, topLeft: QModelIndex, bottomRight: QModelIndex, roles: List[int]):
         """Handles updates when data in the CheckableProxyModel changes (e.g., check state)."""
+        # This method might still be useful for reacting to check state changes,
+        # but file size calculation is removed.
         if Qt.ItemDataRole.CheckStateRole in roles and hasattr(self.mw, 'checkable_proxy'): # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
             # Get checked files (optimized version without os.path.getsize)
-            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses os.path.isfile or QFileInfo
+            checked_files = self.mw.checkable_proxy.get_checked_files() # This now uses cache/model info
             self.mw.selected_files_data = []
-            # --- Removed file size calculation ---
-            # total_size = 0
-            # for fpath in checked_files:
-            #     try:
-            #         # size = os.path.getsize(fpath) # Removed size calculation
-            #         self.mw.selected_files_data.append((fpath, 0)) # Store path with size 0
-            #         # total_size += size
-            #     except Exception:
-            #         pass # 오류 무시
-            # self.mw.status_bar.showMessage(f"{len(checked_files)} files selected, Total size: {total_size:,} bytes")
-            # --- End of removal ---
+            # Store paths only, size is not relevant here anymore
+            for fpath in checked_files:
+                self.mw.selected_files_data.append((fpath, 0)) # Store path with dummy size 0
+
             self.mw.status_bar.showMessage(f"{len(checked_files)} files selected.") # Update status bar without size
-            # 토큰 계산은 버튼 클릭 시에만 수행되도록 변경됨
-            # 파일 체크 상태 변경 시 상태 변경 시그널 발생 (자동 저장용) -> 시그널 연결 파일에서 처리
+            # Token calculation is triggered by button clicks
+            # State change signal is emitted directly from the proxy model connection
             # logger.debug("Check state changed, state_changed_signal emitted.") # Signal emitted via connect_signals
+
 
 
 
@@ -4349,52 +4945,115 @@ class XmlController:
 ======== src\ui\models\file_system_models.py ========
 import os
 import fnmatch
-from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex, QFileInfo # QFileInfo 추가
-from PyQt6.QtGui import QFileSystemModel
-from PyQt6.QtWidgets import QTreeView
+from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex, QFileInfo, QAbstractItemModel, pyqtSignal # Added QAbstractItemModel, pyqtSignal
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QColor, QBrush # Added QStandardItemModel, QStandardItem, QIcon, QColor, QBrush
+from PyQt6.QtWidgets import QTreeView, QApplication, QStyle # Added QApplication, QStyle
 from typing import Callable, Optional, Set, List, Dict, Any # List, Dict, Any 추가
 from core.services.filesystem_service import FilesystemService
+from core.services.directory_cache_service import CacheNode # Added
 import logging
 
 logger = logging.getLogger(__name__)
 
-class FilteredFileSystemModel(QFileSystemModel):
+# --- Constants ---
+NODE_ROLE = Qt.ItemDataRole.UserRole + 1 # Role to store CacheNode reference
+PATH_ROLE = Qt.ItemDataRole.UserRole + 2 # Role to store absolute path
+
+# --- Cached File System Model (using QStandardItemModel) ---
+class CachedFileSystemModel(QStandardItemModel):
     """
-    Custom file system model using Qt's default lazy loading behavior.
-    The eager recursive loading (_fetch_all_recursively) has been removed
-    to improve performance on large or remote directories.
+    A model based on QStandardItemModel that displays the cached directory structure.
+    It gets populated/updated by the DirectoryCacheService.
     """
+    # Signal emitted when the model needs to be repopulated
+    request_repopulation = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Lazy loading is the default behavior, no extra options needed here.
-        # Options like DontWatchForChanges can be set if needed, but might affect responsiveness.
-        # self.setOption(QFileSystemModel.Option.DontWatchForChanges, True) # Example if needed
+        self.setHorizontalHeaderLabels(['Name']) # Single column for name/icon
+        self._icon_provider = QApplication.style() # Use application style for default icons
+        self._folder_icon = self._icon_provider.standardIcon(QStyle.StandardPixmap.SP_DirIcon) # QStyle.SP_DirIcon -> QStyle.StandardPixmap.SP_DirIcon
+        self._file_icon = self._icon_provider.standardIcon(QStyle.StandardPixmap.SP_FileIcon) # QStyle.SP_FileIcon -> QStyle.StandardPixmap.SP_FileIcon
 
-    def setRootPathFiltered(self, path: str) -> QModelIndex:
-        """
-        Sets the root path for the model. Lazy loading will occur as needed
-        when the view requests more data (e.g., expanding a directory).
-        """
-        logger.info(f"Setting root path (lazy loading enabled): {path}")
-        # Simply call the base class method. Qt handles fetching as needed.
-        root_index = super().setRootPath(path)
-        # The _fetch_all_recursively call is removed.
-        return root_index
+    def populate_from_cache(self, root_node: Optional[CacheNode]):
+        """Clears the model and populates it from the CacheNode structure."""
+        self.beginResetModel()
+        self.clear()
+        self.setHorizontalHeaderLabels(['Name']) # Reset header after clear
+        if root_node and not root_node.ignored: # Only populate if root exists and is not ignored
+            root_item = self._create_item_from_node(root_node)
+            self.invisibleRootItem().appendRow(root_item)
+            self._populate_children(root_item, root_node)
+        self.endResetModel()
+        logger.info("CachedFileSystemModel populated from cache.")
 
-    # _fetch_all_recursively method is removed entirely.
+    def _populate_children(self, parent_item: QStandardItem, parent_node: CacheNode):
+        """Recursively populates children items."""
+        # Sort children by name (directories first, then files)
+        sorted_children = sorted(parent_node.children.values(), key=lambda node: (not node.is_dir, node.name.lower()))
+
+        for child_node in sorted_children:
+            if not child_node.ignored: # Skip ignored items
+                child_item = self._create_item_from_node(child_node)
+                parent_item.appendRow(child_item)
+                if child_node.is_dir:
+                    self._populate_children(child_item, child_node)
+
+    def _create_item_from_node(self, node: CacheNode) -> QStandardItem:
+        """Creates a QStandardItem from a CacheNode."""
+        item = QStandardItem(node.name)
+        item.setEditable(False)
+        item.setData(node, NODE_ROLE) # Store the node object
+        item.setData(node.path, PATH_ROLE) # Store the path
+        item.setIcon(self._folder_icon if node.is_dir else self._file_icon)
+        # Set checkable flag (proxy model will handle actual check state)
+        item.setCheckable(True)
+        item.setCheckState(Qt.CheckState.Unchecked) # Default to unchecked
+        return item
+
+    def find_item_by_path(self, path: str) -> Optional[QStandardItem]:
+        """Finds a QStandardItem in the model by its absolute path."""
+        if not path: return None
+        # Iterate through all items to find the one with the matching path
+        # This can be slow for very large models. Consider optimizing if needed.
+        root = self.invisibleRootItem()
+        queue = [root.child(i, 0) for i in range(root.rowCount())]
+        while queue:
+            item = queue.pop(0)
+            if not item: continue
+            item_path = item.data(PATH_ROLE)
+            if item_path == path:
+                return item
+            # Add children to the queue
+            for i in range(item.rowCount()):
+                 child = item.child(i, 0)
+                 if child: queue.append(child)
+        return None
+
+    def update_model_from_cache_change(self, cache_root: Optional[CacheNode]):
+        """Handles cache updates from the service."""
+        # For simplicity, repopulate the entire model on any cache change.
+        # More granular updates (insertRows, removeRows, dataChanged) are possible
+        # but significantly more complex to implement correctly based on cache diffs.
+        logger.info("Received cache update signal. Repopulating model.")
+        self.populate_from_cache(cache_root)
 
 
+# --- Checkable Proxy Model (Adapted for CachedFileSystemModel) ---
 class CheckableProxyModel(QSortFilterProxyModel):
     """
     Proxy model that provides checkable items and filters based on ignore patterns.
     Handles recursive checking for folders and multi-selection checking.
-    Optimized to reduce filesystem access in `data` and `filterAcceptsRow`.
+    Works with CachedFileSystemModel (QStandardItemModel based).
     """
-    def __init__(self, fs_model: FilteredFileSystemModel, project_folder_getter: Callable[[], Optional[str]], fs_service: FilesystemService, tree_view: QTreeView, parent=None):
+    # Signal to indicate check state dictionary has changed
+    check_state_changed = pyqtSignal()
+
+    def __init__(self, project_folder_getter: Callable[[], Optional[str]], fs_service: FilesystemService, tree_view: QTreeView, parent=None):
         super().__init__(parent)
-        self.fs_model = fs_model
+        # Source model is now CachedFileSystemModel (set via setSourceModel)
         self.project_folder_getter = project_folder_getter
-        self.fs_service = fs_service
+        self.fs_service = fs_service # Still needed for should_ignore fallback? Maybe not.
         self.tree_view = tree_view
         self.checked_files_dict: Dict[str, bool] = {} # {file_path: bool} - Stores the check state
         self._ignore_patterns: Set[str] = set()
@@ -4405,105 +5064,100 @@ class CheckableProxyModel(QSortFilterProxyModel):
         if self._ignore_patterns != patterns:
             self._ignore_patterns = patterns
             logger.info(f"Ignore patterns updated. Invalidating filter.")
-            self.invalidateFilter()
+            self.invalidateFilter() # Trigger refiltering
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
         """
-        Determines if a row should be shown based on ignore patterns.
-        Uses QFileInfo for potentially cached attributes.
+        Determines if a row should be shown. Reads 'ignored' status from CacheNode.
         """
-        source_index = self.sourceModel().index(source_row, 0, source_parent)
+        source_model = self.sourceModel()
+        if not isinstance(source_model, QStandardItemModel): # Check if source model is set and correct type
+             logger.warning("filterAcceptsRow: Source model not set or not QStandardItemModel.")
+             return False
+
+        source_index = source_model.index(source_row, 0, source_parent)
         if not source_index.isValid():
             return False
 
-        # Use QFileInfo provided by the source model, which might cache attributes.
-        file_info: QFileInfo = self.sourceModel().fileInfo(source_index)
-        file_path = file_info.filePath() # Get absolute path
-        is_dir = file_info.isDir()
+        item = source_model.itemFromIndex(source_index)
+        if not item: return False # Should not happen
 
-        project_root = self.project_folder_getter()
+        node: Optional[CacheNode] = item.data(NODE_ROLE)
 
-        # Allow items outside the project root or the root itself
-        if not project_root or not file_path.startswith(project_root) or file_path == project_root:
-            return True
-
-        # Check against ignore patterns using the FilesystemService
-        # This call is now potentially faster as is_dir is obtained from QFileInfo.
-        if self.fs_service.should_ignore(file_path, project_root, self._ignore_patterns, is_dir):
-            if file_path in self.checked_files_dict:
-                # Remove filtered items from the check state dictionary
-                logger.debug(f"Removing filtered item from checked_files_dict: {file_path}")
-                del self.checked_files_dict[file_path]
-            # logger.debug(f"Ignoring item: {file_path}") # Can be verbose
+        # If node data is missing or node is marked as ignored in the cache, filter it out
+        if node is None or node.ignored:
+            # If it's filtered out, ensure it's removed from the check state dict
+            path = item.data(PATH_ROLE)
+            if path and path in self.checked_files_dict:
+                logger.debug(f"Removing filtered/ignored item from checked_files_dict: {path}")
+                del self.checked_files_dict[path]
+                self.check_state_changed.emit() # Notify change
             return False
 
+        # If node exists and is not ignored, accept the row
         return True
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> Any:
         """
-        Returns data for the item, including check state.
-        Removed file size calculation for performance.
+        Returns data for the item, including check state based on checked_files_dict.
         """
         if not index.isValid():
             return None
 
-        if index.column() == 0:
-            if role == Qt.ItemDataRole.CheckStateRole:
-                file_path = self.get_file_path_from_index(index)
+        # Handle check state for column 0
+        if index.column() == 0 and role == Qt.ItemDataRole.CheckStateRole:
+            file_path = self.mapToSource(index).data(PATH_ROLE) # Get path from source item
+            if file_path:
                 is_checked = self.checked_files_dict.get(file_path, False)
                 return Qt.CheckState.Checked if is_checked else Qt.CheckState.Unchecked
-            elif role == Qt.ItemDataRole.DisplayRole:
-                # Return only the base name, removing the size calculation.
-                return super().data(index, role)
-                # --- Removed file size calculation ---
-                # base_name = super().data(index, role)
-                # src_index = self.mapToSource(index)
-                # if src_index.isValid() and not self.fs_model.isDir(src_index):
-                #     file_path = self.fs_model.filePath(src_index)
-                #     try:
-                #         # This os.path.getsize call is expensive on network drives.
-                #         size = os.path.getsize(file_path)
-                #         return f"{base_name} ({size:,} bytes)"
-                #     except OSError:
-                #         return f"{base_name} (size error)"
-                # return base_name
-                # --- End of removal ---
+            return Qt.CheckState.Unchecked # Default if path not found
 
+        # For other roles, delegate to the source model (QStandardItemModel)
         return super().data(index, role)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
-        """Returns item flags, adding ItemIsUserCheckable."""
+        """Returns item flags, ensuring checkable status comes from source."""
+        # Start with flags from the proxy model itself
         flags = super().flags(index)
         if index.column() == 0:
-            # Ensure items are enabled, checkable, and selectable
-            flags |= Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsSelectable
+            # Get flags from the source model item (QStandardItem)
+            source_index = self.mapToSource(index)
+            source_flags = self.sourceModel().flags(source_index)
+            # Ensure checkable flag is included if set in source
+            if source_flags & Qt.ItemFlag.ItemIsUserCheckable: # Qt.ItemIsUserCheckable -> Qt.ItemFlag.ItemIsUserCheckable
+                flags |= Qt.ItemFlag.ItemIsUserCheckable # Qt.ItemIsUserCheckable -> Qt.ItemFlag.ItemIsUserCheckable
+            # Ensure item is enabled
+            flags |= Qt.ItemFlag.ItemIsEnabled # Qt.ItemIsEnabled -> Qt.ItemFlag.ItemIsEnabled
         return flags
+
 
     def setData(self, index: QModelIndex, value: Any, role: int = Qt.ItemDataRole.EditRole) -> bool:
         """
-        Sets data for the item, handling check state changes, including multi-select and folder recursion.
-        Removed calls to ensure_loaded as lazy loading is now used.
+        Sets data for the item, handling check state changes for the proxy model's dictionary.
+        Propagates changes to children based on the source model structure.
         """
-        # 재귀 호출 방지 플래그 체크
         if self._is_setting_data:
-            logger.debug(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
+            # logger.debug(f"setData blocked by flag for index: {self.get_file_path_from_index(index)}")
             return False
-        # 체크 상태 역할 및 0번 컬럼인지 확인
         if index.column() != 0 or role != Qt.ItemDataRole.CheckStateRole:
             return super().setData(index, value, role)
 
-        file_path = self.get_file_path_from_index(index)
-        if not file_path:
-            logger.warning(f"setData failed: Could not get file path for index {index.row()},{index.column()}")
+        source_index = self.mapToSource(index)
+        source_item = self.sourceModel().itemFromIndex(source_index)
+        if not source_item: return False
+
+        file_path = source_item.data(PATH_ROLE)
+        node: Optional[CacheNode] = source_item.data(NODE_ROLE)
+        if not file_path or not node:
+            logger.warning(f"setData failed: Could not get path/node for index {index.row()},{index.column()}")
             return False
 
-        logger.debug(f"▶ setData called: path={file_path}, role={role}, value={value}")
-        self._is_setting_data = True # 플래그 설정
+        # logger.debug(f"▶ setData called: path={file_path}, role={role}, value={value}")
+        self._is_setting_data = True
         try:
-            # PyQt6에서는 value가 CheckState enum 값일 수 있음
             if isinstance(value, Qt.CheckState):
                 new_check_state = value
-            elif isinstance(value, int): # Fallback for integer
+            elif isinstance(value, int):
                 new_check_state = Qt.CheckState(value)
             else:
                 logger.warning(f"setData: Unexpected value type for CheckStateRole: {type(value)}")
@@ -4511,180 +5165,185 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 return False
 
             is_checked = (new_check_state == Qt.CheckState.Checked)
-            # Use get() with default False for cleaner check
             current_state_in_dict = self.checked_files_dict.get(file_path, False)
 
-            # 상태가 실제로 변경되는 경우에만 처리
             if is_checked == current_state_in_dict:
-                logger.debug(f"setData: No state change needed for {file_path}. Current: {current_state_in_dict}, New: {is_checked}")
+                # logger.debug(f"setData: No state change needed for {file_path}.")
                 self._is_setting_data = False
-                return True # 상태 변경 없어도 성공으로 처리
+                return True
 
-            logger.debug(f"setData processing state change for: {file_path}, New state: {is_checked}")
+            # logger.debug(f"setData processing state change for: {file_path}, New state: {is_checked}")
 
-            # 상태 딕셔너리 업데이트
+            # Update the dictionary
             if is_checked:
                 self.checked_files_dict[file_path] = True
             elif file_path in self.checked_files_dict:
-                # 체크 해제 시 딕셔너리에서 제거
                 del self.checked_files_dict[file_path]
-                logger.debug(f"  Item unchecked and removed from checked_files_dict: {file_path}")
+                # logger.debug(f"  Item unchecked and removed from checked_files_dict: {file_path}")
 
-            # 변경된 인덱스 목록 초기화
-            indices_to_signal = {index} # 자기 자신 포함
+            # Emit dataChanged for the current index to update its visual state
+            self.dataChanged.emit(index, index, [role])
+            indices_to_signal = {index} # Track indices needing UI update
 
-            # 폴더인 경우 하위 항목 처리
-            src_index = self.mapToSource(index)
-            if src_index.isValid() and self.fs_model.isDir(src_index):
-                logger.debug(f"  {file_path} is a directory. Updating children...")
-                # ensure_loaded call removed - rely on lazy loading
-                # self.ensure_loaded(src_index) # 하위 항목 로드 보장 (REMOVED)
+            # If it's a directory, update children recursively
+            if node.is_dir:
+                # logger.debug(f"  {file_path} is a directory. Updating children...")
+                changed_children_proxy_indices = self._update_children_state_recursive(source_item, is_checked)
+                indices_to_signal.update(changed_children_proxy_indices)
+                # logger.debug(f"  Finished updating children for {file_path}. Total signals needed: {len(indices_to_signal)}")
 
-                # update_children_state 호출하여 하위 항목 상태 업데이트 및 변경된 인덱스 받기
-                # This might only affect already loaded children due to lazy loading.
-                changed_children_indices = self.update_children_state(src_index, is_checked)
-                indices_to_signal.update(changed_children_indices) # 변경된 하위 인덱스 추가
-                logger.debug(f"  Finished updating children for {file_path}. Total signals needed: {len(indices_to_signal)}")
-
-                # 폴더가 체크되었을 때 확장 (선택적)
+                # Expand checked folders (optional)
                 if is_checked:
-                    logger.debug(f"  Expanding checked folder: {file_path}")
+                    # logger.debug(f"  Expanding checked folder: {file_path}")
                     self.expand_index_recursively(index)
 
-            # dataChanged 시그널 발생 (변경된 모든 인덱스에 대해)
-            logger.debug(f"Emitting dataChanged for {len(indices_to_signal)} indices.")
-            for idx_to_signal in indices_to_signal:
-                if idx_to_signal.isValid():
-                    logger.debug(f"    Emitting for: {self.get_file_path_from_index(idx_to_signal)}")
-                    # dataChanged 시그널 발생시켜 UI 업데이트
-                    self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.ItemDataRole.CheckStateRole])
+            # Emit dataChanged for all affected children (already done inside _update_children_state_recursive)
+            # logger.debug(f"Emitting dataChanged for {len(indices_to_signal)} indices.")
+            # for idx_to_signal in indices_to_signal:
+            #     if idx_to_signal.isValid():
+            #         # logger.debug(f"    Emitting for: {self.get_file_path_from_index(idx_to_signal)}")
+            #         self.dataChanged.emit(idx_to_signal, idx_to_signal, [Qt.ItemDataRole.CheckStateRole])
 
-            logger.debug(f"setData returning True for path: {file_path}")
-            return True # 성공적으로 처리됨
+            self.check_state_changed.emit() # Signal that the dictionary was modified
+            # logger.debug(f"setData returning True for path: {file_path}")
+            return True
 
         except Exception as e:
             logger.exception(f"Error in setData for path {file_path}: {e}")
-            return False # 오류 발생 시 실패 반환
+            return False
         finally:
-            logger.debug("setData finished. Releasing flag.")
-            self._is_setting_data = False # 플래그 해제
+            # logger.debug("setData finished. Releasing flag.")
+            self._is_setting_data = False
 
-    # ensure_loaded method is removed as it relied on _fetch_all_recursively.
-
-    def update_children_state(self, parent_src_index: QModelIndex, checked: bool) -> Set[QModelIndex]:
+    def _update_children_state_recursive(self, parent_source_item: QStandardItem, checked: bool) -> Set[QModelIndex]:
         """
-        Recursively updates check state for all *currently loaded* visible children
-        based on the 'checked' parameter. Updates the internal dictionary and
-        returns a set of *proxy* indices whose state was changed.
-        Due to lazy loading, this might not affect children that haven't been fetched yet.
+        Recursively updates the check state dictionary for children of a source item.
+        Returns a set of *proxy* indices whose state was visually changed.
         """
-        changed_indices = set()
-        # Check if the source model has fetched children for this parent
-        if not self.fs_model.hasChildren(parent_src_index):
-             # If it has children but they aren't fetched, rowCount might be 0 initially.
-             # We might need to fetch them first if we want to update them immediately.
-             # However, for performance, we'll only update loaded children.
-             # If canFetchMore is true, it means children exist but aren't loaded.
-             # logger.debug(f"    update_children_state: Parent {self.fs_model.filePath(parent_src_index)} has no loaded children.")
-             pass # Continue without fetching for performance
+        changed_proxy_indices = set()
+        source_model = self.sourceModel()
 
-        row_count = self.fs_model.rowCount(parent_src_index)
-        parent_path = self.fs_model.filePath(parent_src_index)
-        # logger.debug(f"    update_children_state for {parent_path}, checked={checked}, loaded children={row_count}")
+        for row in range(parent_source_item.rowCount()):
+            child_source_item = parent_source_item.child(row, 0)
+            if not child_source_item: continue
 
-        for row in range(row_count):
-            child_src_index = self.fs_model.index(row, 0, parent_src_index)
-            if not child_src_index.isValid(): continue
+            child_node: Optional[CacheNode] = child_source_item.data(NODE_ROLE)
+            child_path = child_source_item.data(PATH_ROLE)
 
-            child_proxy_index = self.mapFromSource(child_src_index)
-            # 필터링되어 보이지 않는 항목은 건너뜀
-            if not child_proxy_index.isValid():
-                # logger.debug(f"      Skipping filtered child: {self.fs_model.filePath(child_src_index)}")
-                continue
+            if not child_node or not child_path: continue
+            # Skip ignored items as they are not visible anyway
+            if child_node.ignored: continue
 
-            file_path = self.fs_model.filePath(child_src_index)
-            current_state_in_dict = self.checked_files_dict.get(file_path, False)
+            current_state_in_dict = self.checked_files_dict.get(child_path, False)
             needs_update = (checked != current_state_in_dict)
 
             if needs_update:
                 if checked:
-                    self.checked_files_dict[file_path] = True
-                elif file_path in self.checked_files_dict:
-                    # 체크 해제 시 딕셔너리에서 제거
-                    del self.checked_files_dict[file_path]
-                    logger.debug(f"      Child unchecked and removed from checked_files_dict: {file_path}")
-                changed_indices.add(child_proxy_index) # 변경된 프록시 인덱스 추가
-                # logger.debug(f"      Child state changed: {file_path}, Added proxy index.")
+                    self.checked_files_dict[child_path] = True
+                elif child_path in self.checked_files_dict:
+                    del self.checked_files_dict[child_path]
+                    # logger.debug(f"      Child unchecked and removed from dict: {child_path}")
 
-            # 하위 폴더 재귀 호출 (폴더인 경우에만)
-            if self.fs_model.isDir(child_src_index):
-                # ensure_loaded call removed
-                # self.ensure_loaded(child_src_index) # 하위 항목 로드 보장 (REMOVED)
-                grandchildren_indices = self.update_children_state(child_src_index, checked)
-                changed_indices.update(grandchildren_indices) # 재귀적으로 변경된 인덱스 추가
+                # Find the corresponding proxy index for signaling
+                child_source_index = source_model.indexFromItem(child_source_item)
+                child_proxy_index = self.mapFromSource(child_source_index)
+                if child_proxy_index.isValid():
+                    changed_proxy_indices.add(child_proxy_index)
+                    # Emit dataChanged immediately for this child
+                    self.dataChanged.emit(child_proxy_index, child_proxy_index, [Qt.ItemDataRole.CheckStateRole])
+                    # logger.debug(f"      Child state changed & signaled: {child_path}")
 
-        # logger.debug(f"    Finished update_children_state for {parent_path}. Returning {len(changed_indices)} changed indices.")
-        return changed_indices
+            # Recurse if it's a directory
+            if child_node.is_dir:
+                grandchildren_indices = self._update_children_state_recursive(child_source_item, checked)
+                changed_proxy_indices.update(grandchildren_indices)
 
+        return changed_proxy_indices
 
     def expand_index_recursively(self, proxy_index: QModelIndex):
         """Recursively expands the given index and its children in the tree view."""
         if not proxy_index.isValid(): return
-
         self.tree_view.expand(proxy_index)
-        # With lazy loading, rowCount might be 0 until children are fetched.
-        # Expanding might trigger fetching, but we might need to wait or re-check.
-        # For simplicity, we only recurse if children are already loaded.
+        # Iterate through children in the proxy model
         child_count = self.rowCount(proxy_index)
         for row in range(child_count):
             child_proxy_idx = self.index(row, 0, proxy_index)
             if child_proxy_idx.isValid():
-                 child_src_idx = self.mapToSource(child_proxy_idx)
-                 if self.fs_model.isDir(child_src_idx):
-                      self.expand_index_recursively(child_proxy_idx)
+                 # Check if the child corresponds to a directory in the source model
+                 source_idx = self.mapToSource(child_proxy_idx)
+                 source_item = self.sourceModel().itemFromIndex(source_idx)
+                 if source_item:
+                     node: Optional[CacheNode] = source_item.data(NODE_ROLE)
+                     if node and node.is_dir:
+                          self.expand_index_recursively(child_proxy_idx)
 
 
     def get_file_path_from_index(self, proxy_index: QModelIndex) -> Optional[str]:
-        """Gets the file path from a proxy index."""
-        src_index = self.mapToSource(proxy_index)
-        if src_index.isValid():
-            # 절대 경로 반환
-            return self.fs_model.filePath(src_index)
+        """Gets the file path from a proxy index by looking at the source model."""
+        if not proxy_index.isValid(): return None
+        source_index = self.mapToSource(proxy_index)
+        if source_index.isValid():
+            return self.sourceModel().data(source_index, PATH_ROLE)
         return None
 
     def get_all_checked_paths(self) -> List[str]:
-        """Returns a list of all paths currently marked as checked."""
-        logger.debug(f"get_all_checked_paths called. Returning {len(self.checked_files_dict)} paths.")
+        """Returns a list of all paths currently marked as checked in the dictionary."""
+        # logger.debug(f"get_all_checked_paths called. Returning {len(self.checked_files_dict)} paths.")
         return list(self.checked_files_dict.keys())
 
 
     def get_checked_files(self) -> List[str]:
         """
         Returns a list of checked paths that correspond to actual files.
-        Uses os.path.isfile, which might be slow on network drives.
-        Consider caching or alternative approach if this becomes a bottleneck.
+        Reads 'is_dir' status from the internal dictionary.
         """
-        # This check might still be slow on network drives.
-        # If performance is still an issue, consider storing type (file/dir)
-        # in checked_files_dict when items are checked.
         checked_files = []
-        for path in self.checked_files_dict.keys():
-            try:
-                # Use QFileInfo from source model for potentially cached type info
-                src_index = self.fs_model.index(path)
-                if src_index.isValid():
-                    file_info: QFileInfo = self.fs_model.fileInfo(src_index)
-                    if file_info.isFile():
-                        checked_files.append(path)
-                else:
-                    # Fallback to os.path.isfile if index is invalid (less likely)
+        source_model = self.sourceModel()
+        if not isinstance(source_model, QStandardItemModel):
+             logger.warning("get_checked_files: Source model not available.")
+             return []
+
+        # Iterate through the dictionary keys (paths)
+        for path, is_checked in self.checked_files_dict.items():
+            if not is_checked: continue # Should not happen if only True is stored, but check anyway
+
+            # Find the item in the model to check its type
+            # This is inefficient. Store type in checked_files_dict?
+            # Or iterate through model items? Let's try finding item.
+            item = source_model.find_item_by_path(path) # Use helper method
+            if item:
+                node: Optional[CacheNode] = item.data(NODE_ROLE)
+                if node and not node.is_dir:
+                    checked_files.append(path)
+            else:
+                # Fallback: If item not found in model (shouldn't happen often), use os.path
+                # This is slow, especially on network drives.
+                logger.warning(f"Item not found in model for checked path: {path}. Falling back to os.path.isfile().")
+                try:
                     if os.path.isfile(path):
                         checked_files.append(path)
-            except OSError as e:
-                logger.warning(f"Error checking if path is file in get_checked_files: {path}, Error: {e}")
+                except OSError as e:
+                    logger.warning(f"Error checking if path is file in get_checked_files (fallback): {path}, Error: {e}")
 
-        logger.debug(f"get_checked_files called. Returning {len(checked_files)} file paths.")
+
+        # logger.debug(f"get_checked_files called. Returning {len(checked_files)} file paths.")
         return checked_files
+
+    def update_check_states_from_dict(self):
+        """Forces UI update based on the current checked_files_dict."""
+        logger.debug("Updating visual check states from dictionary.")
+        self.beginResetModel() # More drastic update signal
+        # Or iterate and emit dataChanged for all items?
+        # for path in self.checked_files_dict.keys():
+        #     item = self.sourceModel().find_item_by_path(path)
+        #     if item:
+        #         source_index = self.sourceModel().indexFromItem(item)
+        #         proxy_index = self.mapFromSource(source_index)
+        #         if proxy_index.isValid():
+        #             self.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole])
+        self.endResetModel()
+        logger.debug("Finished updating visual check states.")
+
 
 
 
@@ -4967,10 +5626,12 @@ from core.services.xml_service import XmlService
 from core.services.filesystem_service import FilesystemService
 from core.services.token_service import TokenCalculationService
 from core.services.gemini_service import build_gemini_graph
+from core.services.directory_cache_service import DirectoryCacheService, CacheNode # Added
 from core.langgraph_state import GeminiGraphState
 
 # UI 관련 import
-from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
+# from ui.models.file_system_models import FilteredFileSystemModel, CheckableProxyModel # Removed QFileSystemModel based
+from ui.models.file_system_models import CachedFileSystemModel, CheckableProxyModel # Use new models
 from ui.controllers.main_controller import MainController # MainController import 수정
 from ui.controllers.resource_controller import ResourceController
 from ui.controllers.prompt_controller import PromptController
@@ -5042,8 +5703,8 @@ class MainWindow(QMainWindow):
         # --- 상태 변수 ---
         self.current_project_folder: Optional[str] = None
         self.last_generated_prompt: str = ""
-        self.selected_files_data: List[tuple] = []
-        self.tree_generated: bool = False
+        self.selected_files_data: List[tuple] = [] # Still used by PromptController? Maybe remove.
+        self.tree_generated: bool = False # Still used by PromptController? Maybe remove.
         self._is_saving_gemini_settings = False # Still needed to prevent signal loops
         self.attached_items: List[Dict[str, Any]] = []
         self.api_call_start_time: Optional[datetime.datetime] = None # API 호출 시작 시간 저장
@@ -5075,13 +5736,14 @@ class MainWindow(QMainWindow):
         self.xml_service = XmlService()
         self.fs_service = FilesystemService(self.config_service) # Pass DB-backed config
         self.token_service = TokenCalculationService(self.config_service) # Pass DB-backed config
+        self.cache_service = DirectoryCacheService(self.fs_service) # Added Cache Service
         self.gemini_graph = build_gemini_graph(self.config_service) # Pass DB-backed config
         self.gemini_thread: Optional[QThread] = None
         self.gemini_worker: Optional[GeminiWorker] = None
 
         # --- UI 구성 요소 생성 ---
         create_menu_bar(self)
-        create_widgets(self)
+        create_widgets(self) # This now creates CachedFileSystemModel and CheckableProxyModel
         create_layout(self)
         create_status_bar(self)
 
@@ -5090,13 +5752,19 @@ class MainWindow(QMainWindow):
         self.resource_controller = ResourceController(self, self.template_service, self.state_service)
         self.prompt_controller = PromptController(self, self.prompt_service)
         self.xml_controller = XmlController(self, self.xml_service)
-        self.file_tree_controller = FileTreeController(self, self.fs_service, self.config_service)
+        # Pass cache_service to FileTreeController
+        self.file_tree_controller = FileTreeController(self, self.fs_service, self.config_service, self.cache_service)
 
         # --- 시그널 연결 ---
         connect_signals(self)
         # 자동 저장 타이머 시그널 연결
         self.auto_save_timer.timeout.connect(self.resource_controller.save_state_to_default)
         self.state_changed_signal.connect(self.restart_auto_save_timer) # 상태 변경 시 타이머 재시작
+        # Connect cache update signal to model population slot
+        self.cache_service.cache_updated.connect(self.cached_model.update_model_from_cache_change)
+        # Connect check state changes in proxy model to state changed signal
+        self.checkable_proxy.check_state_changed.connect(self.state_changed_signal.emit)
+
 
         # --- 초기화 작업 ---
         self.resource_controller.load_templates_list()
@@ -5145,7 +5813,7 @@ class MainWindow(QMainWindow):
         # 4. Gemini 파라미터 UI 업데이트
         self.load_gemini_settings_to_ui()
 
-        # 5. 파일 필터링/gitignore 설정 로드
+        # 5. 파일 필터링/gitignore 설정 로드 (Controller가 CacheService 업데이트)
         self.file_tree_controller.load_gitignore_settings()
 
         # 6. 리소스 관리 버튼 레이블 업데이트
@@ -5157,6 +5825,8 @@ class MainWindow(QMainWindow):
         """Restarts the application with the specified mode."""
         self._initialized = False
         self.auto_save_timer.stop() # 타이머 중지
+        self.cache_service.stop_monitoring() # Stop monitoring
+        self.cache_service.stop_scan() # Stop scan
         self.db_service.disconnect() # Disconnect DB before closing
         self.close()
         # Note: Restarting might re-trigger DB connection errors if they persist
@@ -5197,6 +5867,8 @@ class MainWindow(QMainWindow):
         was_initialized = self._initialized
         self._initialized = False
         self.auto_save_timer.stop() # 리셋 시 타이머 중지
+        self.cache_service.stop_scan() # Stop scan on reset
+        self.cache_service.stop_monitoring() # Stop monitoring on reset
 
         self.current_project_folder = None
         self.last_generated_prompt = ""
@@ -5214,7 +5886,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, 'attachment_list_widget'): self.attachment_list_widget.clear()
         self.update_window_title()
 
-        # 파일 트리 리셋 (내부에서 checked_files_dict 초기화 포함)
+        # 파일 트리 리셋 (모델 클리어)
         if hasattr(self, 'file_tree_controller'):
             self.file_tree_controller.reset_file_tree()
 
@@ -5301,6 +5973,7 @@ class MainWindow(QMainWindow):
         """
         Sets the UI state based on the provided AppState model.
         If partial_load is True, only loads project folder, checked files, user prompt, and attachments.
+        Triggers background scan if project folder changes.
         """
         logger.info(f"Setting current state. Partial load: {partial_load}")
         # UI 업데이트 중 시그널/타이머 방지
@@ -5308,209 +5981,157 @@ class MainWindow(QMainWindow):
         self._initialized = False
         self.auto_save_timer.stop()
 
-        # --- 부분 로드 (마지막 작업 불러오기) ---
-        if partial_load:
-            # 1. 프로젝트 폴더 로드 (폴더 변경 시 트리 리셋 및 gitignore 로드 포함)
-            folder_name = None
-            if state.project_folder and os.path.isdir(state.project_folder):
-                if self.current_project_folder != state.project_folder:
-                    # reset_state 대신 필요한 부분만 초기화
-                    self.current_project_folder = state.project_folder
-                    folder_name = os.path.basename(state.project_folder)
-                    self.project_folder_label.setText(f"현재 프로젝트 폴더: {state.project_folder}")
-                    if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
-                        # 체크 상태 딕셔너리 초기화 (폴더 변경 시)
-                        self.checkable_proxy.checked_files_dict.clear()
-                        logger.debug("Cleared checked_files_dict due to project folder change (partial load).")
-                        idx = self.dir_model.setRootPathFiltered(state.project_folder)
-                        root_proxy_index = self.checkable_proxy.mapFromSource(idx)
-                        self.tree_view.setRootIndex(root_proxy_index)
-                    self.status_bar.showMessage(f"Project Folder: {state.project_folder}")
-                    self.file_tree_controller.load_gitignore_settings() # 폴더 변경 시 gitignore 다시 로드
-                    self.update_window_title(folder_name)
-                else:
-                    # 같은 폴더면 현재 폴더 이름 유지
-                    folder_name = os.path.basename(self.current_project_folder)
-            elif not state.project_folder and self.current_project_folder:
-                # 상태 파일에 폴더 정보가 없으면 현재 폴더 유지
-                folder_name = os.path.basename(self.current_project_folder)
-                pass
-            else:
-                # 상태 파일에도 없고 현재도 없으면 초기화
-                self.current_project_folder = None
-                self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
-                self.file_tree_controller.reset_file_tree() # 트리 및 체크 상태 초기화
-                self.update_window_title()
+        folder_changed = False
+        new_folder = state.project_folder
+        old_folder = self.current_project_folder
 
-            # 2. 사용자 프롬프트 로드
-            self.user_tab.setText(state.user_prompt)
-
-            # 3. 첨부 파일 로드
-            self.attached_items = state.attached_items or []
-            self._update_attachment_list_ui()
-
-            # 4. 체크된 파일 복원 (프로젝트 폴더 로드 후에 수행)
-            if self.current_project_folder and hasattr(self, 'checkable_proxy'):
-                # 부분 로드 시에도 체크 상태 딕셔너리 초기화 (폴더 변경 시 이미 초기화됨)
-                if self.current_project_folder == state.project_folder: # 같은 폴더일 때만 초기화
+        # Determine if folder needs update and trigger scan if necessary
+        if new_folder and os.path.isdir(new_folder):
+            if old_folder != new_folder:
+                logger.info(f"Project folder changed: {old_folder} -> {new_folder}")
+                folder_changed = True
+                self.current_project_folder = new_folder
+                folder_name = os.path.basename(new_folder)
+                self.project_folder_label.setText(f"현재 프로젝트 폴더: {new_folder}")
+                self.update_window_title(folder_name)
+                # Clear check state dict immediately on folder change
+                if hasattr(self, 'checkable_proxy'):
                     self.checkable_proxy.checked_files_dict.clear()
-                    logger.debug("Cleared checked_files_dict before restoring checks (partial load, same folder).")
+                    logger.debug("Cleared checked_files_dict due to project folder change.")
+                # Load gitignore and start scan
+                ignore_patterns = self.file_tree_controller.load_gitignore_settings()
+                self.cache_service.start_scan(new_folder, ignore_patterns)
+            else:
+                # Folder is the same, no need to rescan unless forced
+                folder_name = os.path.basename(new_folder)
+        elif not new_folder and old_folder:
+            # Folder removed in state
+            folder_changed = True
+            self.current_project_folder = None
+            self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
+            self.update_window_title()
+            self.file_tree_controller.reset_file_tree() # Clear model
+            self.cache_service.stop_scan()
+            self.cache_service.stop_monitoring()
+            if hasattr(self, 'checkable_proxy'): self.checkable_proxy.checked_files_dict.clear()
+        # else: new_folder is None and old_folder is None - no change
 
-                items_to_check = []
-                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
-                for fpath in state.checked_files:
-                    try:
-                        abs_fpath = os.path.abspath(fpath)
-                        abs_proj_folder = os.path.abspath(self.current_project_folder)
-                        if abs_fpath.startswith(abs_proj_folder):
-                            if os.path.exists(abs_fpath):
-                                src_index = self.dir_model.index(abs_fpath)
-                                if src_index.isValid():
-                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                                    if proxy_index.isValid():
-                                        # checked_files_dict 직접 수정 대신 setData 호출에 의존
-                                        # self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                        items_to_check.append(proxy_index)
-                                        logger.debug(f"  Queueing {abs_fpath} to be checked via setData.")
-                                    else: logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
-                                else: logger.warning(f"  Could not get source index for: {abs_fpath}")
-                            else: logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
-                        else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
-                    except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
+        # --- Load common fields (partial and full) ---
+        self.user_tab.setText(state.user_prompt)
+        self.attached_items = state.attached_items or []
+        self._update_attachment_list_ui()
 
-                # UI 업데이트 (setData 호출)
-                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
-                for proxy_index in items_to_check:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
-
-            # 부분 로드 시 다른 UI 요소는 변경하지 않음 (시스템 프롬프트, LLM 설정 등)
-            self.status_bar.showMessage("마지막 작업 상태 로드 완료.")
-
-        # --- 전체 로드 (상태 가져오기 등) ---
-        else:
+        # --- Full Load Specific Fields ---
+        if not partial_load:
             if self.mode != state.mode:
                 logger.info(f"Mode mismatch. Restarting...")
                 self._restart_with_mode(state.mode)
-                return # 재시작 후에는 이 함수 다시 호출 안 됨
-
-            # 전체 리셋 대신 필요한 부분만 업데이트
-            folder_name = None
-            if state.project_folder and os.path.isdir(state.project_folder):
-                if self.current_project_folder != state.project_folder:
-                    self.current_project_folder = state.project_folder
-                    folder_name = os.path.basename(state.project_folder)
-                    self.project_folder_label.setText(f"현재 프로젝트 폴더: {state.project_folder}")
-                    if hasattr(self, 'dir_model') and hasattr(self, 'checkable_proxy'):
-                        self.checkable_proxy.checked_files_dict.clear() # 폴더 변경 시 초기화
-                        logger.debug("Cleared checked_files_dict due to project folder change (full load).")
-                        idx = self.dir_model.setRootPathFiltered(state.project_folder)
-                        root_proxy_index = self.checkable_proxy.mapFromSource(idx)
-                        self.tree_view.setRootIndex(root_proxy_index)
-                    self.status_bar.showMessage(f"Project Folder: {state.project_folder}")
-                    self.file_tree_controller.load_gitignore_settings() # 폴더 변경 시 gitignore 다시 로드
-                else:
-                    folder_name = os.path.basename(self.current_project_folder)
-            else:
-                 self.current_project_folder = None
-                 self.project_folder_label.setText("현재 프로젝트 폴더: (선택 안 됨)")
-                 self.file_tree_controller.reset_file_tree() # 트리 및 체크 상태 초기화
+                return # Restart handles everything
 
             self.system_tab.setText(state.system_prompt)
-            self.user_tab.setText(state.user_prompt)
 
             llm_index = self.llm_combo.findText(state.selected_llm)
             if llm_index != -1:
                 self.llm_combo.setCurrentIndex(llm_index)
-                # on_llm_selected 호출 전에 모델 목록 로드
-                available_models = self.config_service.get_available_models(state.selected_llm)
-                self.model_name_combo.blockSignals(True)
-                self.model_name_combo.clear()
-                self.model_name_combo.addItems(available_models)
-                self.model_name_combo.blockSignals(False)
-                # 저장된 모델명 선택 시도
+                # on_llm_selected updates model list and selects default/saved
+                self.main_controller.on_llm_selected() # Call this first
+                # Now try to select the specific model from the state
                 model_index = self.model_name_combo.findText(state.selected_model_name)
                 if model_index != -1:
                     self.model_name_combo.setCurrentIndex(model_index)
-                elif available_models:
-                    self.model_name_combo.setCurrentIndex(0) # 없으면 첫 번째 모델 선택
-                    logger.warning(f"Warning: Saved model '{state.selected_model_name}' not found for {state.selected_llm}. Selecting first available.")
                 else:
-                    logger.warning(f"No available models found for {state.selected_llm}.")
+                    logger.warning(f"Saved model '{state.selected_model_name}' not found for {state.selected_llm} after loading state.")
             else:
-                # 저장된 LLM 자체가 없으면 기본값으로 설정
+                # Saved LLM not found, default to Gemini
                 self.llm_combo.setCurrentIndex(self.llm_combo.findText("Gemini"))
                 self.main_controller.on_llm_selected()
 
-            # 첨부 파일 복원
-            self.attached_items = state.attached_items or []
-            self._update_attachment_list_ui()
-
-            # 체크된 파일 복원 (부분 로드와 동일 로직)
-            if self.current_project_folder and hasattr(self, 'checkable_proxy'):
-                # 전체 로드 시에도 체크 상태 딕셔너리 초기화 (폴더 변경 시 이미 초기화됨)
-                if self.current_project_folder == state.project_folder: # 같은 폴더일 때만 초기화
-                    self.checkable_proxy.checked_files_dict.clear()
-                    logger.debug("Cleared checked_files_dict before restoring checks (full load, same folder).")
-
-                items_to_check = []
-                logger.info(f"Restoring checked files from state: {len(state.checked_files)} items")
-                for fpath in state.checked_files:
-                    try:
-                        abs_fpath = os.path.abspath(fpath)
-                        abs_proj_folder = os.path.abspath(self.current_project_folder)
-                        if abs_fpath.startswith(abs_proj_folder):
-                            if os.path.exists(abs_fpath):
-                                src_index = self.dir_model.index(abs_fpath)
-                                if src_index.isValid():
-                                    proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                                    if proxy_index.isValid():
-                                        # checked_files_dict 직접 수정 대신 setData 호출에 의존
-                                        # self.checkable_proxy.checked_files_dict[abs_fpath] = True
-                                        items_to_check.append(proxy_index)
-                                        logger.debug(f"  Queueing {abs_fpath} to be checked via setData.")
-                                    else: logger.warning(f"  Could not map source index to proxy for: {abs_fpath}")
-                                else: logger.warning(f"  Could not get source index for: {abs_fpath}")
-                            else: logger.warning(f"  Checked file path from state does not exist: {abs_fpath}")
-                        else: logger.warning(f"  Checked file path from state is outside current project folder: {abs_fpath}")
-                    except Exception as e: logger.error(f"  Error processing checked file path '{fpath}': {e}")
-
-                # UI 업데이트 (setData 호출)
-                logger.info(f"Applying check state for {len(items_to_check)} restored items using setData.")
-                for proxy_index in items_to_check:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
-                    logger.debug(f"  Called setData(Checked) for: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
-
-            # 전체 로드 시에는 gitignore 로드 및 Gemini 파라미터 로드 필요
-            if self.current_project_folder:
-                self.file_tree_controller.load_gitignore_settings() # gitignore 로드
-            self.update_window_title(folder_name)
+            # Load Gemini settings if needed (already done by on_llm_selected if Gemini)
+            # self.load_gemini_settings_to_ui()
             self.resource_controller.update_buttons_label()
-            self.load_gemini_settings_to_ui() # Gemini 파라미터 로드
 
-            self.status_bar.showMessage("State loaded successfully!")
+        # --- Restore Check States (Common for partial and full, AFTER scan potentially finishes) ---
+        # Check states should be restored *after* the model is populated by the scan.
+        # We store the desired check states and apply them once the scan finishes.
+        self._pending_check_states = set(state.checked_files or [])
+        if folder_changed:
+            # Connect to scan_finished signal to apply checks
+            logger.info(f"Scan triggered for folder change. Will apply {len(self._pending_check_states)} check states upon completion.")
+            # Ensure only one connection
+            try: self.cache_service.scan_finished.disconnect(self._apply_pending_check_states)
+            except TypeError: pass # Ignore if not connected
+            self.cache_service.scan_finished.connect(self._apply_pending_check_states)
+        elif self.current_project_folder:
+            # If folder didn't change, apply checks immediately (assuming model is already populated)
+            logger.info("Folder unchanged. Applying check states immediately.")
+            self._apply_pending_check_states()
+        else:
+            # No folder, clear pending checks
+            self._pending_check_states = set()
 
-        # 공통 마무리 작업
-        self._initialized = was_initialized # 원래 상태로 복원
+
+        # --- Final UI Updates ---
+        status_msg = "마지막 작업 상태 로드 완료." if partial_load else "상태 로드 완료."
+        self.status_bar.showMessage(status_msg)
+        self._initialized = was_initialized
         self.main_controller.update_char_count_for_active_tab()
         self.token_count_label.setText("토큰 계산: -")
         if hasattr(self, 'api_time_label'): self.api_time_label.setText("API 시간: -")
-        self.restart_auto_save_timer() # 상태 로드 후 자동 저장 재시작
+        self.restart_auto_save_timer()
+
+    def _apply_pending_check_states(self):
+        """Applies check states stored in self._pending_check_states to the current model."""
+        logger.info(f"Applying {len(self._pending_check_states)} pending check states...")
+        if not hasattr(self, 'checkable_proxy') or not hasattr(self, 'cached_model'):
+            logger.warning("Cannot apply check states: Models not available.")
+            self._pending_check_states = set()
+            return
+
+        # Disconnect the signal after applying
+        try: self.cache_service.scan_finished.disconnect(self._apply_pending_check_states)
+        except TypeError: pass
+
+        # Clear current checks before applying pending ones
+        self.checkable_proxy.checked_files_dict.clear()
+        items_to_check_indices = []
+
+        for path in self._pending_check_states:
+            item = self.cached_model.find_item_by_path(path)
+            if item:
+                source_index = self.cached_model.indexFromItem(item)
+                proxy_index = self.checkable_proxy.mapFromSource(source_index)
+                if proxy_index.isValid():
+                    items_to_check_indices.append(proxy_index)
+                else:
+                    logger.warning(f"Could not map source index to proxy for pending check: {path}")
+            else:
+                logger.warning(f"Item not found in model for pending check state: {path}")
+
+        # Apply checks using setData (will handle dictionary update and recursion)
+        logger.info(f"Applying check state for {len(items_to_check_indices)} restored items using setData.")
+        # Set data in batches or individually? Individual seems safer with recursion flag.
+        for proxy_index in items_to_check_indices:
+            self.checkable_proxy.setData(proxy_index, Qt.CheckState.Checked, Qt.ItemDataRole.CheckStateRole)
+            # logger.debug(f"  Called setData(Checked) for pending state: {self.checkable_proxy.get_file_path_from_index(proxy_index)}")
+
+        self._pending_check_states = set() # Clear pending states
+        logger.info("Finished applying pending check states.")
+        # Emit state changed signal after applying checks
+        self.state_changed_signal.emit()
+
 
     def uncheck_all_files(self):
-        """Unchecks all items in the file tree view."""
+        """Unchecks all items in the file tree view by clearing the dictionary."""
         if not hasattr(self, 'checkable_proxy'): return
-        paths_to_uncheck = list(self.checkable_proxy.checked_files_dict.keys())
+        if not self.checkable_proxy.checked_files_dict: return # Nothing to uncheck
+
+        logger.info("Unchecking all files.")
+        # Clear the dictionary
         self.checkable_proxy.checked_files_dict.clear()
-        for fpath in paths_to_uncheck:
-            src_index = self.dir_model.index(fpath)
-            if src_index.isValid():
-                proxy_index = self.checkable_proxy.mapFromSource(src_index)
-                if proxy_index.isValid():
-                    self.checkable_proxy.dataChanged.emit(proxy_index, proxy_index, [Qt.ItemDataRole.CheckStateRole]) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
-        self.state_changed_signal.emit() # 상태 변경 시그널 발생
+        # Signal the proxy model to update the UI based on the cleared dictionary
+        self.checkable_proxy.update_check_states_from_dict()
+        # Emit state changed signal
+        self.state_changed_signal.emit()
 
     def create_tree_item(self, text, parent=None) -> QTreeWidgetItem:
         """Helper method to create items in the template/state tree."""
@@ -5817,26 +6438,32 @@ class MainWindow(QMainWindow):
         """Handles context menu requests on the file tree view."""
         index = self.tree_view.indexAt(position)
         if not index.isValid(): return
+        # Get path from proxy model using the new method
         file_path = self.checkable_proxy.get_file_path_from_index(index)
         if not file_path: return
         menu = QMenu()
         rename_action = QAction("이름 변경", self) # PyQt6: QAction(text, parent)
         delete_action = QAction("삭제", self) # PyQt6: QAction(text, parent)
+        refresh_action = QAction("새로고침", self) # Add refresh action
         menu.addAction(rename_action)
         menu.addAction(delete_action)
+        menu.addSeparator()
+        menu.addAction(refresh_action)
         action = menu.exec(self.tree_view.viewport().mapToGlobal(position)) # exec_() -> exec()
         if action == rename_action: self.file_tree_controller.rename_item(file_path)
         elif action == delete_action: self.file_tree_controller.delete_item(file_path)
+        elif action == refresh_action: self.file_tree_controller.refresh_tree() # Call refresh
 
     def on_tree_view_item_clicked(self, index: QModelIndex):
         """
         Handles item clicks in the tree view to toggle check state for selected items.
         Applies the toggled state of the clicked item to all currently selected items.
+        Uses the CheckableProxyModel's setData.
         """
         if not index.isValid() or index.column() != 0:
             return
 
-        # 클릭된 아이템의 현재 체크 상태 확인
+        # Get the target state based on the *clicked* item's current state
         current_state_value = self.checkable_proxy.data(index, Qt.ItemDataRole.CheckStateRole)
         if isinstance(current_state_value, Qt.CheckState):
             current_check_state = current_state_value
@@ -5846,33 +6473,27 @@ class MainWindow(QMainWindow):
             logger.warning(f"on_tree_view_item_clicked: Unexpected data type for CheckStateRole: {type(current_state_value)}")
             return
 
-        # 목표 체크 상태 결정 (클릭된 아이템 기준 토글)
+        # Determine the state to apply to all selected items (toggle of the clicked item)
         target_check_state = Qt.CheckState.Unchecked if current_check_state == Qt.CheckState.Checked else Qt.CheckState.Checked
 
-        # 현재 선택된 모든 아이템 가져오기
+        # Get all currently selected proxy indices
         selection_model = self.tree_view.selectionModel()
-        selected_indexes = selection_model.selectedIndexes()
+        selected_proxy_indices = selection_model.selectedIndexes()
 
-        logger.debug(f"Clicked item: {self.checkable_proxy.get_file_path_from_index(index)}, Target state: {target_check_state}, Selected count: {len(selected_indexes)}")
+        # Filter for unique column 0 indices
+        unique_col0_indices = {idx for idx in selected_proxy_indices if idx.column() == 0}
 
-        # 선택된 모든 아이템에 대해 목표 상태 적용
-        indices_processed = set() # 중복 처리 방지
+        logger.debug(f"Clicked item: {self.checkable_proxy.get_file_path_from_index(index)}, Target state: {target_check_state}, Selected count: {len(unique_col0_indices)}")
 
-        try:
-            for selected_index in selected_indexes:
-                # 0번 컬럼이고, 아직 처리되지 않은 인덱스만
-                if selected_index.isValid() and selected_index.column() == 0 and selected_index not in indices_processed:
-                    # setData 호출하여 모델 데이터 변경 및 UI 업데이트 트리거
-                    # setData 내부에서 실제 변경이 필요한지 확인하고 처리함
-                    logger.debug(f"  Calling setData for selected index: {self.checkable_proxy.get_file_path_from_index(selected_index)} with state {target_check_state}")
-                    self.checkable_proxy.setData(selected_index, target_check_state, Qt.ItemDataRole.CheckStateRole)
-                    indices_processed.add(selected_index) # 처리된 인덱스 기록
+        # Apply the target state to all unique selected items using setData
+        # setData will handle the dictionary update and recursive logic
+        for proxy_idx in unique_col0_indices:
+            if proxy_idx.isValid():
+                # logger.debug(f"  Calling setData for selected index: {self.checkable_proxy.get_file_path_from_index(proxy_idx)} with state {target_check_state}")
+                # Let setData handle the logic, including checking if state actually needs changing
+                self.checkable_proxy.setData(proxy_idx, target_check_state, Qt.ItemDataRole.CheckStateRole)
 
-        finally:
-            pass # 플래그 관리는 setData 내부에서 처리
-
-        # 체크 상태 변경 후 자동 저장 타이머 재시작
-        self.state_changed_signal.emit()
+        # No need to emit state_changed_signal here, it's connected to checkable_proxy.check_state_changed
 
 
     def restart_auto_save_timer(self):
@@ -5937,6 +6558,8 @@ class MainWindow(QMainWindow):
         logger.info("Closing MainWindow. Stopping threads and disconnecting database.")
         self.auto_save_timer.stop() # 윈도우 닫을 때 자동 저장 타이머 중지
         self.api_timer.stop() # 윈도우 닫을 때 API 타이머 중지
+        self.cache_service.stop_monitoring() # Stop monitoring
+        self.cache_service.stop_scan() # Stop scan
         # 진행 중인 스레드 중지 시도
         if hasattr(self, 'main_controller'):
             self.main_controller._stop_token_calculation_thread()
@@ -5962,6 +6585,7 @@ class MainWindow(QMainWindow):
 
 
 
+
 ======== src\ui\main_window_setup_signals.py ========
 from PyQt6.QtGui import QKeySequence, QAction # PyQt5 -> PyQt6
 from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
@@ -5984,9 +6608,10 @@ def connect_signals(mw: 'MainWindow'):
     # 파일 트리
     mw.tree_view.customContextMenuRequested.connect(mw.on_tree_view_context_menu) # MainWindow (컨트롤러 호출)
     mw.tree_view.clicked.connect(mw.on_tree_view_item_clicked) # 아이템 클릭 시 체크 상태 토글 (연결 복원)
-    mw.checkable_proxy.dataChanged.connect(mw.file_tree_controller.on_data_changed) # FileTreeController
-    # 파일 체크 상태 변경 시 MainWindow의 상태 변경 시그널 발생
-    mw.checkable_proxy.dataChanged.connect(lambda topLeft, bottomRight, roles: mw.state_changed_signal.emit() if Qt.ItemDataRole.CheckStateRole in roles else None) # Qt.CheckStateRole -> Qt.ItemDataRole.CheckStateRole
+    # Connect proxy model's check_state_changed signal to FileTreeController's handler
+    mw.checkable_proxy.check_state_changed.connect(mw.file_tree_controller.on_data_changed)
+    # Connect proxy model's check_state_changed signal to MainWindow's state_changed_signal
+    mw.checkable_proxy.check_state_changed.connect(mw.state_changed_signal.emit)
 
 
     # 실행 버튼
@@ -6091,6 +6716,7 @@ def connect_signals(mw: 'MainWindow'):
 
 
 
+
 ======== src\ui\main_window_setup_ui.py ========
 import os
 import sys
@@ -6110,7 +6736,8 @@ if TYPE_CHECKING:
     from .main_window import MainWindow
 
 # 모델 및 위젯 import
-from .models.file_system_models import FilteredFileSystemModel, CheckableProxyModel
+# from .models.file_system_models import FilteredFileSystemModel, CheckableProxyModel # Removed QFileSystemModel based
+from .models.file_system_models import CachedFileSystemModel, CheckableProxyModel # Use new models
 from .widgets.custom_text_edit import CustomTextEdit
 from .widgets.custom_tab_bar import CustomTabBar
 from utils.helpers import get_resource_path
@@ -6201,18 +6828,27 @@ def create_widgets(mw: 'MainWindow'):
     mw.project_folder_label.setFont(font_lbl)
 
     # --- 파일 탐색기 (왼쪽) ---
-    mw.dir_model = FilteredFileSystemModel()
-    mw.tree_view = FileTreeView()
+    # Use CachedFileSystemModel and CheckableProxyModel
+    mw.cached_model = CachedFileSystemModel() # Source model
+    mw.tree_view = FileTreeView() # Custom view
     project_folder_getter = lambda: mw.current_project_folder
-    mw.checkable_proxy = CheckableProxyModel(mw.dir_model, project_folder_getter, mw.fs_service, mw.tree_view)
-    mw.checkable_proxy.setSourceModel(mw.dir_model)
-    mw.tree_view.setModel(mw.checkable_proxy)
+    # Pass fs_service for potential fallback checks (though ideally not needed)
+    mw.checkable_proxy = CheckableProxyModel(project_folder_getter, mw.fs_service, mw.tree_view)
+    mw.checkable_proxy.setSourceModel(mw.cached_model) # Set source model
+    mw.checkable_proxy.setFilterKeyColumn(0) # Filter based on column 0 data (name/node)
+    mw.checkable_proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive) # Qt.CaseInsensitive -> Qt.CaseSensitivity.CaseInsensitive
+
+    mw.tree_view.setModel(mw.checkable_proxy) # Set proxy model to the view
     mw.tree_view.setColumnWidth(0, 250)
-    mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
+    # No need to hide columns as CachedFileSystemModel only has one
+    # mw.tree_view.hideColumn(1); mw.tree_view.hideColumn(2); mw.tree_view.hideColumn(3)
     mw.tree_view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection) # QAbstractItemView.ExtendedSelection -> QAbstractItemView.SelectionMode.ExtendedSelection
     mw.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu) # Qt.CustomContextMenu -> Qt.ContextMenuPolicy.CustomContextMenu
     mw.tree_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers) # QAbstractItemView.NoEditTriggers -> QAbstractItemView.EditTrigger.NoEditTriggers
     mw.tree_view.setItemDelegateForColumn(0, CheckBoxDelegate(mw.tree_view))
+    mw.tree_view.setHeaderHidden(True) # Hide header for single column model
+    mw.tree_view.setSortingEnabled(False) # Disable sorting for now
+
 
     # --- 리소스 관리 (오른쪽 하단) ---
     mw.resource_manager_group = QGroupBox("리소스 관리")
@@ -6352,139 +6988,6 @@ def create_widgets(mw: 'MainWindow'):
     gemini_param_layout.addSpacerItem(QSpacerItem(10, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
     gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
     mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
-
-
-def create_layout(mw: 'MainWindow'):
-    """Creates the layout and arranges widgets."""
-    central_widget = QWidget()
-    mw.setCentralWidget(central_widget)
-    main_layout = QVBoxLayout(central_widget)
-    main_layout.setContentsMargins(5, 2, 5, 5); main_layout.setSpacing(2)
-
-    # --- 상단 레이아웃 (버튼 + 프로젝트 경로 + LLM 컨트롤) ---
-    top_layout_wrapper = QVBoxLayout(); top_layout_wrapper.setSpacing(2); top_layout_wrapper.setContentsMargins(0, 0, 0, 0)
-
-    # 상단 버튼 행
-    top_button_container = QWidget()
-    top_button_layout = QHBoxLayout(top_button_container)
-    top_button_layout.setSpacing(10); top_button_layout.setContentsMargins(0, 0, 0, 0)
-    top_button_layout.addWidget(mw.mode_toggle_btn)
-    top_button_layout.addWidget(mw.reset_program_btn)
-    top_button_layout.addWidget(mw.load_previous_work_btn)
-    top_button_layout.addWidget(mw.save_current_work_btn) # 작업 저장 버튼 추가
-    top_button_layout.addWidget(mw.select_project_btn)
-    top_button_layout.addStretch(1)
-    top_layout_wrapper.addWidget(top_button_container)
-
-    # 프로젝트 경로 행
-    top_layout_wrapper.addWidget(mw.project_folder_label)
-
-    # LLM 컨트롤 행 (새로 추가)
-    llm_controls_container = QWidget()
-    llm_controls_layout = QHBoxLayout(llm_controls_container)
-    llm_controls_layout.setContentsMargins(0, 5, 0, 5); llm_controls_layout.setSpacing(10) # 상하 여백 추가
-    llm_controls_layout.addWidget(QLabel("Model:"))
-    llm_controls_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
-    llm_controls_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
-    llm_controls_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
-    llm_controls_layout.addStretch(1)
-    top_layout_wrapper.addWidget(llm_controls_container)
-
-    main_layout.addLayout(top_layout_wrapper, 0) # 상단 전체 레이아웃 추가
-
-    # --- 중앙 스플리터 ---
-    mw.center_splitter = QSplitter(Qt.Orientation.Horizontal) # Qt.Horizontal -> Qt.Orientation.Horizontal
-
-    # --- 왼쪽 영역 (파일 트리 + 첨부 파일) ---
-    left_side_widget = QWidget() # 컨테이너 위젯
-    left_side_layout = QVBoxLayout(left_side_widget) # 메인 레이아웃
-    left_side_layout.setContentsMargins(2, 2, 2, 2); left_side_layout.setSpacing(5)
-
-    # 세로 스플리터 생성
-    left_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
-    left_splitter.addWidget(mw.tree_view) # 파일 트리 추가
-    left_splitter.addWidget(mw.attachment_group) # 첨부 파일 그룹 추가
-    left_splitter.setSizes([400, 200]) # 초기 크기 설정 (조정 가능)
-
-    left_side_layout.addWidget(left_splitter) # 스플리터를 레이아웃에 추가
-
-    mw.center_splitter.addWidget(left_side_widget)
-
-    # --- 오른쪽 영역 (실행 버튼 + 상하 분할 영역) ---
-    right_side_widget = QWidget()
-    right_side_layout = QVBoxLayout(right_side_widget)
-    right_side_layout.setContentsMargins(0, 0, 0, 0); right_side_layout.setSpacing(0)
-
-    # 실행 버튼 컨테이너
-    run_buttons_container = QWidget()
-    run_layout = QHBoxLayout(run_buttons_container)
-    run_layout.setContentsMargins(5, 5, 5, 5); run_layout.setSpacing(10); run_layout.setAlignment(Qt.AlignmentFlag.AlignLeft) # Qt.AlignLeft -> Qt.AlignmentFlag.AlignLeft
-    for btn in mw.run_buttons: run_layout.addWidget(btn)
-    run_layout.addStretch(1)
-    right_side_layout.addWidget(run_buttons_container)
-
-    # 구분선
-    line_frame = QFrame(); line_frame.setFrameShape(QFrame.Shape.HLine); line_frame.setFrameShadow(QFrame.Shadow.Sunken) # QFrame.HLine -> QFrame.Shape.HLine, QFrame.Sunken -> QFrame.Shadow.Sunken
-    right_side_layout.addWidget(line_frame)
-
-    # 오른쪽 상하 분할 스플리터
-    right_content_splitter = QSplitter(Qt.Orientation.Vertical) # Qt.Vertical -> Qt.Orientation.Vertical
-
-    # 오른쪽 상단: 탭 위젯
-    right_content_splitter.addWidget(mw.build_tabs)
-
-    # 오른쪽 하단: 리소스 관리만
-    bottom_right_widget = QWidget()
-    bottom_right_layout = QVBoxLayout(bottom_right_widget)
-    bottom_right_layout.setContentsMargins(0, 5, 0, 0) # 상단 여백 추가
-    bottom_right_layout.setSpacing(5)
-    bottom_right_layout.addWidget(mw.resource_manager_group) # 리소스 관리 그룹만 추가
-    right_content_splitter.addWidget(bottom_right_widget)
-
-    # 오른쪽 상하 스플리터 크기 비율 설정 (예: 2:1)
-    right_content_splitter.setSizes([400, 200]) # 초기 높이 설정 (조정 가능)
-
-    # 오른쪽 레이아웃에 상하 스플리터 추가
-    right_side_layout.addWidget(right_content_splitter)
-
-    # 중앙 스플리터에 오른쪽 영역 추가
-    mw.center_splitter.addWidget(right_side_widget)
-
-    # 중앙 스플리터 크기 비율 설정 (예: 1:3)
-    # setStretchFactor is deprecated in PyQt6, use setSizes or handle resize events
-    # mw.center_splitter.setStretchFactor(0, 1) # 왼쪽 영역 비율
-    # mw.center_splitter.setStretchFactor(1, 3) # 오른쪽 영역 비율
-    # Instead, set initial sizes (already done above)
-
-    # 메인 레이아웃에 중앙 스플리터 추가
-    main_layout.addWidget(mw.center_splitter, 1)
-
-
-def create_status_bar(mw: 'MainWindow'):
-    """Creates the status bar."""
-    mw.status_bar = QStatusBar()
-    mw.setStatusBar(mw.status_bar)
-    status_widget = QWidget()
-    status_layout = QHBoxLayout(status_widget)
-    status_layout.setContentsMargins(5, 2, 5, 2); status_layout.setSpacing(10)
-
-    # 문자 수와 토큰 계산 라벨을 붙여서 추가
-    status_layout.addWidget(mw.char_count_label)
-    status_layout.addWidget(mw.token_count_label) # 토큰 계산 라벨 위치 변경
-
-    # API 시간 표시 라벨 추가
-    status_layout.addSpacerItem(QSpacerItem(20, 0, QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)) # QSizePolicy.Fixed -> QSizePolicy.Policy.Fixed
-    status_layout.addWidget(mw.api_time_label)
-
-    # LLM 관련 위젯들은 상단으로 이동했으므로 여기서 제거
-    # status_layout.addWidget(QLabel("Model:"))
-    # status_layout.addWidget(mw.llm_combo); mw.llm_combo.setFixedWidth(80)
-    # status_layout.addWidget(mw.model_name_combo); mw.model_name_combo.setMinimumWidth(180)
-    # status_layout.addWidget(mw.gemini_param_widget) # Gemini 파라미터 그룹 위젯 추가
-
-    status_layout.addStretch(1)
-    mw.status_bar.addPermanentWidget(status_widget)
-
 
 
 
@@ -8292,12 +8795,114 @@ gemini_enable_search: false
 
 
 
+======== main.py ========
+import sys
+import os
+
+# src 디렉토리를 sys.path에 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(current_dir, "src")
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
+
+# src/app.py의 메인 함수 실행
+if __name__ == '__main__':
+    # app 모듈을 여기서 임포트하여 순환 참조 방지 가능성 고려
+    from app import main
+    main()
+
+
+
+======== pyproject.toml ========
+[project]
+name = "duck-prompt"
+version = "0.2.1" # Version bump
+description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
+requires-python = ">=3.12"
+dependencies = [
+    "PyQt6>=6.7.0",
+    "PyQt6-Qt6>=6.7.0",
+    "google-generativeai>=0.5.4", # Gemini API
+    "langgraph>=0.0.69", # LangGraph for workflow
+    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
+    "anthropic>=0.28.0", # Anthropic API (Claude)
+    "psycopg2-binary>=2.9.9", # PostgreSQL driver
+    "PyYAML>=6.0.1", # YAML parsing (config)
+    "pydantic>=2.7.1", # Data validation and settings
+    "pillow>=10.3.0", # Image handling
+    "winotify>=1.1.0", # Windows notifications
+    "pyinstaller>=6.13.0",
+    "asyncssh>=2.21.0",
+    "python-dotenv>=1.1.0",
+    "watchdog>=4.0.0", # Added for filesystem monitoring
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.uv.sources]
+# Optional: Specify custom package sources if needed
+
+# Optional: Define project scripts or entry points
+# [project.scripts]
+# duckprompt = "src.app:main"
+
+# Optional: Project URLs
+# [project.urls]
+# homepage = "https://example.com"
+# documentation = "https://readthedocs.org"
+# repository = "https://github.com/user/duck-prompt.git"
+# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
+
+# Optional: Author and maintainer information
+# authors = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+# maintainers = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+
+# Optional: License information
+# license = { text = "MIT License" }
+
+# Optional: Keywords for PyPI
+# keywords = ["llm", "prompt", "gui", "pyqt"]
+
+# Optional: Classifiers for PyPI
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "License :: OSI Approved :: MIT License",
+#     "Programming Language :: Python :: 3",
+#     "Programming Language :: Python :: 3.12",
+#     "Operating System :: OS Independent",
+#     "Topic :: Software Development :: User Interfaces",
+# ]
+
+
+
+
+======== qt.conf ========
+[Platforms]
+WindowsArguments = dpiawareness=3 
+
+
+======== .env ========
+SSH_ID=2
+SSH_ALIAS=Lab_79
+SSH_HOST=lab.miraker.me
+SSH_PORT=7922
+SSH_USERNAME=shacea
+SSH_AUTH_TYPE=password
+SSH_PASSWORD=alfkzj9389#
+
+
 File Tree:
  📁 duck-prompt/
    📁 ./
-   📁 docs/
-     📁 리팩토링/
-       📄 네트워크 드라이브 개선_캐싱 및 watchdog 사용.md (5,600 bytes)
    📁 src/
      📁 core/
        📁 pydantic_models/
@@ -8305,9 +8910,10 @@ File Tree:
          📄 app_state.py (1,319 bytes)
          📄 config_settings.py (3,409 bytes)
        📁 services/
-         📄 __init__.py (884 bytes)
+         📄 __init__.py (990 bytes)
          📄 config_service.py (11,753 bytes)
          📄 db_service.py (32,083 bytes)
+         📄 directory_cache_service.py (27,887 bytes)
          📄 filesystem_service.py (6,069 bytes)
          📄 gemini_service.py (30,577 bytes)
          📄 prompt_service.py (3,956 bytes)
@@ -8322,7 +8928,7 @@ File Tree:
      📁 ui/
        📁 controllers/
          📄 __init__.py (72 bytes)
-         📄 file_tree_controller.py (18,207 bytes)
+         📄 file_tree_controller.py (17,076 bytes)
          📄 main_controller.py (24,125 bytes)
          📄 prompt_controller.py (10,846 bytes)
          📄 resource_controller.py (13,735 bytes)
@@ -8330,7 +8936,7 @@ File Tree:
          📄 xml_controller.py (2,883 bytes)
        📁 models/
          📄 __init__.py (67 bytes)
-         📄 file_system_models.py (17,755 bytes)
+         📄 file_system_models.py (20,741 bytes)
        📁 widgets/
          📄 __init__.py (68 bytes)
          📄 check_box_delegate.py (3,714 bytes)
@@ -8339,9 +8945,9 @@ File Tree:
          📄 file_tree_view.py (2,439 bytes)
          📄 tab_manager.py (613 bytes)
        📄 __init__.py (63 bytes)
-       📄 main_window.py (58,142 bytes)
-       📄 main_window_setup_signals.py (8,717 bytes)
-       📄 main_window_setup_ui.py (24,067 bytes)
+       📄 main_window.py (53,871 bytes)
+       📄 main_window_setup_signals.py (8,666 bytes)
+       📄 main_window_setup_ui.py (18,240 bytes)
        📄 settings_dialog.py (54,953 bytes)
      📁 utils/
        📄 __init__.py (320 bytes)
@@ -8352,6 +8958,7 @@ File Tree:
      📄 __init__.py (64 bytes)
      📄 app.py (5,313 bytes)
      📄 config.yml (1,155 bytes)
+   📄 .env (137 bytes)
    📄 main.py (422 bytes)
-   📄 pyproject.toml (2,014 bytes)
+   📄 pyproject.toml (2,085 bytes)
    📄 qt.conf (47 bytes)

@@ -16,8 +16,6 @@ dependencies = [
     "pillow>=10.3.0", # Image handling
     "winotify>=1.1.0", # Windows notifications
     "pyinstaller>=6.13.0",
-    "asyncssh>=2.21.0",
-    "python-dotenv>=1.1.0",
     "watchdog>=4.0.0", # Added for filesystem monitoring
 ]
 
@@ -65,4 +63,3 @@ profile = "black"
 #     "Operating System :: OS Independent",
 #     "Topic :: Software Development :: User Interfaces",
 # ]
-

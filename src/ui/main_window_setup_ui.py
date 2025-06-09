@@ -269,3 +269,83 @@ def create_widgets(mw: 'MainWindow'):
     gemini_param_layout.addWidget(mw.gemini_budget_label); gemini_param_layout.addWidget(mw.gemini_budget_edit)
     mw.gemini_param_widget.setVisible(mw.llm_combo.currentText() == "Gemini") # 초기 가시성 설정
 
+
+def create_layout(mw: 'MainWindow'):
+    """Creates the main layout and arranges widgets."""
+    central_widget = QWidget()
+    mw.setCentralWidget(central_widget)
+    main_layout = QVBoxLayout(central_widget)
+    main_layout.setContentsMargins(5, 5, 5, 5)
+    main_layout.setSpacing(5)
+
+    # --- Top Bar (Buttons and LLM selection) ---
+    top_bar_layout = QHBoxLayout()
+    top_bar_layout.addWidget(mw.mode_toggle_btn)
+    top_bar_layout.addWidget(mw.reset_program_btn)
+    top_bar_layout.addWidget(mw.load_previous_work_btn)
+    top_bar_layout.addWidget(mw.save_current_work_btn)
+    top_bar_layout.addStretch(1)
+    top_bar_layout.addWidget(QLabel("LLM:"))
+    top_bar_layout.addWidget(mw.llm_combo)
+    top_bar_layout.addWidget(QLabel("Model:"))
+    top_bar_layout.addWidget(mw.model_name_combo)
+    top_bar_layout.addWidget(mw.gemini_param_widget)
+    main_layout.addLayout(top_bar_layout)
+
+    # --- Project Folder and Selection Button ---
+    project_folder_layout = QHBoxLayout()
+    project_folder_layout.addWidget(mw.select_project_btn)
+    project_folder_layout.addWidget(mw.project_folder_label, 1)
+    main_layout.addLayout(project_folder_layout)
+
+    # --- Center Splitter (Left: File Tree/Attachments, Right: Tabs/Resources) ---
+    mw.center_splitter = QSplitter(Qt.Orientation.Horizontal)
+
+    # --- Left Panel ---
+    left_panel = QWidget()
+    left_layout = QVBoxLayout(left_panel)
+    left_layout.setContentsMargins(0, 0, 0, 0)
+    left_splitter = QSplitter(Qt.Orientation.Vertical)
+    left_splitter.addWidget(mw.tree_view)
+    left_splitter.addWidget(mw.attachment_group)
+    # Set initial sizes for the left vertical splitter
+    left_splitter.setSizes([400, 150])
+    left_layout.addWidget(left_splitter)
+    mw.center_splitter.addWidget(left_panel)
+
+    # --- Right Panel ---
+    right_panel = QWidget()
+    right_layout = QVBoxLayout(right_panel)
+    right_layout.setContentsMargins(0, 0, 0, 0)
+    right_splitter = QSplitter(Qt.Orientation.Vertical)
+
+    # Top part of the right panel (run buttons and tabs)
+    right_top_widget = QWidget()
+    right_top_layout = QVBoxLayout(right_top_widget)
+    right_top_layout.setContentsMargins(0, 0, 0, 0)
+    right_top_layout.setSpacing(5)
+
+    run_buttons_layout = QHBoxLayout()
+    for btn in mw.run_buttons:
+        run_buttons_layout.addWidget(btn)
+    run_buttons_layout.addStretch()
+    right_top_layout.addLayout(run_buttons_layout)
+    right_top_layout.addWidget(mw.build_tabs, 1)
+
+    right_splitter.addWidget(right_top_widget)
+    right_splitter.addWidget(mw.resource_manager_group)
+    # Set initial sizes for the right vertical splitter
+    right_splitter.setSizes([500, 250])
+    right_layout.addWidget(right_splitter)
+    mw.center_splitter.addWidget(right_panel)
+
+    main_layout.addWidget(mw.center_splitter, 1)
+
+def create_status_bar(mw: 'MainWindow'):
+    """Creates and configures the status bar."""
+    mw.status_bar = QStatusBar()
+    mw.setStatusBar(mw.status_bar)
+    # Add permanent widgets from right to left
+    mw.status_bar.addPermanentWidget(mw.api_time_label)
+    mw.status_bar.addPermanentWidget(mw.token_count_label)
+    mw.status_bar.addPermanentWidget(mw.char_count_label)
