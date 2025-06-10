@@ -77,6 +77,19 @@ class MainController(QObject):
                 self._load_default_system_prompt(result['settings'])
             # Set default UI states after config is loaded
             self._set_default_ui_states()
+
+        elif command_name == "ApplyDmpPatch":
+            if result.get("success"):
+                self.status_message.emit(result.get("message", "패치 적용 완료."))
+                # The service already triggers a refresh, but we need to get the new tree data.
+                from src.features.file_management.commands import GetFileTree
+                self.bridge.execute_command("file_management", GetFileTree())
+            else:
+                self.error_occurred.emit(result.get("message", "패치 적용 실패."))
+
+        elif command_name == "GetFileTree":
+            if result and result.get("tree"):
+                self.file_tree_ready.emit(result["tree"])
     
     @pyqtSlot(str, str)
     def _handle_command_failure(self, command_name: str, error: str):
@@ -247,6 +260,17 @@ class MainController(QObject):
         except TypeError:
             pass # was not connected
         self.prompt_built.connect(self._switch_to_prompt_tab, type=Qt.ConnectionType.SingleShotConnection)
+
+    @pyqtSlot()
+    def run_dmp_parser(self):
+        """Handles the click of the 'Run DMP Parser' button."""
+        patch_text = self.main_window.dmp_input_tab.toPlainText()
+        if not patch_text.strip():
+            self.error_occurred.emit("DMP 입력 탭에 패치 내용이 없습니다.")
+            return
+        
+        from src.features.dmp_processor.commands import ApplyDmpPatch
+        self.bridge.execute_command("dmp_processor", ApplyDmpPatch(patch_text=patch_text))
 
     @pyqtSlot(str)
     def _switch_to_prompt_tab(self, prompt_text: str):

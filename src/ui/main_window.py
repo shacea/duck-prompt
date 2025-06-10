@@ -131,11 +131,13 @@ class MainWindow(QMainWindow):
         self.user_tab = CustomTextEdit()
         self.dir_structure_tab = CustomTextEdit()
         self.prompt_output_tab = CustomTextEdit()
+        self.dmp_input_tab = CustomTextEdit()
         self.summary_tab = CustomTextEdit()
         self.build_tabs.addTab(self.system_tab, "시스템")
         self.build_tabs.addTab(self.user_tab, "사용자")
         self.build_tabs.addTab(self.dir_structure_tab, "파일 트리")
         self.build_tabs.addTab(self.prompt_output_tab, "프롬프트 출력")
+        self.build_tabs.addTab(self.dmp_input_tab, "DMP 입력")
         self.build_tabs.addTab(self.summary_tab, "Summary")
         self.build_tabs.setCurrentWidget(self.user_tab)
 
@@ -143,8 +145,9 @@ class MainWindow(QMainWindow):
         self.generate_btn = QPushButton("✨ 프롬프트 생성")
         self.send_to_gemini_btn = QPushButton("♊ Gemini로 전송")
         self.copy_btn = QPushButton("📋 클립보드에 복사")
+        self.run_dmp_parser_btn = QPushButton("▶️ DMP 패치 적용")
         self.generate_all_btn = QPushButton("⚡️ 한번에 실행")
-        self.run_buttons = [self.generate_tree_btn, self.generate_btn, self.send_to_gemini_btn, self.copy_btn, self.generate_all_btn]
+        self.run_buttons = [self.generate_tree_btn, self.generate_btn, self.send_to_gemini_btn, self.copy_btn, self.run_dmp_parser_btn, self.generate_all_btn]
         
         self.llm_combo = QComboBox(); self.llm_combo.addItems(["Gemini", "Claude", "GPT"])
         self.model_name_combo = QComboBox(); self.model_name_combo.setEditable(True)

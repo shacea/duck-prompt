@@ -106,6 +106,7 @@ class DuckPromptApp(QApplication):
         self.main_window.generate_btn.clicked.connect(self.controller.build_prompt)
         self.main_window.generate_tree_btn.clicked.connect(self.controller.generate_directory_tree)
         self.main_window.generate_all_btn.clicked.connect(self.controller.run_all_sequence)
+        self.main_window.run_dmp_parser_btn.clicked.connect(self.controller.run_dmp_parser)
         
         # --- File tree ---
         # Connect the model's check state change signal to the controller

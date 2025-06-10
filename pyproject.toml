@@ -18,6 +18,7 @@ dependencies = [
     "pyinstaller>=6.13.0",
     "watchdog>=4.0.0", # Added for filesystem monitoring
     "diff-match-patch>=20230430", # DMP for code patches
+    "python-patch>=1.16", # DMP patch application
 ]
 
 [tool.black]

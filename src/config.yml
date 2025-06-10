@@ -1,4 +1,4 @@
-default_system_prompt: resources\prompts\system\unified-diff_en.md
+default_system_prompt: resources/prompts/system/unified-diff_en.md
 allowed_extensions: !!set {}
 excluded_dirs: !!set
   __pycache__/: null
@@ -20,6 +20,7 @@ default_ignore_list:
   - .gitignore
   - .idea/
   - .vscode/
+  - .windsurfrules
   - __pycache__/
   - build/
   - dist/

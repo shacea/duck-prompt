@@ -68,6 +68,7 @@ class FAHBridge(QObject):
             import src.features.file_management.handlers
             import src.features.prompt_builder.handlers
             import src.features.tokens.handlers
+            import src.features.dmp_processor.handlers
             
             logger.info("FAH Bridge initialized with all handlers")
             
