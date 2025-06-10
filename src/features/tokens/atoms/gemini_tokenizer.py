@@ -1,6 +1,6 @@
 """Gemini tokenizer atom - calculates tokens for Google models"""
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,3 @@ class GeminiTokenizer:
         # Each frame counts as an image (~258 tokens)
         frames = duration_seconds * fps
         return frames * 258
-
-
-# Import for type hints
-from typing import List

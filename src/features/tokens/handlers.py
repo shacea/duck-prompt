@@ -5,7 +5,7 @@ from src.gateway import EventBus, ServiceLocator
 from .commands import (
     CalculateTokens, CalculatePromptTokens, CalculateFileTokens,
     CalculateMultimodalTokens, GetTokenUsage, GetTokenLimits,
-    EstimateCost, GetModelInfo
+    GetModelInfo
 )
 from .organisms.token_service import TokenService
 
@@ -85,19 +85,6 @@ async def handle_get_token_limits(cmd: GetTokenLimits):
     limits = service.get_token_limits()
     
     return {"limits": limits}
-
-
-@TokensCommandBus.register(EstimateCost)
-async def handle_estimate_cost(cmd: EstimateCost):
-    """Estimate API cost based on tokens"""
-    service = ServiceLocator.get("tokens")
-    result = service.estimate_cost(
-        prompt_tokens=cmd.prompt_tokens,
-        completion_tokens=cmd.completion_tokens,
-        model=cmd.model
-    )
-    
-    return result
 
 
 @TokensCommandBus.register(GetModelInfo)

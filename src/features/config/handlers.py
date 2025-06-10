@@ -1,8 +1,7 @@
 """Configuration feature command handlers"""
 import logging
 from src.gateway.bus.config_command_bus import ConfigCommandBus
-from src.gateway.event_bus import EventBus, Event
-from src.gateway.service_locator import ServiceLocator
+from src.gateway import EventBus, Event, ServiceLocator
 from .commands import (
     LoadConfiguration, UpdateConfiguration,
     GetActiveGeminiKey, SetUserSelectedGeminiKey,

@@ -1,6 +1,6 @@
 """GPT tokenizer atom - calculates tokens for OpenAI models"""
 import logging
-from typing import Optional
+from typing import Optional, Dict
 import tiktoken
 
 logger = logging.getLogger(__name__)
@@ -91,7 +91,3 @@ class GPTTokenizer:
         }
         
         return limits.get(model, {"context": 4096, "max_output": 2048})
-
-
-# Import for type hints
-from typing import Dict

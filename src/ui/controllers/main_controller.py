@@ -198,16 +198,20 @@ class MainController(QObject):
     @pyqtSlot()
     def save_state(self):
         """Save application state"""
-        from src.features.state.commands import SaveState
-        self.bridge.execute_command("state", SaveState())
-        self.status_message.emit("State saved")
+        logger.warning("State saving feature is not yet implemented.")
+        self.status_message.emit("State saving not implemented.")
+        # from src.features.state.commands import SaveState
+        # self.bridge.execute_command("state", SaveState())
+        # self.status_message.emit("State saved")
     
     @pyqtSlot()
     def load_last_state(self):
         """Load last saved state"""
-        from src.features.state.commands import LoadLastState
-        self.bridge.execute_command("state", LoadLastState())
-        self.status_message.emit("Last state loaded")
+        logger.warning("State loading feature is not yet implemented.")
+        self.status_message.emit("State loading not implemented.")
+        # from src.features.state.commands import LoadLastState
+        # self.bridge.execute_command("state", LoadLastState())
+        # self.status_message.emit("Last state loaded")
     
     def shutdown(self):
         """Cleanup on shutdown"""

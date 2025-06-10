@@ -129,8 +129,7 @@ class ConfigurationService:
     # Private helper methods for database operations
     async def _get_application_config(self, db_service) -> Dict[str, Any]:
         """Get application config from database"""
-        from src.features.database.commands import GetAllConfigs
-        configs = await db_service.handle(GetAllConfigs())
+        configs = db_service.config_manager.get_all_configs()
         
         # Convert list of configs to dict
         config_dict = {}
@@ -141,23 +140,19 @@ class ConfigurationService:
     
     async def _save_application_config(self, db_service, config_dict: Dict[str, Any]) -> bool:
         """Save application config to database"""
-        from src.features.database.commands import SaveConfig
-        
         for key, value in config_dict.items():
-            await db_service.handle(SaveConfig(key=key, value=str(value)))
+            db_service.config_manager.save_config(key=key, value=str(value))
         
         return True
     
     async def _get_available_gemini_keys(self, db_service) -> List[Dict[str, Any]]:
         """Get available Gemini API keys"""
-        from src.features.database.commands import ExecuteQuery
         query = "SELECT * FROM api_keys WHERE service_name = 'google' AND is_active = true"
-        return await db_service.handle(ExecuteQuery(query=query, fetch_all=True))
+        return db_service.execute_query(query=query, fetch_all=True)
     
     async def _get_anthropic_key(self, db_service) -> Optional[str]:
         """Get active Anthropic API key"""
-        from src.features.database.commands import GetActiveApiKey
-        return await db_service.handle(GetActiveApiKey(service_name='anthropic'))
+        return db_service.api_key_manager.get_active_api_key(service_name='anthropic')
     
     async def _check_api_keys(self, db_service) -> None:
         """Check availability of API keys"""
@@ -169,5 +164,4 @@ class ConfigurationService:
     
     async def _get_gitignore_patterns(self, db_service) -> List[str]:
         """Get gitignore patterns from database"""
-        from src.features.database.commands import GetIgnoredPatterns
-        return await db_service.handle(GetIgnoredPatterns())
+        return db_service.get_ignored_patterns()

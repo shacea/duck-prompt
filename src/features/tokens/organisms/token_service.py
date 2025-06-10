@@ -5,7 +5,6 @@ from src.gateway import ServiceLocator, EventBus, Event
 from ..atoms.gpt_tokenizer import GPTTokenizer
 from ..atoms.claude_tokenizer import ClaudeTokenizer
 from ..atoms.gemini_tokenizer import GeminiTokenizer
-from ..molecules.cost_calculator import CostCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +17,6 @@ class TokensCalculatedEvent(Event):
         self.token_count = token_count
 
 
-class CostCalculatedEvent(Event):
-    """Event emitted when cost is calculated"""
-    def __init__(self, model: str, total_cost: float):
-        self.model = model
-        self.total_cost = total_cost
-
-
 class TokenService:
     """High-level token calculation service"""
     
@@ -32,13 +24,11 @@ class TokenService:
         self.gpt_tokenizer = GPTTokenizer()
         self.claude_tokenizer = ClaudeTokenizer()
         self.gemini_tokenizer = GeminiTokenizer()
-        self.cost_calculator = CostCalculator()
         
         # Token usage tracking
         self.usage_stats = {
             "total_prompt_tokens": 0,
             "total_completion_tokens": 0,
-            "total_cost": 0.0,
             "by_model": {}
         }
         
@@ -205,47 +195,6 @@ class TokenService:
             }
         }
     
-    def estimate_cost(
-        self,
-        prompt_tokens: int,
-        completion_tokens: int,
-        model: str = "gpt-4",
-        image_count: int = 0
-    ) -> Dict[str, Any]:
-        """Estimate API cost based on tokens"""
-        cost_data = self.cost_calculator.calculate_cost(
-            prompt_tokens,
-            completion_tokens,
-            model,
-            image_count
-        )
-        
-        # Convert Decimal to float for JSON serialization
-        result = {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "model": model,
-            "costs": {
-                "prompt_cost": float(cost_data["prompt_cost"]),
-                "completion_cost": float(cost_data["completion_cost"]),
-                "image_cost": float(cost_data["image_cost"]),
-                "total_cost": float(cost_data["total_cost"]),
-                "currency": cost_data["currency"]
-            }
-        }
-        
-        # Emit event
-        EventBus.emit(CostCalculatedEvent(
-            model=model,
-            total_cost=result["costs"]["total_cost"]
-        ))
-        
-        # Update usage stats
-        self._update_usage_stats(model, prompt_tokens, completion_tokens)
-        self.usage_stats["total_cost"] += result["costs"]["total_cost"]
-        
-        return result
-    
     def get_token_limits(self) -> Dict[str, Dict[str, Any]]:
         """Get token limits for all models"""
         limits = {}
@@ -276,13 +225,9 @@ class TokenService:
         else:
             limits = {"context": 4096, "max_output": 2048}
         
-        # Get pricing
-        pricing = self.cost_calculator.get_model_pricing(model)
-        
         return {
             "model": model,
             "limits": limits,
-            "pricing": {k: float(v) for k, v in pricing.items()} if pricing else None,
             "provider": self._get_provider(model)
         }
     

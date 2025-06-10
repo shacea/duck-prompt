@@ -66,9 +66,6 @@ class SaveGeminiLog(Command):
     prompt_tokens: int
     response_tokens: int
     total_tokens: int
-    prompt_cost: float
-    response_cost: float
-    total_cost: float
     response_text: Optional[str] = None
     response_summary: Optional[str] = None
 

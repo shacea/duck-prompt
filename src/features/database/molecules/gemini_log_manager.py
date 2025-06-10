@@ -1,7 +1,6 @@
 """Gemini API log management molecule"""
 import logging
 from typing import Optional, Dict, Any, List
-from decimal import Decimal
 from ..atoms.query_executor import QueryExecutor
 
 logger = logging.getLogger(__name__)
@@ -19,9 +18,6 @@ class GeminiLogManager:
         prompt_tokens: int,
         response_tokens: int,
         total_tokens: int,
-        prompt_cost: float,
-        response_cost: float,
-        total_cost: float,
         response_text: Optional[str] = None,
         response_summary: Optional[str] = None
     ) -> int:
@@ -29,8 +25,8 @@ class GeminiLogManager:
         query = """
             INSERT INTO gemini_logs (
                 model_name, prompt_tokens, response_tokens, total_tokens,
-                prompt_cost, response_cost, total_cost, response_text, response_summary
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                response_text, response_summary
+            ) VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
         """
         params = (
@@ -38,9 +34,6 @@ class GeminiLogManager:
             prompt_tokens,
             response_tokens,
             total_tokens,
-            Decimal(str(prompt_cost)),
-            Decimal(str(response_cost)),
-            Decimal(str(total_cost)),
             response_text,
             response_summary
         )
@@ -61,14 +54,13 @@ class GeminiLogManager:
         return results
     
     def get_total_usage(self) -> Dict[str, Any]:
-        """Get total token usage and costs"""
+        """Get total token usage"""
         query = """
             SELECT 
                 COUNT(*) as total_requests,
                 SUM(prompt_tokens) as total_prompt_tokens,
                 SUM(response_tokens) as total_response_tokens,
-                SUM(total_tokens) as total_tokens,
-                SUM(total_cost) as total_cost
+                SUM(total_tokens) as total_tokens
             FROM gemini_logs
         """
         result = self.executor.execute(query, fetch_one=True)

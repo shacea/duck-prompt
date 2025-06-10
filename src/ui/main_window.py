@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTreeView, QTabWidget,
-    QStatusBar, QPushButton, QLabel, QCheckBox,
+    QStatusBar, QPushButton, QLabel, QCheckBox, QGroupBox,
     QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu,
     QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox,
     QFrame, QLineEdit, QDialog, QListWidget, QListWidgetItem, QStyle

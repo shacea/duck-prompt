@@ -42,13 +42,6 @@ class GetTokenLimits(Command):
     pass
 
 
-class EstimateCost(Command):
-    """Command to estimate API cost based on tokens"""
-    prompt_tokens: int
-    completion_tokens: int
-    model: str = "gpt-4"
-
-
 class GetModelInfo(Command):
     """Command to get model information including token limits"""
     model: str

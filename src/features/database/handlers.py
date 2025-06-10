@@ -134,9 +134,6 @@ async def handle_save_gemini_log(cmd: SaveGeminiLog):
         cmd.prompt_tokens,
         cmd.response_tokens,
         cmd.total_tokens,
-        cmd.prompt_cost,
-        cmd.response_cost,
-        cmd.total_cost,
         cmd.response_text,
         cmd.response_summary
     )

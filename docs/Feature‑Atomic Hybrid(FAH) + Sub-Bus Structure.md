@@ -341,7 +341,7 @@ if __name__ == "__main__":
 ### A.3 Event Bus 리스너 (`src/features/analytics/handlers.py`)
 
 ```python
-from src.gateway.event_bus import EventBus, Event # src. 추가, Event 클래스 임포트
+from src.gateway import EventBus, Event # src. 추가, Event 클래스 임포트
 # from src.features.images_resize.events import ImageResizedEvent # 실제 이벤트 클래스 임포트 가정 (예시 경로)
 
 # class ImageResizedEvent(Event): # 예시 이벤트 정의
@@ -360,7 +360,7 @@ def collect_metrics(event: Event): # 파라미터 변경 (event: ImageResizedEve
 ### A.4 Service Locator 초기화 (`src/main.py`)
 
 ```python
-from src.gateway.service_locator import ServiceLocator # src. 추가
+from src.gateway import ServiceLocator # src. 추가
 # from src.infrastructure.local_storage import LocalDiskStorage # src/infrastructure에 있다고 가정 (예시 경로)
 
 # class LocalDiskStorage: # 예시 스토리지 클래스
@@ -377,8 +377,7 @@ from src.gateway.service_locator import ServiceLocator # src. 추가
 
 ```python
 from src.gateway.bus.images_resize_command_bus import ImagesResizeCommandBus # src. 추가 (예시 경로)
-from src.gateway.event_bus import EventBus, Event # src. 추가, Event 클래스 임포트
-from src.gateway.service_locator import ServiceLocator # src. 추가
+from src.gateway import EventBus, Event, ServiceLocator # src. 추가
 from .commands import ResizeImage # 현재 디렉터리 내 commands 모듈이므로 .commands 사용
 import asyncio # 예시를 위해 추가
 
