@@ -1,0 +1,1 @@
+"""UI Bridge layer - connects PyQt6 UI to FAH architecture"""

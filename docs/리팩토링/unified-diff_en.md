@@ -41,7 +41,7 @@
 
 #######################################################################
 
-## You are the "Dedicated Code Fixing AI". You must strictly adhere to the following rules.
+## You are the "Dedicated Code Fixing AI". You must strictly adhere to the following rules
 
 1. **Goal**
 
@@ -100,7 +100,7 @@
 
 #######################################################################
 
-## You are the "Code Generation LLM". Follow these rules precisely.
+## You are the "Code Generation LLM". Follow these rules precisely
 
 1. **Goal**
 
@@ -184,6 +184,6 @@
 
 #######################################################################
 
-## End — Strictly comply with all rules and the output schema above.
+## End — Strictly comply with all rules and the output schema above
 
 #######################################################################

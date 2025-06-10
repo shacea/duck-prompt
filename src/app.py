@@ -1,106 +1,190 @@
+"""
+FAH-based Duck Prompt Application
+This is the new main application using FAH architecture
+"""
 import sys
 import os
-import ctypes
-import logging # 로깅 추가
-from PyQt6.QtWidgets import QApplication, QMessageBox # PyQt5 -> PyQt6
-from PyQt6.QtGui import QIcon # PyQt5 -> PyQt6
-from PyQt6.QtCore import Qt # PyQt5 -> PyQt6
-from ui.main_window import MainWindow
-from utils.helpers import get_resource_path
-from core.services.db_service import DbService # DbService 임포트
+import logging
+from pathlib import Path
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon, QFont
 
-def setup_logging():
-    """Sets up basic logging configuration."""
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.basicConfig(level=logging.INFO, format=log_format)
-    # Optionally add file handler later if needed
-    # handler = logging.FileHandler('app.log', encoding='utf-8')
-    # handler.setFormatter(logging.Formatter(log_format))
-    # logging.getLogger().addHandler(handler)
-    logging.info("Logging setup complete.")
+# Add parent directory to path for imports
+# This is no longer strictly necessary if run via the root main.py, but good for robustness
+if str(Path(__file__).parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
-def cleanup_logs(db_service: DbService):
-    """Calls the log cleanup function."""
-    try:
-        logging.info("Attempting to clean up old Gemini logs...")
-        db_service.cleanup_old_gemini_logs(days_to_keep=7) # 7일 이상된 로그 삭제
-        logging.info("Log cleanup process finished.")
-    except Exception as e:
-        logging.error(f"Error during log cleanup: {e}", exc_info=True)
+# Import UI components and the new controller
+from src.ui.main_window import MainWindow
+from src.ui.controllers.main_controller import MainController
+from src.shared.atoms.logger import Logger
+from src.ui.styles.font_config import FontConfig
+
+# Configure logging
+Logger.setup(
+    level=logging.INFO,
+    format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+class DuckPromptApp(QApplication):
+    """FAH-based Duck Prompt Application"""
+    
+    def __init__(self, argv):
+        super().__init__(argv)
+        
+        # Set application metadata
+        self.setApplicationName("Duck Prompt FAH")
+        self.setOrganizationName("DuckPrompt")
+        self.setApplicationDisplayName("Duck Prompt - FAH Edition")
+        
+        # Configure font settings and load malgun.ttf
+        FontConfig.setup_application_fonts(self)
+        
+        # Set application icon
+        try:
+            icon_path = str(Path(__file__).parent.parent / "resources" / "icons" / "rubber_duck.ico")
+            if Path(icon_path).exists():
+                self.setWindowIcon(QIcon(icon_path))
+        except Exception as e:
+            logger.error(f"Failed to set window icon: {e}")
+        
+        # Initialize main window and controller
+        self.main_window = None
+        self.controller = None
+        
+        # Setup application
+        self._setup_application()
+    
+    
+    def _setup_application(self):
+        """Setup the application"""
+        try:
+            # Suppress font warnings in Qt
+            os.environ['QT_LOGGING_RULES'] = 'qt.text.font.db.warning=false'
+            
+            # Create main window
+            self.main_window = MainWindow()
+            self.main_window.setWindowTitle("Duck Prompt - FAH Edition")
+            
+            # Create FAH controller
+            self.controller = MainController(self.main_window)
+            
+            # Connect UI to controller
+            self._connect_ui_signals()
+            
+            # Show main window
+            self.main_window.show()
+            
+            # Initialize application after GUI is shown
+            QTimer.singleShot(100, self._initialize_app)
+            
+        except Exception as e:
+            logger.critical(f"Failed to setup application: {e}", exc_info=True)
+            raise
+    
+    def _connect_ui_signals(self):
+        """Connect UI signals to the FAH controller"""
+        logger.debug("Connecting UI signals to FAH controller.")
+
+        # --- Top buttons ---
+        self.main_window.select_project_btn.clicked.connect(self.controller.select_project_folder)
+        self.main_window.save_current_work_btn.clicked.connect(self.controller.save_state)
+        self.main_window.load_previous_work_btn.clicked.connect(self.controller.load_last_state)
+        # Note: reset_program_btn is not connected as it's not part of the FAH controller logic.
+
+        # --- Prompt building ---
+        self.main_window.system_tab.textChanged.connect(
+            lambda: self.controller.update_system_prompt(self.main_window.system_tab.toPlainText())
+        )
+        self.main_window.user_tab.textChanged.connect(
+            lambda: self.controller.update_user_prompt(self.main_window.user_tab.toPlainText())
+        )
+        self.main_window.generate_btn.clicked.connect(self.controller.build_prompt)
+        self.main_window.generate_tree_btn.clicked.connect(self.controller.generate_directory_tree)
+        
+        # --- File tree ---
+        # Check all/uncheck all functionality
+        if hasattr(self.main_window, 'check_all_btn'): # Assuming a button exists for this
+            self.main_window.check_all_btn.clicked.connect(lambda: self.controller.check_all_files(True))
+        if hasattr(self.main_window, 'uncheck_all_btn'):
+            self.main_window.uncheck_all_btn.clicked.connect(lambda: self.controller.check_all_files(False))
+        
+        # Context menu refresh action
+        # This is handled within MainWindow's context menu creation logic now, which calls the controller.
+        
+        # --- Controller signals to UI ---
+        self.controller.project_folder_changed.connect(self._update_project_folder)
+        self.controller.prompt_built.connect(self._update_prompt_display)
+        self.controller.tokens_calculated.connect(self._update_token_display)
+        self.controller.status_message.connect(self.main_window.statusBar().showMessage)
+        self.controller.error_occurred.connect(self._show_error_messagebox)
+
+    def _initialize_app(self):
+        """Initialize application after GUI is ready"""
+        logger.info("Initializing FAH-based Duck Prompt application...")
+        # Controller's __init__ handles the initialization sequence now.
+        logger.info("Application initialized successfully")
+    
+    def _update_project_folder(self, folder_path: str):
+        """Update UI when project folder changes"""
+        if hasattr(self.main_window, 'project_folder_label'):
+            self.main_window.project_folder_label.setText(f"현재 프로젝트 폴더: {folder_path}")
+        self.main_window.setWindowTitle(f"{Path(folder_path).name} - Duck Prompt FAH")
+    
+    def _update_prompt_display(self, prompt: str):
+        """Update prompt display if available"""
+        if hasattr(self.main_window, 'prompt_output_tab'):
+            self.main_window.prompt_output_tab.setPlainText(prompt)
+    
+    def _update_token_display(self, token_info: dict):
+        """Update token count display"""
+        if hasattr(self.main_window, 'token_count_label'):
+            total_tokens = token_info.get('total_tokens', 0)
+            model = token_info.get('model', 'Unknown')
+            self.main_window.token_count_label.setText(f"Tokens: {total_tokens:,} ({model})")
+
+    def _show_error_messagebox(self, error_message: str):
+        """Show error in a message box."""
+        QMessageBox.critical(self.main_window, "Error", error_message)
+    
+    def cleanup(self):
+        """Cleanup on application exit"""
+        logger.info("Shutting down FAH application...")
+        if self.controller:
+            self.controller.shutdown()
+        logger.info("Application shutdown complete")
 
 def main():
-    setup_logging() # 로깅 설정 호출
-
-    if sys.platform.startswith("win"):
-        try:
-            # DPI 인식 설정 (Windows)
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
-            logging.info("Set DPI awareness for Windows.")
-        except AttributeError:
-            logging.warning("ctypes.windll.shcore not available, DPI awareness not set (might be older Windows).")
-        except Exception as e:
-            logging.warning(f"Error setting DPI awareness: {e}") # 로깅 사용
-
-    # Qt High DPI 설정 (PyQt6에서는 기본 활성화)
-    logging.info("PyQt6에서는 High DPI 스케일링이 기본으로 활성화됨")
-
-    app = QApplication(sys.argv)
-
-    # 애플리케이션 아이콘 설정
-    try:
-        # 아이콘 경로를 get_resource_path를 사용하여 올바르게 가져옵니다.
-        icon_path = get_resource_path("icons/rubber_duck.ico")
-        logging.info(f"Attempting to load icon from: {icon_path}") # 경로 로깅 추가
-        if os.path.exists(icon_path):
-            app_icon = QIcon(icon_path)
-            app.setWindowIcon(app_icon)
-            logging.info(f"Application icon set successfully from: {icon_path}")
-        else:
-            # 아이콘 파일이 없을 경우 경고 로깅
-            logging.warning(f"Icon file not found at resolved path: {icon_path}. Check if the file exists at 'project_root/resources/icons/rubber_duck.ico'.")
-    except Exception as e:
-        logging.error(f"Error loading application icon: {e}", exc_info=True) # 로깅 사용
-
-    db_service_instance = None # DB 서비스 인스턴스 변수
-    try:
-        # MainWindow 생성 전에 DB 서비스 초기화 및 로그 정리 시도
-        # MainWindow 내부에서도 DBService를 초기화하므로, 여기서 생성된 인스턴스를
-        # MainWindow에 전달하거나, MainWindow 내부에서 로그 정리를 호출해야 함.
-        # 여기서는 로그 정리만 시도하고, MainWindow는 자체적으로 DBService를 생성하도록 둠.
-        try:
-            db_service_instance = DbService()
-            cleanup_logs(db_service_instance)
-        except (ConnectionError, ValueError) as db_init_err:
-             # DB 연결 또는 설정 오류 시에도 일단 앱 실행 시도 (MainWindow에서 다시 처리)
-             logging.error(f"Initial DB connection/cleanup failed: {db_init_err}. MainWindow will attempt connection.")
-        except Exception as cleanup_err:
-             logging.error(f"Error during initial log cleanup: {cleanup_err}")
-        finally:
-            # 로그 정리 후 연결 닫기 (MainWindow에서 새로 연결)
-            if db_service_instance:
-                db_service_instance.disconnect()
-                logging.info("Initial DB connection for cleanup closed.")
-
-
-        # MainWindow 생성 및 실행
-        window = MainWindow()
-        window.show()
-        sys.exit(app.exec()) # exec_() -> exec()
-
-    except (ConnectionError, ValueError) as e:
-         # Catch DB connection or config load errors from MainWindow init
-         logging.critical(f"Application initialization failed: {e}", exc_info=True)
-         # GUI가 부분적으로 사용 가능할 때 간단한 메시지 박스 표시 (선택 사항)
-         QMessageBox.critical(None, "치명적 오류", f"애플리케이션 시작 실패:\n{e}")
-         sys.exit(1) # 오류 코드로 종료
-    except SystemExit as e:
-         # MainWindow 내부에서 DB/Config 오류로 SystemExit 호출 시
-         logging.info(f"Application exited with code {e.code}")
-         sys.exit(e.code)
-    except Exception as e:
-         logging.critical(f"An unexpected error occurred during application startup: {e}", exc_info=True)
-         QMessageBox.critical(None, "예상치 못한 오류", f"애플리케이션 시작 중 오류 발생:\n{e}")
-         sys.exit(1)
+    """Main entry point"""
+    # Apply font fixes before creating QApplication
+    FontConfig.apply_font_fixes()
+    
+    # Enable high DPI scaling
+    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    
+    # Create and run application
+    app = DuckPromptApp(sys.argv)
+    
+    # Set global exception handler
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        
+        logger.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+    
+    sys.excepthook = handle_exception
+    
+    # Run application
+    exit_code = app.exec()
+    
+    # Cleanup
+    app.cleanup()
+    
+    sys.exit(exit_code)
 
 if __name__ == "__main__":
     main()

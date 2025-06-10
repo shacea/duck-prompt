@@ -17,6 +17,7 @@ dependencies = [
     "winotify>=1.1.0", # Windows notifications
     "pyinstaller>=6.13.0",
     "watchdog>=4.0.0", # Added for filesystem monitoring
+    "diff-match-patch>=20230430", # DMP for code patches
 ]
 
 [tool.black]
