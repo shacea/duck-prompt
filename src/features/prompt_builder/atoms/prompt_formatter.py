@@ -43,42 +43,40 @@ class PromptFormatter:
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         file_contents: Optional[List[Dict[str, str]]] = None,
+        directory_tree: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> str:
-        """Build an enhanced prompt with all components"""
+        """Build an enhanced prompt with all components in a specific order."""
         sections = []
         
-        # Add system prompt
+        # 1. System Prompt
         if system_prompt:
             sections.append(f"=== SYSTEM PROMPT ===\n{system_prompt}")
         
-        # Add file contents
+        # 2. User Prompt
+        if user_prompt:
+            sections.append(f"=== USER PROMPT ===\n{user_prompt}")
+            
+        # 3. File Contents
         if file_contents:
             file_section = "=== FILE CONTENTS ===\n"
-            formatted_files = []
-            
-            for file_info in file_contents:
-                file_path = file_info.get('path', 'Unknown')
-                content = file_info.get('content', '')
-                formatted_files.append(self.format_file_content(file_path, content))
-            
+            formatted_files = [
+                self.format_file_content(f.get('path', 'Unknown'), f.get('content', ''))
+                for f in file_contents
+            ]
             file_section += self.file_separator.join(formatted_files)
             sections.append(file_section)
         
-        # Add attachments
+        # 4. Directory Tree
+        if directory_tree:
+            sections.append(f"=== DIRECTORY TREE ===\n{directory_tree}")
+            
+        # 5. Attachments (last)
         if attachments:
             attachment_section = "=== ATTACHMENTS ===\n"
-            formatted_attachments = []
-            
-            for attachment in attachments:
-                formatted_attachments.append(self.format_attachment(attachment))
-            
+            formatted_attachments = [self.format_attachment(a) for a in attachments]
             attachment_section += self.section_separator.join(formatted_attachments)
             sections.append(attachment_section)
-        
-        # Add user prompt
-        if user_prompt:
-            sections.append(f"=== USER PROMPT ===\n{user_prompt}")
         
         # Join all sections
         final_prompt = self.section_separator.join(sections)

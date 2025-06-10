@@ -64,22 +64,3 @@ class DatabaseService:
         if not self.query_executor:
             raise ConnectionError("Database service not initialized")
         return self.query_executor.execute(query, params, fetch_one, fetch_all, return_id)
-    
-    def get_ignored_patterns(self) -> List[str]:
-        """Get ignored file patterns from the database"""
-        query = "SELECT pattern FROM gitignore_patterns ORDER BY pattern"
-        results = self.execute_query(query, fetch_all=True)
-        return [r['pattern'] for r in results] if results else []
-    
-    def save_ignored_patterns(self, patterns: List[str]) -> None:
-        """Save ignored file patterns to the database"""
-        # Clear existing patterns
-        self.execute_query("DELETE FROM gitignore_patterns")
-        
-        # Insert new patterns
-        for pattern in patterns:
-            if pattern.strip():
-                query = "INSERT INTO gitignore_patterns (pattern) VALUES (%s)"
-                self.execute_query(query, (pattern.strip(),))
-        
-        logger.info(f"Saved {len(patterns)} ignored patterns to database")

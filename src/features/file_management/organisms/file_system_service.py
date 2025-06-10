@@ -146,9 +146,9 @@ class FileSystemService:
                 if not node.is_dir:
                     node.checked = checked
     
-    def get_checked_files(self) -> List[str]:
-        """Get list of checked files"""
-        return self.tree_builder.get_checked_files()
+    def get_checked_paths(self) -> List[str]:
+        """Get list of checked file and directory paths"""
+        return self.tree_builder.get_checked_paths()
     
     def get_file_content(self, file_path: str) -> Optional[str]:
         """Read file content"""
@@ -166,14 +166,30 @@ class FileSystemService:
             return None
     
     def generate_directory_tree(self, include_files: bool = True, max_depth: Optional[int] = None) -> str:
-        """Generate directory tree text"""
+        """Generate directory tree text for all files."""
         if not self.tree_cache:
             self.refresh_file_system()
         
         if self.tree_cache:
             return self.tree_builder.generate_tree_text(self.tree_cache)
         return ""
-    
+
+    def generate_checked_directory_tree(self) -> str:
+        """Generate directory tree text for only checked files and directories."""
+        if not self.project_folder:
+            return ""
+        
+        checked_paths = self.get_checked_paths()
+        if not checked_paths:
+            return "(No items checked)"
+
+        temp_tree_builder = FileTreeBuilder()
+        checked_path_objects = [Path(p) for p in checked_paths]
+        
+        temp_root_node = temp_tree_builder.build_tree(self.project_folder, checked_path_objects)
+        
+        return temp_tree_builder.generate_tree_text(temp_root_node)
+
     def _start_watching(self):
         """Start watching the project folder"""
         if not self.project_folder:

@@ -323,47 +323,7 @@ feat: Refactor project structure and common utilities (logging, config)
 
 
 ===USER===
-- import 에러가 여러 파일들에서 발견되는데, 프로그램 실행 단계를 꼼꼼히 따라가면서 import error 가 발생할만한 내용 찾고 수정해줘. 
-- 모든 코드에 대해 확인해볼 것!
-
-Microsoft Windows [Version 10.0.26100.4061]
-(c) Microsoft Corporation. All rights reserved.
-
-(duck-prompt) E:\Projects\duck-prompt>e:/Projects/duck-prompt/.venv/Scripts/python.exe e:/Projects/duck-prompt/main.py
-2025-06-10 09:30:18,534 - src.ui.styles.font_config - INFO - Successfully loaded custom font: Malgun Gothic from resources\fonts\malgun.ttf
-2025-06-10 09:30:18,535 - src.ui.styles.font_config - INFO - Application font set to: Malgun Gothic (10pt)
-2025-06-10 09:30:18,595 - src.app - CRITICAL - Failed to setup application: name 'QGroupBox' is not defined
-Traceback (most recent call last):
-  File "e:\Projects\duck-prompt\src\app.py", line 69, in _setup_application
-    self.main_window = MainWindow()
-                       ~~~~~~~~~~^^
-  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 76, in __init__
-    self.setup_ui() # UI 생성 메서드 호출
-    ~~~~~~~~~~~~~^^
-  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 120, in setup_ui
-    self.attachment_group = QGroupBox("첨부 파일")
-                            ^^^^^^^^^
-NameError: name 'QGroupBox' is not defined
-Traceback (most recent call last):
-  File "e:\Projects\duck-prompt\main.py", line 17, in <module>
-    main()
-    ~~~~^^
-  File "e:\Projects\duck-prompt\src\app.py", line 169, in main
-    app = DuckPromptApp(sys.argv)
-  File "e:\Projects\duck-prompt\src\app.py", line 59, in __init__
-    self._setup_application()
-    ~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "e:\Projects\duck-prompt\src\app.py", line 69, in _setup_application
-    self.main_window = MainWindow()
-                       ~~~~~~~~~~^^
-  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 76, in __init__
-    self.setup_ui() # UI 생성 메서드 호출
-    ~~~~~~~~~~~~~^^
-  File "e:\Projects\duck-prompt\src\ui\main_window.py", line 120, in setup_ui
-    self.attachment_group = QGroupBox("첨부 파일")
-                            ^^^^^^^^^
-NameError: name 'QGroupBox' is not defined
-
+- xml 파싱 관련 내용 모두 제거하고 DMP 만 남겨줘.
 
 ===FILES CONTENTS===
 
@@ -388,274 +348,79 @@ if __name__ == "__main__":
 
 
 
-======== CLAUDE.md ========
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Development Commands
-
-### Running the Application
-
-```bash
-# With uv (recommended)
-uv run python main.py
-
-# Direct Python
-python main.py
-```
-
-### Building the Application
-
-```bash
-# Windows build (automatically detects AMD64/ARM64)
-build.bat
-
-# The executable will be created in dist/DuckPrompt/DuckPrompt.exe
-```
-
-### Testing and Code Quality
-
-```bash
-# Run tests (when available)
-uv run pytest tests/
-
-# Type checking
-uv run mypy src/ tests/
-
-# Linting
-uv run ruff check .
-
-# Code formatting
-uv run black .
-uv run ruff format .
-```
-
-### Installing Dependencies
-
-```bash
-# Create virtual environment
-uv venv
-
-# Install dependencies
-uv pip install -r requirements.txt
-
-# Install development dependencies
-uv pip install -r requirements-dev.txt
-```
-
-## High-Level Architecture
-
-### Application Overview
-
-DuckPrompt is a PyQt6-based GUI application that serves as an integrated prompt builder for Large Language Models (LLMs). It combines file content, attachments, and prompts to create comprehensive inputs for AI models, with direct Gemini API integration.
-
-### Key Architectural Components
-
-1. **Database-Driven Configuration**
-   - PostgreSQL database (`duck_agent`) stores all configuration and API keys
-   - Connection details hardcoded in `src/core/services/db_service.py`
-   - Application will not start without database connection
-   - Settings are read-only in GUI; database modifications required for changes
-
-2. **Service Layer Architecture**
-   - All core business logic is in `src/core/services/`:
-     - `DbService`: Database operations and connection management
-     - `ConfigService`: Configuration management from database
-     - `GeminiService`: LangGraph-based Gemini API integration
-     - `TokenService`: Multi-model token calculation (GPT, Claude, Gemini)
-     - `FilesystemService`: File operations with watchdog monitoring
-     - `DirectoryCacheService`: Efficient directory tree caching
-     - `XmlService`: XML parsing for code changes
-     - `PromptService`, `TemplateService`, `StateService`: Content management
-
-3. **UI/Controller Pattern**
-   - Controllers in `src/ui/controllers/` handle business logic
-   - UI components in `src/ui/` handle presentation
-   - Clean separation between UI and business logic
-   - Main window setup split into modular components
-
-4. **Two Operating Modes**
-   - **Code Enhancement Mode**: Combines files, attachments, system/user prompts
-   - **Meta Prompt Mode**: Wraps existing prompts with templates
-
-5. **Asynchronous Processing**
-   - Gemini API calls run in separate QThread workers
-   - LangGraph workflow for structured API interactions
-   - Non-blocking UI during API operations
-
-### Critical Implementation Details
-
-1. **File System Monitoring**
-   - Uses `watchdog` library for real-time file system changes
-   - Cached file system model for performance
-   - Respects `.gitignore` and database filtering rules
-
-2. **Token Calculation**
-   - GPT: Local calculation using `tiktoken`
-   - Claude: API-based calculation (requires active API key in DB)
-   - Gemini: API-based with multimodal support (text + attachments)
-
-3. **State Management**
-   - Auto-saves to `resources/status/default.json`
-   - Preserves project folder, prompts, attachments, and checked files
-   - "Load Last Work" button for quick state restoration
-
-4. **XML Processing**
-   - Parses LLM-generated `<code_changes>` XML
-   - Executes file operations without confirmation
-   - Automatically strips markdown code blocks
-
-### Database Schema Requirements
-
-- Tables: `application_config`, `api_keys`, `gemini_logs`, `model_configs`
-- API keys must have `is_active=TRUE` for functionality
-- Default system prompt path stored in `application_config`
-
-### Important File Locations
-
-- Configuration: Database-driven, no local config files
-- Templates: `resources/prompts/system/` and `resources/prompts/user/`
-- States: `resources/status/`
-- Icons/Resources: `resources/icons/`, `resources/fonts/`
-
-## 디렉터리 트리 구조
-
-File Tree:
- 📁 duck-prompt/
-   📁 ./
-   📁 docs/
-     📁 PRD(Product Requirement Document)/
-       📄 PRD_db.md (267 bytes)
-       📄 전체 PRD.md (8,262 bytes)
-       📄 파일별 기능 상세.md (12,942 bytes)
-     📁 PyQt6/
-       📄 designer.md (19,049 bytes)
-       📄 gotchas.md (14,084 bytes)
-       📄 index.md (11,758 bytes)
-       📄 introduction.md (7,488 bytes)
-       📄 metaobjects.md (5,854 bytes)
-       📄 multiinheritance.md (7,714 bytes)
-       📄 pickle.md (4,137 bytes)
-       📄 pyqt5_differences.md (5,701 bytes)
-       📄 pyqt_qsettings.md (5,315 bytes)
-       📄 pyqt_qvariant.md (4,135 bytes)
-       📄 python_shell.md (3,690 bytes)
-       📄 qml.md (22,132 bytes)
-       📄 qt_interfaces.md (3,096 bytes)
-       📄 qt_properties.md (7,917 bytes)
-       📄 signals_slots.md (23,888 bytes)
-     📁 ReferenceDocs/
-       📄 Google Gen AI SDK.md (123,856 bytes)
-       📄 gemini flash thinking model sample.py.txt (11,904 bytes)
-       📄 py-silero-vad-lite docs.md (1,625 bytes)
-       📄 개발전 PRD 작성가이드.md (8,778 bytes)
-     📁 리팩토링/
-       📄 Diff-match-patch(DMP) 코드 수정 방법.md (12,792 bytes)
-       📄 Feature‑Atomic Hybrid(FAH) + Sub-Bus Structure.md (19,456 bytes)
-       📄 unified-diff_en.md (7,265 bytes)
-       📄 unified-diff_kr.md (9,307 bytes)
-       📄 네트워크 드라이브 개선_캐싱 및 watchdog 사용.md (5,600 bytes)
-       📄 프로그램 재개발.md (14,992 bytes)
-     📄 Database Schema Definitions.md (11,229 bytes)
-     📄 Diff-match-patch(DMP) 코드 수정 방법.md (12,792 bytes)
-     📄 Feature‑Atomic Hybrid(FAH) + Sub-Bus Structure.md (19,456 bytes)
-     📄 Gemini JSON schema docs.md (10,943 bytes)
-     📄 ssh_docs.md (9,999 bytes)
-   📁 resources/
-     📁 fonts/
-       📄 malgun.ttf (13,459,196 bytes)
-     📁 icons/
-       📄 rubber_duck.ico (108,585 bytes)
-     📁 prompts/
-       📁 system/
-         📁 kr/
-           📄 bug_fixer_kr.md (2,610 bytes)
-           📄 unified-diff_kr.md (9,307 bytes)
-           📄 xml_prompt_guide_python_kr.md (32,114 bytes)
-         📄 META_Prompt.md (14,530 bytes)
-         📄 bux_fixer.md (21,252 bytes)
-         📄 code_generator.md (3,667 bytes)
-         📄 python_prompt_guide.md (4,574 bytes)
-         📄 unified-diff_en.md (7,265 bytes)
-         📄 xml_prompt_guide.md (3,019 bytes)
-         📄 xml_prompt_guide_python_en.md (30,011 bytes)
-         📄 xml_prompt_guide_python_kr.md (32,114 bytes)
-       📁 user/
-         📄 mp_code_review.md (2,047 bytes)
-         📄 mp_code_review_input.md (678 bytes)
-         📄 mp_hn_perspective_input.md (559 bytes)
-         📄 mp_script_to_blog_input.md (936 bytes)
-         📄 mp_template.md (88 bytes)
-     📁 status/
-   📁 src/
-     📁 core/
-       📁 pydantic_models/
-         📄 **init**.py (76 bytes)
-         📄 app_state.py (1,267 bytes)
-         📄 config_settings.py (3,409 bytes)
-       📁 services/
-         📄 **init**.py (990 bytes)
-         📄 config_service.py (11,753 bytes)
-         📄 db_service.py (32,083 bytes)
-         📄 directory_cache_service.py (28,426 bytes)
-         📄 filesystem_service.py (6,069 bytes)
-         📄 gemini_service.py (30,577 bytes)
-         📄 prompt_service.py (3,134 bytes)
-         📄 state_service.py (7,779 bytes)
-         📄 template_service.py (3,394 bytes)
-         📄 token_service.py (12,573 bytes)
-         📄 xml_service.py (12,145 bytes)
-       📁 utils/
-       📁 workers/
-       📄 **init**.py (65 bytes)
-       📄 langgraph_state.py (860 bytes)
-     📁 ui/
-       📁 controllers/
-         📄 **init**.py (72 bytes)
-         📄 file_tree_controller.py (15,891 bytes)
-         📄 main_controller.py (23,703 bytes)
-         📄 prompt_controller.py (7,072 bytes)
-         📄 resource_controller.py (13,735 bytes)
-         📄 system_prompt_controller.py (7,322 bytes)
-         📄 xml_controller.py (2,671 bytes)
-       📁 models/
-         📄 **init**.py (67 bytes)
-         📄 file_system_models.py (20,825 bytes)
-       📁 widgets/
-         📄 **init**.py (68 bytes)
-         📄 check_box_delegate.py (3,714 bytes)
-         📄 custom_tab_bar.py (4,364 bytes)
-         📄 custom_text_edit.py (501 bytes)
-         📄 file_tree_view.py (2,439 bytes)
-         📄 tab_manager.py (434 bytes)
-       📄 **init**.py (63 bytes)
-       📄 main_window.py (51,497 bytes)
-       📄 main_window_setup_signals.py (8,111 bytes)
-       📄 main_window_setup_ui.py (19,302 bytes)
-       📄 settings_dialog.py (54,953 bytes)
-     📁 utils/
-       📄 **init**.py (320 bytes)
-       📄 db_migration_script.py (5,742 bytes)
-       📄 helpers.py (2,152 bytes)
-       📄 notifications.py (2,983 bytes)
-       📄 postgres_db_initializer.py (20,529 bytes)
-     📄 **init**.py (64 bytes)
-     📄 app.py (5,276 bytes)
-     📄 config.yml (1,155 bytes)
-   📄 README.md (20,536 bytes)
-   📄 app_amd64.spec (2,695 bytes)
-   📄 app_arm64.spec (2,839 bytes)
-   📄 build.bat (553 bytes)
-   📄 main.py (422 bytes)
-   📄 pyproject.toml (2,029 bytes)
-   📄 qt.conf (47 bytes)
-
-
-
 ======== qt.conf ========
 [Platforms]
 WindowsArguments = dpiawareness=3 
+
+
+======== pyproject.toml ========
+[project]
+name = "duck-prompt"
+version = "0.2.1" # Version bump
+description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
+requires-python = ">=3.12"
+dependencies = [
+    "PyQt6>=6.7.0",
+    "PyQt6-Qt6>=6.7.0",
+    "google-generativeai>=0.5.4", # Gemini API
+    "langgraph>=0.0.69", # LangGraph for workflow
+    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
+    "anthropic>=0.28.0", # Anthropic API (Claude)
+    "psycopg2-binary>=2.9.9", # PostgreSQL driver
+    "PyYAML>=6.0.1", # YAML parsing (config)
+    "pydantic>=2.7.1", # Data validation and settings
+    "pillow>=10.3.0", # Image handling
+    "winotify>=1.1.0", # Windows notifications
+    "pyinstaller>=6.13.0",
+    "watchdog>=4.0.0", # Added for filesystem monitoring
+    "diff-match-patch>=20230430", # DMP for code patches
+]
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+[tool.uv.sources]
+# Optional: Specify custom package sources if needed
+
+# Optional: Define project scripts or entry points
+# [project.scripts]
+# duckprompt = "src.app:main"
+
+# Optional: Project URLs
+# [project.urls]
+# homepage = "https://example.com"
+# documentation = "https://readthedocs.org"
+# repository = "https://github.com/user/duck-prompt.git"
+# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
+
+# Optional: Author and maintainer information
+# authors = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+# maintainers = [
+#   { name="Your Name", email="your.email@example.com" },
+# ]
+
+# Optional: License information
+# license = { text = "MIT License" }
+
+# Optional: Keywords for PyPI
+# keywords = ["llm", "prompt", "gui", "pyqt"]
+
+# Optional: Classifiers for PyPI
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "License :: OSI Approved :: MIT License",
+#     "Programming Language :: Python :: 3",
+#     "Programming Language :: Python :: 3.12",
+#     "Operating System :: OS Independent",
+#     "Topic :: Software Development :: User Interfaces",
+# ]
+
 
 
 ======== docs\Diff-match-patch(DMP) 코드 수정 방법.md ========
@@ -1262,7 +1027,7 @@ if __name__ == "__main__":
 ### A.3 Event Bus 리스너 (`src/features/analytics/handlers.py`)
 
 ```python
-from src.gateway.event_bus import EventBus, Event # src. 추가, Event 클래스 임포트
+from src.gateway import EventBus, Event # src. 추가, Event 클래스 임포트
 # from src.features.images_resize.events import ImageResizedEvent # 실제 이벤트 클래스 임포트 가정 (예시 경로)
 
 # class ImageResizedEvent(Event): # 예시 이벤트 정의
@@ -1281,7 +1046,7 @@ def collect_metrics(event: Event): # 파라미터 변경 (event: ImageResizedEve
 ### A.4 Service Locator 초기화 (`src/main.py`)
 
 ```python
-from src.gateway.service_locator import ServiceLocator # src. 추가
+from src.gateway import ServiceLocator # src. 추가
 # from src.infrastructure.local_storage import LocalDiskStorage # src/infrastructure에 있다고 가정 (예시 경로)
 
 # class LocalDiskStorage: # 예시 스토리지 클래스
@@ -1298,8 +1063,7 @@ from src.gateway.service_locator import ServiceLocator # src. 추가
 
 ```python
 from src.gateway.bus.images_resize_command_bus import ImagesResizeCommandBus # src. 추가 (예시 경로)
-from src.gateway.event_bus import EventBus, Event # src. 추가, Event 클래스 임포트
-from src.gateway.service_locator import ServiceLocator # src. 추가
+from src.gateway import EventBus, Event, ServiceLocator # src. 추가
 from .commands import ResizeImage # 현재 디렉터리 내 commands 모듈이므로 .commands 사용
 import asyncio # 예시를 위해 추가
 
@@ -1326,76 +1090,6 @@ async def handle_resize(cmd: ResizeImage): # async로 변경
 ```
 
 > **설명** : 핸들러는 ① `ServiceLocator`에서 스토리지 인스턴스 획득 → ② 원본 이미지 로드 → ③ 리사이즈 수행 → ④ 저장 → ⑤ `EventBus.emit()`으로 후속 작업을 알리는 **비동기 순수 함수** 구현입니다. 의존성이 명확하므로 단위 테스트와 AI 코드 이해가 용이합니다.
-
-
-
-======== pyproject.toml ========
-[project]
-name = "duck-prompt"
-version = "0.2.1" # Version bump
-description = "DuckPrompt: Code Enhancer & Meta Prompt Builder"
-requires-python = ">=3.12"
-dependencies = [
-    "PyQt6>=6.7.0",
-    "PyQt6-Qt6>=6.7.0",
-    "google-generativeai>=0.5.4", # Gemini API
-    "langgraph>=0.0.69", # LangGraph for workflow
-    "tiktoken>=0.7.0", # Token calculation (GPT/fallback)
-    "anthropic>=0.28.0", # Anthropic API (Claude)
-    "psycopg2-binary>=2.9.9", # PostgreSQL driver
-    "PyYAML>=6.0.1", # YAML parsing (config)
-    "pydantic>=2.7.1", # Data validation and settings
-    "pillow>=10.3.0", # Image handling
-    "winotify>=1.1.0", # Windows notifications
-    "pyinstaller>=6.13.0",
-    "watchdog>=4.0.0", # Added for filesystem monitoring
-    "diff-match-patch>=20230430", # DMP for code patches
-]
-
-[tool.black]
-line-length = 88
-
-[tool.isort]
-profile = "black"
-
-[tool.uv.sources]
-# Optional: Specify custom package sources if needed
-
-# Optional: Define project scripts or entry points
-# [project.scripts]
-# duckprompt = "src.app:main"
-
-# Optional: Project URLs
-# [project.urls]
-# homepage = "https://example.com"
-# documentation = "https://readthedocs.org"
-# repository = "https://github.com/user/duck-prompt.git"
-# changelog = "https://github.com/user/duck-prompt/blob/main/CHANGELOG.md"
-
-# Optional: Author and maintainer information
-# authors = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-# maintainers = [
-#   { name="Your Name", email="your.email@example.com" },
-# ]
-
-# Optional: License information
-# license = { text = "MIT License" }
-
-# Optional: Keywords for PyPI
-# keywords = ["llm", "prompt", "gui", "pyqt"]
-
-# Optional: Classifiers for PyPI
-# classifiers = [
-#     "Development Status :: 3 - Alpha",
-#     "Intended Audience :: Developers",
-#     "License :: OSI Approved :: MIT License",
-#     "Programming Language :: Python :: 3",
-#     "Programming Language :: Python :: 3.12",
-#     "Operating System :: OS Independent",
-#     "Topic :: Software Development :: User Interfaces",
-# ]
 
 
 
@@ -1656,23 +1350,23 @@ class ConfigurationService:
             db_service = ServiceLocator.get("database")
             
             # Load application config
-            config_data = await self._get_application_config(db_service)
+            config_data = self._get_application_config(db_service)
             
             if not config_data:
                 raise ValueError(f"Configuration profile '{self.profile_name}' not found in database")
             
             # Check for available API keys
-            await self._check_api_keys(db_service)
+            self._check_api_keys(db_service)
             
             # Add API key placeholders
             config_data['gemini_api_key'] = None  # Selected on demand
-            config_data['anthropic_api_key'] = await self._get_anthropic_key(db_service)
+            config_data['anthropic_api_key'] = self._get_anthropic_key(db_service)
             
             # Validate and create settings
             self._settings = self.validator.validate(config_data)
             
-            # Load gitignore patterns
-            patterns = await self._get_gitignore_patterns(db_service)
+            # Load gitignore patterns from the config object itself
+            patterns = self._settings.default_ignore_list or []
             self.gitignore_manager.load_from_database(patterns)
             
             logger.info(f"Configuration loaded successfully for profile '{self.profile_name}'")
@@ -1682,7 +1376,7 @@ class ConfigurationService:
             logger.error(f"Failed to load configuration: {e}")
             raise
     
-    async def update_configuration(self, settings_dict: Dict[str, Any]) -> bool:
+    def update_configuration(self, settings_dict: Dict[str, Any]) -> bool:
         """Update configuration in database"""
         try:
             if not self._settings:
@@ -1695,7 +1389,7 @@ class ConfigurationService:
             db_service = ServiceLocator.get("database")
             config_dict = updated_settings.model_dump(exclude={'gemini_api_key', 'anthropic_api_key'})
             
-            success = await self._save_application_config(db_service, config_dict)
+            success = self._save_application_config(db_service, config_dict)
             
             if success:
                 self._settings = updated_settings
@@ -1707,11 +1401,11 @@ class ConfigurationService:
             logger.error(f"Failed to update configuration: {e}")
             return False
     
-    async def get_active_gemini_key(self) -> Optional[str]:
+    def get_active_gemini_key(self) -> Optional[str]:
         """Get active Gemini API key with selection logic"""
         try:
             db_service = ServiceLocator.get("database")
-            available_keys = await self._get_available_gemini_keys(db_service)
+            available_keys = self._get_available_gemini_keys(db_service)
             
             if not available_keys:
                 logger.warning("No active Gemini API keys available")
@@ -1755,50 +1449,40 @@ class ConfigurationService:
         }
     
     # Private helper methods for database operations
-    async def _get_application_config(self, db_service) -> Dict[str, Any]:
+    def _get_application_config(self, db_service) -> Dict[str, Any]:
         """Get application config from database"""
-        from src.features.database.commands import GetAllConfigs
-        configs = await db_service.handle(GetAllConfigs())
+        configs_list = db_service.config_manager.get_all_configs()
+
+        # Find the dictionary for the current profile_name
+        for config_profile in configs_list:
+            if config_profile.get('profile_name') == self.profile_name:
+                logger.debug(f"Found configuration profile: {self.profile_name}")
+                return config_profile
         
-        # Convert list of configs to dict
-        config_dict = {}
-        for config in configs:
-            config_dict[config['key']] = config['value']
-        
-        return config_dict
+        logger.warning(f"Configuration profile '{self.profile_name}' not found in database.")
+        return {}
     
-    async def _save_application_config(self, db_service, config_dict: Dict[str, Any]) -> bool:
+    def _save_application_config(self, db_service, config_dict: Dict[str, Any]) -> bool:
         """Save application config to database"""
-        from src.features.database.commands import SaveConfig
-        
-        for key, value in config_dict.items():
-            await db_service.handle(SaveConfig(key=key, value=str(value)))
-        
+        db_service.config_manager.update_profile_config(self.profile_name, config_dict)
         return True
     
-    async def _get_available_gemini_keys(self, db_service) -> List[Dict[str, Any]]:
+    def _get_available_gemini_keys(self, db_service) -> List[Dict[str, Any]]:
         """Get available Gemini API keys"""
-        from src.features.database.commands import ExecuteQuery
-        query = "SELECT * FROM api_keys WHERE service_name = 'google' AND is_active = true"
-        return await db_service.handle(ExecuteQuery(query=query, fetch_all=True))
+        query = "SELECT * FROM api_keys WHERE provider = 'google' AND is_active = true"
+        return db_service.execute_query(query=query, fetch_all=True)
     
-    async def _get_anthropic_key(self, db_service) -> Optional[str]:
+    def _get_anthropic_key(self, db_service) -> Optional[str]:
         """Get active Anthropic API key"""
-        from src.features.database.commands import GetActiveApiKey
-        return await db_service.handle(GetActiveApiKey(service_name='anthropic'))
+        return db_service.api_key_manager.get_active_api_key(provider='anthropic')
     
-    async def _check_api_keys(self, db_service) -> None:
+    def _check_api_keys(self, db_service) -> None:
         """Check availability of API keys"""
-        gemini_keys = await self._get_available_gemini_keys(db_service)
+        gemini_keys = self._get_available_gemini_keys(db_service)
         if not gemini_keys:
             logger.warning("No active Gemini API keys found in database")
         else:
             logger.info(f"Found {len(gemini_keys)} active Gemini API keys")
-    
-    async def _get_gitignore_patterns(self, db_service) -> List[str]:
-        """Get gitignore patterns from database"""
-        from src.features.database.commands import GetIgnoredPatterns
-        return await db_service.handle(GetIgnoredPatterns())
 
 
 
@@ -1912,8 +1596,7 @@ class GetTokenLimits(Command):
 """Configuration feature command handlers"""
 import logging
 from src.gateway.bus.config_command_bus import ConfigCommandBus
-from src.gateway.event_bus import EventBus, Event
-from src.gateway.service_locator import ServiceLocator
+from src.gateway import EventBus, Event, ServiceLocator
 from .commands import (
     LoadConfiguration, UpdateConfiguration,
     GetActiveGeminiKey, SetUserSelectedGeminiKey,
@@ -2060,6 +1743,7 @@ async def handle_get_token_limits(cmd: GetTokenLimits):
     config_service = ServiceLocator.get("config")
     limits = config_service.get_token_limits()
     return limits
+
 
 
 ======== src\features\database\atoms\__init__.py ========
@@ -2224,51 +1908,52 @@ class ApiKeyManager:
     def __init__(self, query_executor: QueryExecutor):
         self.executor = query_executor
     
-    def get_api_key(self, service_name: str) -> Optional[Dict[str, Any]]:
-        """Get an API key for a specific service"""
-        query = "SELECT * FROM api_keys WHERE service_name = %s"
-        result = self.executor.execute(query, (service_name,), fetch_one=True)
+    def get_api_key(self, provider: str) -> Optional[Dict[str, Any]]:
+        """Get an API key for a specific provider"""
+        query = "SELECT * FROM api_keys WHERE provider = %s"
+        result = self.executor.execute(query, (provider,), fetch_one=True)
         if result:
-            logger.info(f"Retrieved API key for service: {service_name}")
+            logger.info(f"Retrieved API key for provider: {provider}")
         else:
-            logger.warning(f"No API key found for service: {service_name}")
+            logger.warning(f"No API key found for provider: {provider}")
         return result
     
-    def get_active_api_key(self, service_name: str) -> Optional[str]:
-        """Get the active API key for a specific service"""
-        query = "SELECT api_key FROM api_keys WHERE service_name = %s AND is_active = true"
-        result = self.executor.execute(query, (service_name,), fetch_one=True)
+    def get_active_api_key(self, provider: str) -> Optional[str]:
+        """Get the active API key for a specific provider"""
+        query = "SELECT api_key FROM api_keys WHERE provider = %s AND is_active = true"
+        result = self.executor.execute(query, (provider,), fetch_one=True)
         if result:
-            logger.info(f"Retrieved active API key for service: {service_name}")
+            logger.info(f"Retrieved active API key for provider: {provider}")
             return result if isinstance(result, str) else result.get('api_key')
         else:
-            logger.warning(f"No active API key found for service: {service_name}")
+            logger.warning(f"No active API key found for provider: {provider}")
             return None
     
-    def save_api_key(self, service_name: str, api_key: str, is_active: bool = True) -> int:
+    def save_api_key(self, provider: str, api_key: str, is_active: bool = True) -> int:
         """Save or update an API key"""
         # Check if the API key already exists
-        existing = self.get_api_key(service_name)
+        existing = self.get_api_key(provider)
         
         if existing:
             # Update existing key
             query = """
                 UPDATE api_keys 
                 SET api_key = %s, is_active = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE service_name = %s
+                WHERE provider = %s
             """
-            result = self.executor.execute(query, (api_key, is_active, service_name))
-            logger.info(f"Updated API key for service: {service_name}")
+            result = self.executor.execute(query, (api_key, is_active, provider))
+            logger.info(f"Updated API key for provider: {provider}")
         else:
             # Insert new key
             query = """
-                INSERT INTO api_keys (service_name, api_key, is_active)
+                INSERT INTO api_keys (provider, api_key, is_active)
                 VALUES (%s, %s, %s)
             """
-            result = self.executor.execute(query, (service_name, api_key, is_active))
-            logger.info(f"Inserted new API key for service: {service_name}")
+            result = self.executor.execute(query, (provider, api_key, is_active))
+            logger.info(f"Inserted new API key for provider: {provider}")
         
         return result
+
 
 
 ======== src\features\database\molecules\config_manager.py ========
@@ -2285,47 +1970,82 @@ class ConfigManager:
     
     def __init__(self, query_executor: QueryExecutor):
         self.executor = query_executor
-    
-    def get_config(self, key: str) -> Optional[str]:
-        """Get a configuration value by key"""
-        query = "SELECT value FROM application_config WHERE key = %s"
-        result = self.executor.execute(query, (key,), fetch_one=True)
-        if result:
-            value = result if isinstance(result, str) else result.get('value')
-            logger.info(f"Retrieved config for key '{key}': {value}")
-            return value
-        else:
-            logger.warning(f"No configuration found for key: {key}")
-            return None
-    
-    def save_config(self, key: str, value: str) -> int:
-        """Save or update a configuration value"""
-        # Check if the config already exists
-        existing = self.get_config(key)
+
+    def update_profile_config(self, profile_name: str, config_data: Dict[str, Any]) -> int:
+        """Inserts or updates a profile in the application_config table."""
+        logger.info(f"Attempting to insert/update application configuration for profile '{profile_name}'...")
+
+        # Prepare data, handling potential missing keys and types
+        allowed_extensions = list(config_data.get('allowed_extensions', []))
+        excluded_dirs = list(config_data.get('excluded_dirs', []))
+        default_ignore_list = list(config_data.get('default_ignore_list', []))
+        gemini_available_models = list(config_data.get('gemini_available_models', []))
+        claude_available_models = list(config_data.get('claude_available_models', []))
+        gpt_available_models = list(config_data.get('gpt_available_models', []))
+
+        gemini_enable_thinking = bool(config_data.get('gemini_enable_thinking', True))
+        gemini_enable_search = bool(config_data.get('gemini_enable_search', True))
+
+        try:
+            gemini_temperature = float(config_data.get('gemini_temperature', 0.0))
+        except (ValueError, TypeError):
+            gemini_temperature = 0.0
+        try:
+            gemini_thinking_budget = int(config_data.get('gemini_thinking_budget', 24576))
+        except (ValueError, TypeError):
+            gemini_thinking_budget = 24576
+
+        sql = """
+            INSERT INTO application_config (
+                profile_name, default_system_prompt, allowed_extensions, excluded_dirs,
+                default_ignore_list, gemini_default_model, claude_default_model, gpt_default_model,
+                gemini_available_models, claude_available_models, gpt_available_models,
+                gemini_temperature, gemini_enable_thinking, gemini_thinking_budget, gemini_enable_search
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+            ON CONFLICT (profile_name) DO UPDATE SET
+                default_system_prompt = EXCLUDED.default_system_prompt,
+                allowed_extensions = EXCLUDED.allowed_extensions,
+                excluded_dirs = EXCLUDED.excluded_dirs,
+                default_ignore_list = EXCLUDED.default_ignore_list,
+                gemini_default_model = EXCLUDED.gemini_default_model,
+                claude_default_model = EXCLUDED.claude_default_model,
+                gpt_default_model = EXCLUDED.gpt_default_model,
+                gemini_available_models = EXCLUDED.gemini_available_models,
+                claude_available_models = EXCLUDED.claude_available_models,
+                gpt_available_models = EXCLUDED.gpt_available_models,
+                gemini_temperature = EXCLUDED.gemini_temperature,
+                gemini_enable_thinking = EXCLUDED.gemini_enable_thinking,
+                gemini_thinking_budget = EXCLUDED.gemini_thinking_budget,
+                gemini_enable_search = EXCLUDED.gemini_enable_search,
+                updated_at = NOW();
+        """
+        params = (
+            profile_name,
+            config_data.get('default_system_prompt'),
+            allowed_extensions,
+            excluded_dirs,
+            default_ignore_list,
+            config_data.get('gemini_default_model'),
+            config_data.get('claude_default_model'),
+            config_data.get('gpt_default_model'),
+            gemini_available_models,
+            claude_available_models,
+            gpt_available_models,
+            gemini_temperature,
+            gemini_enable_thinking,
+            gemini_thinking_budget,
+            gemini_enable_search
+        )
         
-        if existing is not None:
-            # Update existing config
-            query = """
-                UPDATE application_config 
-                SET value = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE key = %s
-            """
-            result = self.executor.execute(query, (value, key))
-            logger.info(f"Updated config for key '{key}' with value: {value}")
-        else:
-            # Insert new config
-            query = """
-                INSERT INTO application_config (key, value)
-                VALUES (%s, %s)
-            """
-            result = self.executor.execute(query, (key, value))
-            logger.info(f"Inserted new config for key '{key}' with value: {value}")
-        
+        result = self.executor.execute(sql, params)
+        logger.info(f"Application configuration for profile '{profile_name}' inserted/updated successfully.")
         return result
     
     def get_all_configs(self) -> List[Dict[str, Any]]:
         """Get all configuration values"""
-        query = "SELECT * FROM application_config ORDER BY key"
+        query = "SELECT * FROM application_config ORDER BY profile_name"
         results = self.executor.execute(query, fetch_all=True)
         logger.info(f"Retrieved {len(results)} configuration entries")
         return results
@@ -2342,11 +2062,11 @@ class ConfigManager:
         return results
 
 
+
 ======== src\features\database\molecules\gemini_log_manager.py ========
 """Gemini API log management molecule"""
 import logging
 from typing import Optional, Dict, Any, List
-from decimal import Decimal
 from ..atoms.query_executor import QueryExecutor
 
 logger = logging.getLogger(__name__)
@@ -2364,9 +2084,6 @@ class GeminiLogManager:
         prompt_tokens: int,
         response_tokens: int,
         total_tokens: int,
-        prompt_cost: float,
-        response_cost: float,
-        total_cost: float,
         response_text: Optional[str] = None,
         response_summary: Optional[str] = None
     ) -> int:
@@ -2374,8 +2091,8 @@ class GeminiLogManager:
         query = """
             INSERT INTO gemini_logs (
                 model_name, prompt_tokens, response_tokens, total_tokens,
-                prompt_cost, response_cost, total_cost, response_text, response_summary
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                response_text, response_summary
+            ) VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id
         """
         params = (
@@ -2383,9 +2100,6 @@ class GeminiLogManager:
             prompt_tokens,
             response_tokens,
             total_tokens,
-            Decimal(str(prompt_cost)),
-            Decimal(str(response_cost)),
-            Decimal(str(total_cost)),
             response_text,
             response_summary
         )
@@ -2406,18 +2120,18 @@ class GeminiLogManager:
         return results
     
     def get_total_usage(self) -> Dict[str, Any]:
-        """Get total token usage and costs"""
+        """Get total token usage"""
         query = """
             SELECT 
                 COUNT(*) as total_requests,
                 SUM(prompt_tokens) as total_prompt_tokens,
                 SUM(response_tokens) as total_response_tokens,
-                SUM(total_tokens) as total_tokens,
-                SUM(total_cost) as total_cost
+                SUM(total_tokens) as total_tokens
             FROM gemini_logs
         """
         result = self.executor.execute(query, fetch_one=True)
         return result or {}
+
 
 
 ======== src\features\database\organisms\__init__.py ========
@@ -2491,25 +2205,7 @@ class DatabaseService:
         if not self.query_executor:
             raise ConnectionError("Database service not initialized")
         return self.query_executor.execute(query, params, fetch_one, fetch_all, return_id)
-    
-    def get_ignored_patterns(self) -> List[str]:
-        """Get ignored file patterns from the database"""
-        query = "SELECT pattern FROM gitignore_patterns ORDER BY pattern"
-        results = self.execute_query(query, fetch_all=True)
-        return [r['pattern'] for r in results] if results else []
-    
-    def save_ignored_patterns(self, patterns: List[str]) -> None:
-        """Save ignored file patterns to the database"""
-        # Clear existing patterns
-        self.execute_query("DELETE FROM gitignore_patterns")
-        
-        # Insert new patterns
-        for pattern in patterns:
-            if pattern.strip():
-                query = "INSERT INTO gitignore_patterns (pattern) VALUES (%s)"
-                self.execute_query(query, (pattern.strip(),))
-        
-        logger.info(f"Saved {len(patterns)} ignored patterns to database")
+
 
 
 ======== src\features\database\__init__.py ========
@@ -2543,30 +2239,19 @@ class ExecuteQuery(Command):
 
 class GetApiKey(Command):
     """Command to get an API key from database"""
-    service_name: str
+    provider: str
 
 
 class GetActiveApiKey(Command):
     """Command to get an active API key for a service"""
-    service_name: str
+    provider: str
 
 
 class SaveApiKey(Command):
     """Command to save or update an API key"""
-    service_name: str
+    provider: str
     api_key: str
     is_active: bool = True
-
-
-class GetConfig(Command):
-    """Command to get a configuration value"""
-    key: str
-
-
-class SaveConfig(Command):
-    """Command to save a configuration value"""
-    key: str
-    value: str
 
 
 class GetAllConfigs(Command):
@@ -2585,9 +2270,6 @@ class SaveGeminiLog(Command):
     prompt_tokens: int
     response_tokens: int
     total_tokens: int
-    prompt_cost: float
-    response_cost: float
-    total_cost: float
     response_text: Optional[str] = None
     response_summary: Optional[str] = None
 
@@ -2598,19 +2280,10 @@ class GetGeminiLogs(Command):
     offset: int = 0
 
 
-class GetIgnoredPatterns(Command):
-    """Command to get ignored file patterns"""
-    pass
-
-
-class SaveIgnoredPatterns(Command):
-    """Command to save ignored file patterns"""
-    patterns: List[str]
-
-
 class CheckDatabaseConnection(Command):
     """Command to check if database connection is active"""
     pass
+
 
 
 ======== src\features\database\handlers.py ========
@@ -2621,9 +2294,8 @@ from src.gateway import EventBus, Event, ServiceLocator
 from .commands import (
     ConnectDatabase, DisconnectDatabase, ExecuteQuery,
     GetApiKey, GetActiveApiKey, SaveApiKey,
-    GetConfig, SaveConfig, GetAllConfigs, GetModelConfigs,
+    GetAllConfigs, GetModelConfigs,
     SaveGeminiLog, GetGeminiLogs,
-    GetIgnoredPatterns, SaveIgnoredPatterns,
     CheckDatabaseConnection
 )
 from .organisms.database_service import DatabaseService
@@ -2676,7 +2348,7 @@ async def handle_check_connection(cmd: CheckDatabaseConnection):
 async def handle_execute_query(cmd: ExecuteQuery):
     """Execute a raw SQL query"""
     db_service = ServiceLocator.get("database")
-    result = db_service.execute_query(
+    result = await db_service.execute_query(
         cmd.query, 
         cmd.params, 
         cmd.fetch_one, 
@@ -2690,40 +2362,25 @@ async def handle_execute_query(cmd: ExecuteQuery):
 async def handle_get_api_key(cmd: GetApiKey):
     """Get an API key for a service"""
     db_service = ServiceLocator.get("database")
-    return db_service.api_key_manager.get_api_key(cmd.service_name)
+    return await db_service.api_key_manager.get_api_key(cmd.provider)
 
 
 @DatabaseCommandBus.register(GetActiveApiKey)
 async def handle_get_active_api_key(cmd: GetActiveApiKey):
     """Get the active API key for a service"""
     db_service = ServiceLocator.get("database")
-    return db_service.api_key_manager.get_active_api_key(cmd.service_name)
+    return await db_service.api_key_manager.get_active_api_key(cmd.provider)
 
 
 @DatabaseCommandBus.register(SaveApiKey)
 async def handle_save_api_key(cmd: SaveApiKey):
     """Save or update an API key"""
     db_service = ServiceLocator.get("database")
-    rows_affected = db_service.api_key_manager.save_api_key(
-        cmd.service_name, 
+    rows_affected = await db_service.api_key_manager.save_api_key(
+        cmd.provider, 
         cmd.api_key, 
         cmd.is_active
     )
-    return {"rows_affected": rows_affected}
-
-
-@DatabaseCommandBus.register(GetConfig)
-async def handle_get_config(cmd: GetConfig):
-    """Get a configuration value"""
-    db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_config(cmd.key)
-
-
-@DatabaseCommandBus.register(SaveConfig)
-async def handle_save_config(cmd: SaveConfig):
-    """Save a configuration value"""
-    db_service = ServiceLocator.get("database")
-    rows_affected = db_service.config_manager.save_config(cmd.key, cmd.value)
     return {"rows_affected": rows_affected}
 
 
@@ -2731,28 +2388,25 @@ async def handle_save_config(cmd: SaveConfig):
 async def handle_get_all_configs(cmd: GetAllConfigs):
     """Get all configuration values"""
     db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_all_configs()
+    return await db_service.config_manager.get_all_configs()
 
 
 @DatabaseCommandBus.register(GetModelConfigs)
 async def handle_get_model_configs(cmd: GetModelConfigs):
     """Get model configurations"""
     db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_model_configs()
+    return await db_service.config_manager.get_model_configs()
 
 
 @DatabaseCommandBus.register(SaveGeminiLog)
 async def handle_save_gemini_log(cmd: SaveGeminiLog):
     """Save a Gemini API log entry"""
     db_service = ServiceLocator.get("database")
-    log_id = db_service.gemini_log_manager.save_log(
+    log_id = await db_service.gemini_log_manager.save_log(
         cmd.model_name,
         cmd.prompt_tokens,
         cmd.response_tokens,
         cmd.total_tokens,
-        cmd.prompt_cost,
-        cmd.response_cost,
-        cmd.total_cost,
         cmd.response_text,
         cmd.response_summary
     )
@@ -2763,22 +2417,7 @@ async def handle_save_gemini_log(cmd: SaveGeminiLog):
 async def handle_get_gemini_logs(cmd: GetGeminiLogs):
     """Get Gemini API logs"""
     db_service = ServiceLocator.get("database")
-    return db_service.gemini_log_manager.get_logs(cmd.limit, cmd.offset)
-
-
-@DatabaseCommandBus.register(GetIgnoredPatterns)
-async def handle_get_ignored_patterns(cmd: GetIgnoredPatterns):
-    """Get ignored file patterns"""
-    db_service = ServiceLocator.get("database")
-    return db_service.get_ignored_patterns()
-
-
-@DatabaseCommandBus.register(SaveIgnoredPatterns)
-async def handle_save_ignored_patterns(cmd: SaveIgnoredPatterns):
-    """Save ignored file patterns"""
-    db_service = ServiceLocator.get("database")
-    db_service.save_ignored_patterns(cmd.patterns)
-    return {"status": "saved", "count": len(cmd.patterns)}
+    return await db_service.gemini_log_manager.get_logs(cmd.limit, cmd.offset)
 
 
 
@@ -3090,8 +2729,8 @@ class FileTreeBuilder:
             for node in self.path_to_node.values():
                 node.checked = False
     
-    def get_checked_files(self) -> List[str]:
-        """Get list of checked file paths"""
+    def get_checked_paths(self) -> List[str]:
+        """Get list of all checked paths (files and directories)."""
         return sorted(list(self.checked_paths))
     
     def _apply_checked_states(self):
@@ -3131,6 +2770,7 @@ class FileTreeBuilder:
                 lines.append(child_lines)
         
         return "\n".join(lines)
+
 
 
 ======== src\features\file_management\molecules\gitignore_filter.py ========
@@ -3400,9 +3040,9 @@ class FileSystemService:
                 if not node.is_dir:
                     node.checked = checked
     
-    def get_checked_files(self) -> List[str]:
-        """Get list of checked files"""
-        return self.tree_builder.get_checked_files()
+    def get_checked_paths(self) -> List[str]:
+        """Get list of checked file and directory paths"""
+        return self.tree_builder.get_checked_paths()
     
     def get_file_content(self, file_path: str) -> Optional[str]:
         """Read file content"""
@@ -3420,14 +3060,30 @@ class FileSystemService:
             return None
     
     def generate_directory_tree(self, include_files: bool = True, max_depth: Optional[int] = None) -> str:
-        """Generate directory tree text"""
+        """Generate directory tree text for all files."""
         if not self.tree_cache:
             self.refresh_file_system()
         
         if self.tree_cache:
             return self.tree_builder.generate_tree_text(self.tree_cache)
         return ""
-    
+
+    def generate_checked_directory_tree(self) -> str:
+        """Generate directory tree text for only checked files and directories."""
+        if not self.project_folder:
+            return ""
+        
+        checked_paths = self.get_checked_paths()
+        if not checked_paths:
+            return "(No items checked)"
+
+        temp_tree_builder = FileTreeBuilder()
+        checked_path_objects = [Path(p) for p in checked_paths]
+        
+        temp_root_node = temp_tree_builder.build_tree(self.project_folder, checked_path_objects)
+        
+        return temp_tree_builder.generate_tree_text(temp_root_node)
+
     def _start_watching(self):
         """Start watching the project folder"""
         if not self.project_folder:
@@ -3547,6 +3203,7 @@ class GetDirectoryTree(Command):
     root_path: str
     include_files: bool = True
     max_depth: Optional[int] = None
+    checked_only: bool = False # Flag to generate tree for checked items only
 
 
 class GetFilteredFiles(Command):
@@ -3554,6 +3211,7 @@ class GetFilteredFiles(Command):
     root_path: str
     patterns: Optional[List[str]] = None
     exclude_patterns: Optional[List[str]] = None
+
 
 
 ======== src\features\file_management\handlers.py ========
@@ -3582,7 +3240,8 @@ async def handle_set_project_folder(cmd: SetProjectFolder):
     """Set the project folder"""
     service = ServiceLocator.get("file_system")
     success = service.set_project_folder(cmd.folder_path)
-    return {"success": success, "path": cmd.folder_path}
+    tree = service.get_file_tree()
+    return {"success": success, "path": cmd.folder_path, "tree": tree}
 
 
 @FileManagementCommandBus.register(GetProjectFolder)
@@ -3720,14 +3379,16 @@ async def handle_get_directory_tree(cmd: GetDirectoryTree):
     """Generate directory tree text"""
     service = ServiceLocator.get("file_system")
     
-    # Set project folder if needed
     if str(service.project_folder) != cmd.root_path:
         service.set_project_folder(cmd.root_path)
-    
-    tree_text = service.generate_directory_tree(
-        include_files=cmd.include_files,
-        max_depth=cmd.max_depth
-    )
+
+    if cmd.checked_only:
+        tree_text = service.generate_checked_directory_tree()
+    else:
+        tree_text = service.generate_directory_tree(
+            include_files=cmd.include_files,
+            max_depth=cmd.max_depth
+        )
     
     return {"tree": tree_text}
 
@@ -3838,42 +3499,40 @@ class PromptFormatter:
         system_prompt: Optional[str] = None,
         user_prompt: Optional[str] = None,
         file_contents: Optional[List[Dict[str, str]]] = None,
+        directory_tree: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> str:
-        """Build an enhanced prompt with all components"""
+        """Build an enhanced prompt with all components in a specific order."""
         sections = []
         
-        # Add system prompt
+        # 1. System Prompt
         if system_prompt:
             sections.append(f"=== SYSTEM PROMPT ===\n{system_prompt}")
         
-        # Add file contents
+        # 2. User Prompt
+        if user_prompt:
+            sections.append(f"=== USER PROMPT ===\n{user_prompt}")
+            
+        # 3. File Contents
         if file_contents:
             file_section = "=== FILE CONTENTS ===\n"
-            formatted_files = []
-            
-            for file_info in file_contents:
-                file_path = file_info.get('path', 'Unknown')
-                content = file_info.get('content', '')
-                formatted_files.append(self.format_file_content(file_path, content))
-            
+            formatted_files = [
+                self.format_file_content(f.get('path', 'Unknown'), f.get('content', ''))
+                for f in file_contents
+            ]
             file_section += self.file_separator.join(formatted_files)
             sections.append(file_section)
         
-        # Add attachments
+        # 4. Directory Tree
+        if directory_tree:
+            sections.append(f"=== DIRECTORY TREE ===\n{directory_tree}")
+            
+        # 5. Attachments (last)
         if attachments:
             attachment_section = "=== ATTACHMENTS ===\n"
-            formatted_attachments = []
-            
-            for attachment in attachments:
-                formatted_attachments.append(self.format_attachment(attachment))
-            
+            formatted_attachments = [self.format_attachment(a) for a in attachments]
             attachment_section += self.section_separator.join(formatted_attachments)
             sections.append(attachment_section)
-        
-        # Add user prompt
-        if user_prompt:
-            sections.append(f"=== USER PROMPT ===\n{user_prompt}")
         
         # Join all sections
         final_prompt = self.section_separator.join(sections)
@@ -3915,6 +3574,7 @@ class PromptFormatter:
         """Rough estimation of token count"""
         # Simple estimation: ~4 characters per token
         return len(text) // 4
+
 
 
 ======== src\features\prompt_builder\molecules\__init__.py ========
@@ -4170,30 +3830,28 @@ class PromptService:
         include_files: bool = True,
         include_attachments: bool = True,
         include_system_prompt: bool = True,
-        include_user_prompt: bool = True
+        include_user_prompt: bool = True,
+        files_to_include: Optional[List[str]] = None,
+        directory_tree: Optional[str] = None
     ) -> Tuple[bool, str, List[str]]:
         """Build the final prompt"""
         errors = []
         
-        # Gather components
         system = self.system_prompt if include_system_prompt else None
         user = self.user_prompt if include_user_prompt else None
         
-        # Get file contents if requested
         file_contents = []
         if include_files:
-            file_contents = await self._get_file_contents()
-        
-        # Get attachments if requested
+            target_files = files_to_include if files_to_include is not None else await self._get_checked_files_from_service()
+            file_contents = await self._get_file_contents(target_files)
+
         attachments = []
         if include_attachments:
             attachments = await self._get_attachments()
         
-        # Validate complete prompt
         valid, validation_errors = self.validator.validate_complete_prompt(
             system, user, file_contents, attachments
         )
-        
         if not valid:
             errors.extend(validation_errors)
             EventBus.emit(PromptValidationFailedEvent(errors=errors))
@@ -4205,34 +3863,29 @@ class PromptService:
                 system_prompt=system,
                 user_prompt=user,
                 file_contents=file_contents,
+                directory_tree=directory_tree,
                 attachments=attachments
             )
-        else:  # metaprompt mode
-            # Build base content
+        else:
             base_content = self.formatter.build_enhanced_prompt(
-                system_prompt=None,  # Don't include system in base
+                system_prompt=None,
                 user_prompt=user,
                 file_contents=file_contents,
+                directory_tree=directory_tree,
                 attachments=attachments
             )
-            
-            # Apply metaprompt template
-            template = system or "{{CONTENT}}"  # Use system as template
+            template = system or "{{CONTENT}}"
             prompt = self.formatter.build_metaprompt(template, base_content)
         
-        # Emit success event
         EventBus.emit(PromptBuiltEvent(mode=self.current_mode, total_length=len(prompt)))
-        
         logger.info(f"Prompt built successfully: {len(prompt)} characters")
         return True, prompt, []
     
     async def get_prompt_preview(self, max_length: int = 1000) -> str:
         """Get a preview of the prompt"""
         success, prompt, errors = await self.build_prompt()
-        
         if not success:
             return f"Error building prompt: {', '.join(errors)}"
-        
         return self.formatter.truncate_prompt(prompt, max_length)
     
     def get_prompt_components(self) -> Dict[str, Any]:
@@ -4250,7 +3903,6 @@ class PromptService:
         if clear_system:
             self.system_prompt = ""
             logger.info("System prompt cleared")
-        
         if clear_user:
             self.user_prompt = ""
             logger.info("User prompt cleared")
@@ -4264,48 +3916,47 @@ class PromptService:
             attachments=self._attachments_cache
         )
     
-    async def _get_file_contents(self) -> List[Dict[str, str]]:
-        """Get contents of checked files"""
+    async def _get_checked_files_from_service(self) -> List[str]:
+        """Get only file paths from all checked items in the file service."""
         try:
-            # Get file system service
             file_service = ServiceLocator.get("file_system")
             if not file_service:
-                logger.warning("File system service not available")
+                return []
+            all_checked_paths = file_service.get_checked_paths()
+            # Filter for files only
+            return [p for p in all_checked_paths if not Path(p).is_dir()]
+        except Exception as e:
+            logger.error(f"Error getting checked files from service: {e}")
+            return []
+
+    async def _get_file_contents(self, file_paths: List[str]) -> List[Dict[str, str]]:
+        """Get contents for a specific list of files."""
+        try:
+            file_service = ServiceLocator.get("file_system")
+            if not file_service:
                 return []
             
-            # Get checked files
-            checked_files = file_service.get_checked_files()
-            
-            # Read file contents
             file_contents = []
-            for file_path in checked_files:
+            for file_path in file_paths:
                 content = file_service.get_file_content(file_path)
                 if content:
-                    file_contents.append({
-                        'path': file_path,
-                        'content': content
-                    })
+                    file_contents.append({'path': file_path, 'content': content})
             
             self._file_contents_cache = file_contents
             return file_contents
-            
         except Exception as e:
             logger.error(f"Error getting file contents: {e}")
             return []
-    
+
     async def _get_attachments(self) -> List[Dict[str, Any]]:
         """Get attachment information"""
         try:
-            # Get attachment service when implemented
-            # For now, return cached attachments
             return self._attachments_cache
-            
         except Exception as e:
             logger.error(f"Error getting attachments: {e}")
             return []
 
-
-# Import asyncio for preview method
+from pathlib import Path
 import asyncio
 
 
@@ -4347,6 +3998,8 @@ class BuildPrompt(Command):
     include_system_prompt: bool = True
     include_user_prompt: bool = True
     mode: str = "enhanced"  # "enhanced" or "metaprompt"
+    files_to_include: Optional[List[str]] = None # Specify files to include
+    directory_tree: Optional[str] = None # Override for directory tree
 
 
 class GetPromptComponents(Command):
@@ -4384,6 +4037,7 @@ class ApplyTemplate(Command):
     """Command to apply a template to prompts"""
     template_name: str
     target: str  # "system" or "user"
+
 
 
 ======== src\features\prompt_builder\handlers.py ========
@@ -4451,7 +4105,9 @@ async def handle_build_prompt(cmd: BuildPrompt):
         include_files=cmd.include_files,
         include_attachments=cmd.include_attachments,
         include_system_prompt=cmd.include_system_prompt,
-        include_user_prompt=cmd.include_user_prompt
+        include_user_prompt=cmd.include_user_prompt,
+        files_to_include=cmd.files_to_include,
+        directory_tree=cmd.directory_tree
     )
     
     return {
@@ -4696,7 +4352,7 @@ class ClaudeTokenizer:
 ======== src\features\tokens\atoms\gemini_tokenizer.py ========
 """Gemini tokenizer atom - calculates tokens for Google models"""
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
@@ -4843,14 +4499,11 @@ class GeminiTokenizer:
         return frames * 258
 
 
-# Import for type hints
-from typing import List
-
 
 ======== src\features\tokens\atoms\gpt_tokenizer.py ========
 """GPT tokenizer atom - calculates tokens for OpenAI models"""
 import logging
-from typing import Optional
+from typing import Optional, Dict
 import tiktoken
 
 logger = logging.getLogger(__name__)
@@ -4943,184 +4596,9 @@ class GPTTokenizer:
         return limits.get(model, {"context": 4096, "max_output": 2048})
 
 
-# Import for type hints
-from typing import Dict
-
 
 ======== src\features\tokens\molecules\__init__.py ========
 
-
-
-======== src\features\tokens\molecules\cost_calculator.py ========
-"""Cost calculator molecule - calculates API costs based on tokens"""
-import logging
-from typing import Dict, Optional
-from decimal import Decimal
-
-logger = logging.getLogger(__name__)
-
-
-class CostCalculator:
-    """Calculates API costs for different models"""
-    
-    def __init__(self):
-        # Prices per 1K tokens (in USD)
-        self.pricing = {
-            # OpenAI GPT-4
-            "gpt-4": {
-                "prompt": Decimal("0.03"),
-                "completion": Decimal("0.06")
-            },
-            "gpt-4-32k": {
-                "prompt": Decimal("0.06"),
-                "completion": Decimal("0.12")
-            },
-            "gpt-4-turbo": {
-                "prompt": Decimal("0.01"),
-                "completion": Decimal("0.03")
-            },
-            "gpt-4-turbo-preview": {
-                "prompt": Decimal("0.01"),
-                "completion": Decimal("0.03")
-            },
-            # OpenAI GPT-3.5
-            "gpt-3.5-turbo": {
-                "prompt": Decimal("0.0005"),
-                "completion": Decimal("0.0015")
-            },
-            "gpt-3.5-turbo-16k": {
-                "prompt": Decimal("0.001"),
-                "completion": Decimal("0.002")
-            },
-            # Anthropic Claude
-            "claude-3-opus": {
-                "prompt": Decimal("0.015"),
-                "completion": Decimal("0.075")
-            },
-            "claude-3-sonnet": {
-                "prompt": Decimal("0.003"),
-                "completion": Decimal("0.015")
-            },
-            "claude-3-haiku": {
-                "prompt": Decimal("0.00025"),
-                "completion": Decimal("0.00125")
-            },
-            # Google Gemini
-            "gemini-pro": {
-                "prompt": Decimal("0.0005"),
-                "completion": Decimal("0.0015")
-            },
-            "gemini-pro-vision": {
-                "prompt": Decimal("0.0005"),
-                "completion": Decimal("0.0015"),
-                "image": Decimal("0.002")  # per image
-            },
-            "gemini-pro-1.5": {
-                "prompt": Decimal("0.00125"),
-                "completion": Decimal("0.005")
-            }
-        }
-    
-    def calculate_cost(
-        self,
-        prompt_tokens: int,
-        completion_tokens: int,
-        model: str,
-        image_count: int = 0
-    ) -> Dict[str, Decimal]:
-        """Calculate cost for API usage"""
-        if model not in self.pricing:
-            logger.warning(f"Unknown model {model}, using default pricing")
-            pricing = {
-                "prompt": Decimal("0.001"),
-                "completion": Decimal("0.002")
-            }
-        else:
-            pricing = self.pricing[model]
-        
-        # Calculate text costs
-        prompt_cost = (Decimal(prompt_tokens) / 1000) * pricing["prompt"]
-        completion_cost = (Decimal(completion_tokens) / 1000) * pricing["completion"]
-        
-        # Calculate image costs if applicable
-        image_cost = Decimal("0")
-        if image_count > 0 and "image" in pricing:
-            image_cost = Decimal(image_count) * pricing["image"]
-        
-        total_cost = prompt_cost + completion_cost + image_cost
-        
-        return {
-            "prompt_cost": prompt_cost,
-            "completion_cost": completion_cost,
-            "image_cost": image_cost,
-            "total_cost": total_cost,
-            "currency": "USD"
-        }
-    
-    def estimate_monthly_cost(
-        self,
-        daily_requests: int,
-        avg_prompt_tokens: int,
-        avg_completion_tokens: int,
-        model: str,
-        avg_images_per_request: int = 0
-    ) -> Dict[str, Decimal]:
-        """Estimate monthly API costs"""
-        # Calculate daily cost
-        daily_cost = self.calculate_cost(
-            prompt_tokens=daily_requests * avg_prompt_tokens,
-            completion_tokens=daily_requests * avg_completion_tokens,
-            model=model,
-            image_count=daily_requests * avg_images_per_request
-        )
-        
-        # Multiply by 30 for monthly estimate
-        monthly_cost = {}
-        for key, value in daily_cost.items():
-            if key == "currency":
-                monthly_cost[key] = value
-            else:
-                monthly_cost[key] = value * 30
-        
-        return monthly_cost
-    
-    def get_model_pricing(self, model: str) -> Optional[Dict[str, Decimal]]:
-        """Get pricing information for a model"""
-        return self.pricing.get(model)
-    
-    def compare_models(
-        self,
-        prompt_tokens: int,
-        completion_tokens: int,
-        models: Optional[List[str]] = None
-    ) -> Dict[str, Dict[str, Decimal]]:
-        """Compare costs across different models"""
-        if models is None:
-            models = list(self.pricing.keys())
-        
-        comparison = {}
-        for model in models:
-            if model in self.pricing:
-                cost = self.calculate_cost(prompt_tokens, completion_tokens, model)
-                comparison[model] = cost
-        
-        # Sort by total cost
-        sorted_comparison = dict(
-            sorted(comparison.items(), key=lambda x: x[1]["total_cost"])
-        )
-        
-        return sorted_comparison
-    
-    def format_cost(self, cost: Decimal, include_currency: bool = True) -> str:
-        """Format cost for display"""
-        formatted = f"${cost:.4f}"
-        if include_currency:
-            formatted += " USD"
-        return formatted
-
-
-# Import for type hints
-from typing import List
 
 
 ======== src\features\tokens\organisms\__init__.py ========
@@ -5135,7 +4613,6 @@ from src.gateway import ServiceLocator, EventBus, Event
 from ..atoms.gpt_tokenizer import GPTTokenizer
 from ..atoms.claude_tokenizer import ClaudeTokenizer
 from ..atoms.gemini_tokenizer import GeminiTokenizer
-from ..molecules.cost_calculator import CostCalculator
 
 logger = logging.getLogger(__name__)
 
@@ -5148,13 +4625,6 @@ class TokensCalculatedEvent(Event):
         self.token_count = token_count
 
 
-class CostCalculatedEvent(Event):
-    """Event emitted when cost is calculated"""
-    def __init__(self, model: str, total_cost: float):
-        self.model = model
-        self.total_cost = total_cost
-
-
 class TokenService:
     """High-level token calculation service"""
     
@@ -5162,13 +4632,11 @@ class TokenService:
         self.gpt_tokenizer = GPTTokenizer()
         self.claude_tokenizer = ClaudeTokenizer()
         self.gemini_tokenizer = GeminiTokenizer()
-        self.cost_calculator = CostCalculator()
         
         # Token usage tracking
         self.usage_stats = {
             "total_prompt_tokens": 0,
             "total_completion_tokens": 0,
-            "total_cost": 0.0,
             "by_model": {}
         }
         
@@ -5335,47 +4803,6 @@ class TokenService:
             }
         }
     
-    def estimate_cost(
-        self,
-        prompt_tokens: int,
-        completion_tokens: int,
-        model: str = "gpt-4",
-        image_count: int = 0
-    ) -> Dict[str, Any]:
-        """Estimate API cost based on tokens"""
-        cost_data = self.cost_calculator.calculate_cost(
-            prompt_tokens,
-            completion_tokens,
-            model,
-            image_count
-        )
-        
-        # Convert Decimal to float for JSON serialization
-        result = {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "model": model,
-            "costs": {
-                "prompt_cost": float(cost_data["prompt_cost"]),
-                "completion_cost": float(cost_data["completion_cost"]),
-                "image_cost": float(cost_data["image_cost"]),
-                "total_cost": float(cost_data["total_cost"]),
-                "currency": cost_data["currency"]
-            }
-        }
-        
-        # Emit event
-        EventBus.emit(CostCalculatedEvent(
-            model=model,
-            total_cost=result["costs"]["total_cost"]
-        ))
-        
-        # Update usage stats
-        self._update_usage_stats(model, prompt_tokens, completion_tokens)
-        self.usage_stats["total_cost"] += result["costs"]["total_cost"]
-        
-        return result
-    
     def get_token_limits(self) -> Dict[str, Dict[str, Any]]:
         """Get token limits for all models"""
         limits = {}
@@ -5406,13 +4833,9 @@ class TokenService:
         else:
             limits = {"context": 4096, "max_output": 2048}
         
-        # Get pricing
-        pricing = self.cost_calculator.get_model_pricing(model)
-        
         return {
             "model": model,
             "limits": limits,
-            "pricing": {k: float(v) for k, v in pricing.items()} if pricing else None,
             "provider": self._get_provider(model)
         }
     
@@ -5502,16 +4925,10 @@ class GetTokenLimits(Command):
     pass
 
 
-class EstimateCost(Command):
-    """Command to estimate API cost based on tokens"""
-    prompt_tokens: int
-    completion_tokens: int
-    model: str = "gpt-4"
-
-
 class GetModelInfo(Command):
     """Command to get model information including token limits"""
     model: str
+
 
 
 ======== src\features\tokens\handlers.py ========
@@ -5522,7 +4939,7 @@ from src.gateway import EventBus, ServiceLocator
 from .commands import (
     CalculateTokens, CalculatePromptTokens, CalculateFileTokens,
     CalculateMultimodalTokens, GetTokenUsage, GetTokenLimits,
-    EstimateCost, GetModelInfo
+    GetModelInfo
 )
 from .organisms.token_service import TokenService
 
@@ -5602,19 +5019,6 @@ async def handle_get_token_limits(cmd: GetTokenLimits):
     limits = service.get_token_limits()
     
     return {"limits": limits}
-
-
-@TokensCommandBus.register(EstimateCost)
-async def handle_estimate_cost(cmd: EstimateCost):
-    """Estimate API cost based on tokens"""
-    service = ServiceLocator.get("tokens")
-    result = service.estimate_cost(
-        prompt_tokens=cmd.prompt_tokens,
-        completion_tokens=cmd.completion_tokens,
-        model=cmd.model
-    )
-    
-    return result
 
 
 @TokensCommandBus.register(GetModelInfo)
@@ -6335,8 +5739,9 @@ class FAHBridge(QObject):
 """FAH-based main controller - manages main window operations using FAH architecture"""
 import logging
 from typing import Optional, Dict, Any
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from pathlib import Path
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, Qt
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QApplication
 from ..bridges.fah_bridge import FAHBridge
 
 logger = logging.getLogger(__name__)
@@ -6351,6 +5756,7 @@ class MainController(QObject):
     tokens_calculated = pyqtSignal(dict)
     status_message = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    file_tree_ready = pyqtSignal(dict)
     
     def __init__(self, main_window):
         super().__init__()
@@ -6371,6 +5777,11 @@ class MainController(QObject):
         
         # Set up initial state
         self.status_message.emit("Application initialized")
+
+    def _set_default_ui_states(self):
+        """Sets default states for UI elements not covered by configuration."""
+        logger.debug("Setting default UI component states.")
+        self.main_window.gemini_dmp_checkbox.setChecked(True)
     
     @pyqtSlot(str, object)
     def _handle_command_completion(self, command_name: str, result: Any):
@@ -6382,6 +5793,8 @@ class MainController(QObject):
             if result.get("success"):
                 self.project_folder_changed.emit(result.get("path", ""))
                 self.status_message.emit(f"Project folder set: {result.get('path', '')}")
+                if result.get("tree"):
+                    self.file_tree_ready.emit(result["tree"])
         
         elif command_name == "BuildPrompt":
             if result.get("success"):
@@ -6398,6 +5811,10 @@ class MainController(QObject):
         
         elif command_name == "LoadConfiguration":
             self.status_message.emit("Configuration loaded successfully")
+            if result and 'settings' in result:
+                self._load_default_system_prompt(result['settings'])
+            # Set default UI states after config is loaded
+            self._set_default_ui_states()
     
     @pyqtSlot(str, str)
     def _handle_command_failure(self, command_name: str, error: str):
@@ -6405,6 +5822,42 @@ class MainController(QObject):
         logger.error(f"Command {command_name} failed: {error}")
         self.error_occurred.emit(f"{command_name} failed: {error}")
     
+    def _load_default_system_prompt(self, settings: dict):
+        """Loads the default system prompt from the path specified in settings."""
+        prompt_path_str = settings.get('default_system_prompt_path')
+        if not prompt_path_str:
+            logger.info("No default system prompt path configured.")
+            return
+
+        # The path in config is relative to the project root.
+        # The FAHBridge runs commands from the project root directory,
+        # so relative paths should work correctly.
+        prompt_path = Path(prompt_path_str)
+
+        try:
+            from src.features.file_management.commands import GetFileContent
+
+            def on_prompt_content_received(result):
+                if result and result.get('content') is not None:
+                    content = result['content']
+                    self.main_window.system_tab.setPlainText(content)
+                    self.status_message.emit("Default system prompt loaded.")
+                    logger.info("Successfully loaded default system prompt.")
+                else:
+                    error_msg = f"Failed to read default system prompt file: {prompt_path_str}"
+                    logger.error(error_msg)
+                    self.error_occurred.emit(error_msg)
+            
+            self.bridge.execute_command(
+                "file_management", 
+                GetFileContent(file_path=str(prompt_path)),
+                callback=on_prompt_content_received
+            )
+            
+        except Exception as e:
+            logger.error(f"Error loading default system prompt: {e}", exc_info=True)
+            self.error_occurred.emit(f"Error loading system prompt: {e}")
+
     # UI action handlers
     
     @pyqtSlot()
@@ -6446,44 +5899,46 @@ class MainController(QObject):
     
     @pyqtSlot()
     def build_prompt(self):
-        """Build the final prompt"""
+        """Build the final prompt using only checked files."""
         from src.features.prompt_builder.commands import BuildPrompt
-        
-        def handle_result(result):
+        from src.features.file_management.commands import GetDirectoryTree, GetProjectFolder
+
+        def _on_prompt_built(result):
             if result.get("success"):
-                # Copy to clipboard
                 prompt = result.get("prompt", "")
-                clipboard = self.main_window.app.clipboard()
+                clipboard = QApplication.instance().clipboard()
                 clipboard.setText(prompt)
-                
-                # Show success message
-                QMessageBox.information(
-                    self.main_window,
-                    "Prompt Built",
-                    f"Prompt built successfully!\n"
-                    f"Length: {result.get('length', 0)} characters\n"
-                    f"The prompt has been copied to clipboard."
-                )
+                self.status_message.emit(f"Prompt ({result.get('length', 0)} chars) built and copied to clipboard.")
         
-        self.bridge.execute_command("prompt_builder", BuildPrompt(), callback=handle_result)
+        def _on_tree_generated(result):
+            tree_text = result.get("tree", "")
+            checked_files = [p for p in self.main_window.checkable_proxy.get_all_checked_paths() if not Path(p).is_dir()]
+            self.bridge.execute_command(
+                "prompt_builder", 
+                BuildPrompt(files_to_include=checked_files, directory_tree=tree_text), 
+                callback=_on_prompt_built
+            )
+
+        def _on_folder_retrieved(result):
+            folder = result.get("path")
+            if folder:
+                self.bridge.execute_command(
+                    "file_management",
+                    GetDirectoryTree(root_path=folder, checked_only=True),
+                    callback=_on_tree_generated
+                )
+
+        self.bridge.execute_command("file_management", GetProjectFolder(), callback=_on_folder_retrieved)
     
     @pyqtSlot()
     def calculate_prompt_tokens(self):
         """Calculate tokens for the current prompt"""
         from src.features.tokens.commands import CalculatePromptTokens
-        
-        # Get current model selection (default to gpt-4)
         model = self.main_window.token_model_combo.currentText() or "gpt-4"
-        
         def handle_result(result):
             if "error" not in result:
                 self.tokens_calculated.emit(result)
-        
-        self.bridge.execute_command(
-            "tokens",
-            CalculatePromptTokens(model=model),
-            callback=handle_result
-        )
+        self.bridge.execute_command("tokens", CalculatePromptTokens(model=model), callback=handle_result)
     
     @pyqtSlot()
     def refresh_file_tree(self):
@@ -6494,61 +5949,64 @@ class MainController(QObject):
     
     @pyqtSlot()
     def generate_directory_tree(self):
-        """Generate directory tree text"""
+        """Generate directory tree text for checked items only."""
         from src.features.file_management.commands import GetDirectoryTree, GetProjectFolder
         
-        # First get the project folder
         def get_folder_callback(result):
             folder = result.get("path")
             if folder:
-                # Then generate tree
-                from src.features.file_management.commands import GetDirectoryTree
                 self.bridge.execute_command(
                     "file_management",
-                    GetDirectoryTree(root_path=folder),
+                    GetDirectoryTree(root_path=folder, checked_only=True),
                     callback=self._handle_directory_tree
                 )
         
-        self.bridge.execute_command(
-            "file_management",
-            GetProjectFolder(),
-            callback=get_folder_callback
-        )
+        self.bridge.execute_command("file_management", GetProjectFolder(), callback=get_folder_callback)
     
     def _handle_directory_tree(self, result):
-        """Handle directory tree generation result"""
+        """Handle directory tree generation result, updating UI and clipboard."""
         tree = result.get("tree", "")
         if tree:
-            # Copy to clipboard
-            clipboard = self.main_window.app.clipboard()
+            self.main_window.dir_structure_tab.setPlainText(tree)
+            clipboard = QApplication.instance().clipboard()
             clipboard.setText(tree)
-            
-            QMessageBox.information(
-                self.main_window,
-                "Directory Tree",
-                "Directory tree has been copied to clipboard!"
-            )
+            self.status_message.emit("Directory tree generated and copied to clipboard.")
     
+    @pyqtSlot()
+    def run_all_sequence(self):
+        """Execute the full sequence using only checked files."""
+        self.build_prompt() # Re-use the build_prompt logic which now does the full sequence
+        # After the prompt is built, we want to switch the tab
+        # The prompt_built signal is connected to the main window's display slot,
+        # so we can connect another slot to it for tab switching.
+        # To avoid connecting multiple times, we can use a single-shot connection.
+        try:
+            self.prompt_built.disconnect(self._switch_to_prompt_tab)
+        except TypeError:
+            pass # was not connected
+        self.prompt_built.connect(self._switch_to_prompt_tab, type=Qt.ConnectionType.SingleShotConnection)
+
+    @pyqtSlot(str)
+    def _switch_to_prompt_tab(self, prompt_text: str):
+        """Switches the main tab widget to the prompt output tab."""
+        if prompt_text:
+            self.main_window.build_tabs.setCurrentWidget(self.main_window.prompt_output_tab)
+
     @pyqtSlot()
     def save_state(self):
         """Save application state"""
-        from src.features.state.commands import SaveState
-        self.bridge.execute_command("state", SaveState())
-        self.status_message.emit("State saved")
+        logger.warning("State saving feature is not yet implemented.")
+        self.status_message.emit("State saving not implemented.")
     
     @pyqtSlot()
     def load_last_state(self):
         """Load last saved state"""
-        from src.features.state.commands import LoadLastState
-        self.bridge.execute_command("state", LoadLastState())
-        self.status_message.emit("Last state loaded")
+        logger.warning("State loading feature is not yet implemented.")
+        self.status_message.emit("State loading not implemented.")
     
     def shutdown(self):
         """Cleanup on shutdown"""
-        # Save state before shutdown
         self.save_state()
-        
-        # Shutdown bridge
         self.bridge.shutdown()
 
 
@@ -6565,8 +6023,8 @@ from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex, QFileInfo, QAbs
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QColor, QBrush
 from PyQt6.QtWidgets import QTreeView, QApplication, QStyle
 from typing import Callable, Optional, Set, List, Dict, Any
-from src.features.file_management.organisms.file_system_service import FileSystemService
 from src.features.file_management.molecules.file_tree_builder import FileTreeNode
+from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -6574,6 +6032,18 @@ logger = logging.getLogger(__name__)
 # --- Constants ---
 NODE_ROLE = Qt.ItemDataRole.UserRole + 1 # Role to store FileTreeNode reference
 PATH_ROLE = Qt.ItemDataRole.UserRole + 2 # Role to store absolute path
+
+def dict_to_file_tree_node(node_dict: Dict[str, Any]) -> FileTreeNode:
+    """Recursively converts a dictionary back into a FileTreeNode object structure."""
+    path = Path(node_dict['path'])
+    node = FileTreeNode(path, node_dict['is_dir'])
+    node.checked = node_dict.get('checked', False)
+    
+    for child_dict in node_dict.get('children', []):
+        child_node = dict_to_file_tree_node(child_dict)
+        node.add_child(child_node)
+        
+    return node
 
 # --- Cached File System Model (using QStandardItemModel) ---
 class CachedFileSystemModel(QStandardItemModel):
@@ -6658,10 +6128,10 @@ class CheckableProxyModel(QSortFilterProxyModel):
     Handles recursive checking for folders and multi-selection checking.
     Works with CachedFileSystemModel.
     """
-    # Signal to indicate check state dictionary has changed
-    check_state_changed = pyqtSignal()
+    # Signal to inform the controller about a check state change
+    file_check_state_changed = pyqtSignal(str, bool)
 
-    def __init__(self, project_folder_getter: Callable[[], Optional[str]], fs_service: FileSystemService, tree_view: QTreeView, parent=None):
+    def __init__(self, project_folder_getter: Callable[[], Optional[str]], fs_service: Optional[Any], tree_view: QTreeView, parent=None):
         super().__init__(parent)
         self.project_folder_getter = project_folder_getter
         self.fs_service = fs_service
@@ -6737,25 +6207,24 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 return False
 
             is_checked = (new_check_state == Qt.CheckState.Checked)
-            current_state_in_dict = self.checked_files_dict.get(file_path, False)
-
-            if is_checked == current_state_in_dict:
-                self._is_setting_data = False
-                return True
-
-            if is_checked:
-                self.checked_files_dict[file_path] = True
-            elif file_path in self.checked_files_dict:
-                del self.checked_files_dict[file_path]
-
+            
+            # Emit signal to notify controller BEFORE changing internal state
+            # This allows the controller to be the source of truth for the change
+            self.file_check_state_changed.emit(file_path, is_checked)
+            
+            # The actual update of the dictionary and UI will happen
+            # once the controller processes the command and updates the service state.
+            # For a more responsive UI, we can preemptively update the UI here,
+            # but for consistency, we'll let the backend drive the state.
+            # Let's do a hybrid: update locally and let backend confirm.
+            
+            self._update_recursive_check_state(source_item, is_checked)
+            
+            # We must emit dataChanged for all affected indices.
+            # A simple way is to reset the whole model view, but that's inefficient.
+            # Let's emit for the top-level item. The recursive update will handle children.
             self.dataChanged.emit(index, index, [role])
 
-            if node.is_dir:
-                self._update_children_state_recursive(source_item, is_checked)
-                if is_checked:
-                    self.expand_index_recursively(index)
-
-            self.check_state_changed.emit()
             return True
 
         except Exception as e:
@@ -6764,34 +6233,26 @@ class CheckableProxyModel(QSortFilterProxyModel):
         finally:
             self._is_setting_data = False
 
-    def _update_children_state_recursive(self, parent_source_item: QStandardItem, checked: bool) -> None:
-        """
-        Recursively updates the check state dictionary for children of a source item.
-        """
-        source_model = self.sourceModel()
+    def _update_recursive_check_state(self, parent_source_item: QStandardItem, checked: bool):
+        """Recursively updates the internal check state dictionary and emits dataChanged."""
+        parent_path = parent_source_item.data(PATH_ROLE)
+        if not parent_path: return
+
+        if checked:
+            self.checked_files_dict[parent_path] = True
+        elif parent_path in self.checked_files_dict:
+            del self.checked_files_dict[parent_path]
+        
+        parent_source_index = self.sourceModel().indexFromItem(parent_source_item)
+        parent_proxy_index = self.mapFromSource(parent_source_index)
+        if parent_proxy_index.isValid():
+            self.dataChanged.emit(parent_proxy_index, parent_proxy_index, [Qt.ItemDataRole.CheckStateRole])
+        
+        # Recurse for children
         for row in range(parent_source_item.rowCount()):
             child_source_item = parent_source_item.child(row, 0)
-            if not child_source_item: continue
-
-            child_node: Optional[FileTreeNode] = child_source_item.data(NODE_ROLE)
-            child_path = child_source_item.data(PATH_ROLE)
-
-            if not child_node or not child_path: continue
-
-            current_state_in_dict = self.checked_files_dict.get(child_path, False)
-            if checked != current_state_in_dict:
-                if checked:
-                    self.checked_files_dict[child_path] = True
-                elif child_path in self.checked_files_dict:
-                    del self.checked_files_dict[child_path]
-
-                child_source_index = source_model.indexFromItem(child_source_item)
-                child_proxy_index = self.mapFromSource(child_source_index)
-                if child_proxy_index.isValid():
-                    self.dataChanged.emit(child_proxy_index, child_proxy_index, [Qt.ItemDataRole.CheckStateRole])
-
-            if child_node.is_dir:
-                self._update_children_state_recursive(child_source_item, checked)
+            if child_source_item:
+                self._update_recursive_check_state(child_source_item, checked)
 
     def expand_index_recursively(self, proxy_index: QModelIndex):
         """Recursively expands the given index and its children in the tree view."""
@@ -6819,7 +6280,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def get_all_checked_paths(self) -> List[str]:
         """Returns a list of all paths currently marked as checked in the dictionary."""
-        return list(self.checked_files_dict.keys())
+        return [path for path, checked in self.checked_files_dict.items() if checked]
 
     def get_checked_files(self) -> List[str]:
         """
@@ -6839,9 +6300,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 node: Optional[FileTreeNode] = item.data(NODE_ROLE)
                 if node and not node.is_dir:
                     checked_files.append(path)
-            else:
-                logger.warning(f"Item not found in model for checked path: {path}. Cannot determine if it is a file.")
-
+        
         return checked_files
 
     def update_check_states_from_dict(self):
@@ -6850,6 +6309,14 @@ class CheckableProxyModel(QSortFilterProxyModel):
         self.beginResetModel()
         self.endResetModel()
         logger.debug("Finished updating visual check states.")
+
+    def set_check_state_for_path(self, path: str, checked: bool):
+        """Externally set the check state for a path and its children."""
+        source_item = self.sourceModel().find_item_by_path(path)
+        if source_item:
+            self._is_setting_data = True
+            self._update_recursive_check_state(source_item, checked)
+            self._is_setting_data = False
 
 
 
@@ -7322,7 +6789,7 @@ from typing import Optional, List, Dict, Any
 from PyQt6.QtWidgets import ( # PyQt5 -> PyQt6
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTreeView, QTabWidget,
-    QStatusBar, QPushButton, QLabel, QCheckBox,
+    QStatusBar, QPushButton, QLabel, QCheckBox, QGroupBox,
     QAbstractItemView, QMenuBar, QSplitter, QStyleFactory, QApplication, QMenu,
     QTreeWidget, QTreeWidgetItem, QComboBox, QFileDialog, QInputDialog, QMessageBox,
     QFrame, QLineEdit, QDialog, QListWidget, QListWidgetItem, QStyle
@@ -7406,11 +6873,6 @@ class MainWindow(QMainWindow):
         # --- 메뉴바 ---
         self.menubar = QMenuBar(self)
         self.setMenuBar(self.menubar)
-        state_menu = self.menubar.addMenu("상태")
-        self.export_state_action = QAction("상태 내보내기", self)
-        self.import_state_action = QAction("상태 가져오기", self)
-        state_menu.addAction(self.export_state_action)
-        state_menu.addAction(self.import_state_action)
         help_menu = self.menubar.addMenu("도움말")
         open_readme_action = QAction("README 열기", self)
         open_readme_action.triggered.connect(self._open_readme)
@@ -7460,6 +6922,7 @@ class MainWindow(QMainWindow):
         self.build_tabs.addTab(self.prompt_output_tab, "프롬프트 출력")
         self.build_tabs.addTab(self.xml_input_tab, "XML/DMP 입력")
         self.build_tabs.addTab(self.summary_tab, "Summary")
+        self.build_tabs.setCurrentWidget(self.user_tab)
 
         self.generate_tree_btn = QPushButton("🌳 트리 생성")
         self.generate_btn = QPushButton("✨ 프롬프트 생성")
@@ -7493,43 +6956,61 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+
+        # --- Top controls ---
+        top_controls_widget = QWidget()
+        top_controls_layout = QVBoxLayout(top_controls_widget)
+        top_controls_layout.setContentsMargins(0, 0, 0, 0)
+        
         top_buttons_layout = QHBoxLayout()
         top_buttons_layout.addWidget(self.reset_program_btn)
-        top_buttons_layout.addWidget(self.load_previous_work_btn)
         top_buttons_layout.addWidget(self.save_current_work_btn)
+        top_buttons_layout.addWidget(self.load_previous_work_btn)
         top_buttons_layout.addWidget(self.select_project_btn)
         top_buttons_layout.addStretch(1)
-        main_layout.addLayout(top_buttons_layout)
-        main_layout.addWidget(self.project_folder_label)
+        top_controls_layout.addLayout(top_buttons_layout)
+
+        top_controls_layout.addWidget(self.project_folder_label)
+
         llm_params_layout = QHBoxLayout()
         llm_params_layout.addWidget(QLabel("Model:"))
         llm_params_layout.addWidget(self.llm_combo)
         llm_params_layout.addWidget(self.model_name_combo)
         llm_params_layout.addWidget(self.gemini_param_widget)
         llm_params_layout.addStretch(1)
-        main_layout.addLayout(llm_params_layout)
+        top_controls_layout.addLayout(llm_params_layout)
+
+        main_layout.addWidget(top_controls_widget)
         
         self.center_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # --- Left Panel with Tree View and Attachments ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        left_splitter = QSplitter(Qt.Orientation.Vertical)
-        left_splitter.addWidget(self.tree_view)
-        left_splitter.addWidget(self.attachment_group)
-        left_layout.addWidget(left_splitter)
+        left_layout.setContentsMargins(0,0,0,0)
+
+        # Vertical splitter for tree and attachments
+        left_v_splitter = QSplitter(Qt.Orientation.Vertical)
+        left_v_splitter.addWidget(self.tree_view)
+        left_v_splitter.addWidget(self.attachment_group)
+        left_v_splitter.setStretchFactor(0, 1) # tree_view will stretch
+        left_v_splitter.setStretchFactor(1, 0) # attachment_group will not stretch vertically
+
+        left_layout.addWidget(left_v_splitter)
         self.center_splitter.addWidget(left_panel)
         
+        # --- Right Panel ---
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_top_widget = QWidget()
-        right_top_layout = QVBoxLayout(right_top_widget)
         run_buttons_layout = QHBoxLayout()
         for btn in self.run_buttons:
             run_buttons_layout.addWidget(btn)
-        right_top_layout.addLayout(run_buttons_layout)
-        right_top_layout.addWidget(self.build_tabs, 1)
-        right_layout.addWidget(right_top_widget)
+        right_layout.addLayout(run_buttons_layout)
+        right_layout.addWidget(self.build_tabs, 1) # Add stretch factor
         self.center_splitter.addWidget(right_panel)
         
+        # 스플리터 비율 조정 (좌:우 = 1:3)
+        self.center_splitter.setSizes([300, 900])
         main_layout.addWidget(self.center_splitter, 1)
 
         # --- 상태바 ---
@@ -7541,6 +7022,8 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.api_time_label)
         self.status_bar.addPermanentWidget(self.token_count_label)
         self.status_bar.addPermanentWidget(self.char_count_label)
+
+        self.resize(1280, 900)
 
     def _open_readme(self):
         readme_path = str(Path(__file__).parent.parent.parent / "README.md")
@@ -8294,7 +7777,7 @@ def main():
 
             # 6. Insert/Update model_rate_limits table (based on user request)
             print("Inserting/Updating specific model rate limits...")
-            insert_or_update_rate_limit(conn, 'gemini-2.5-pro-preview-03-25', 'google', 5, 25, 'Gemini Pro Preview Rate Limit')
+            insert_or_update_rate_limit(conn, 'gemini-2.5-pro-preview-06-05', 'google', 5, 25, 'Gemini Pro Preview Rate Limit')
             insert_or_update_rate_limit(conn, 'gemini-2.5-flash-preview-04-17', 'google', 10, 500, 'Gemini Flash Preview Rate Limit')
             print("Model rate limits updated.")
 
@@ -8344,6 +7827,7 @@ from src.ui.main_window import MainWindow
 from src.ui.controllers.main_controller import MainController
 from src.shared.atoms.logger import Logger
 from src.ui.styles.font_config import FontConfig
+from src.ui.models.file_system_models import dict_to_file_tree_node
 
 # Configure logging
 Logger.setup(
@@ -8428,9 +7912,12 @@ class DuckPromptApp(QApplication):
         )
         self.main_window.generate_btn.clicked.connect(self.controller.build_prompt)
         self.main_window.generate_tree_btn.clicked.connect(self.controller.generate_directory_tree)
+        self.main_window.generate_all_btn.clicked.connect(self.controller.run_all_sequence)
         
         # --- File tree ---
-        # Check all/uncheck all functionality
+        # Connect the model's check state change signal to the controller
+        self.main_window.checkable_proxy.file_check_state_changed.connect(self.controller.check_file)
+
         if hasattr(self.main_window, 'check_all_btn'): # Assuming a button exists for this
             self.main_window.check_all_btn.clicked.connect(lambda: self.controller.check_all_files(True))
         if hasattr(self.main_window, 'uncheck_all_btn'):
@@ -8445,6 +7932,7 @@ class DuckPromptApp(QApplication):
         self.controller.tokens_calculated.connect(self._update_token_display)
         self.controller.status_message.connect(self.main_window.statusBar().showMessage)
         self.controller.error_occurred.connect(self._show_error_messagebox)
+        self.controller.file_tree_ready.connect(self._update_file_tree_model)
 
     def _initialize_app(self):
         """Initialize application after GUI is ready"""
@@ -8474,6 +7962,23 @@ class DuckPromptApp(QApplication):
         """Show error in a message box."""
         QMessageBox.critical(self.main_window, "Error", error_message)
     
+    def _update_file_tree_model(self, tree_dict: dict):
+        """Update the file tree view model with new data."""
+        if not tree_dict:
+            self.main_window.cached_model.clear()
+            logger.warning("Received empty tree dictionary, clearing model.")
+            return
+        
+        try:
+            # Rebuild the FileTreeNode structure
+            root_node = dict_to_file_tree_node(tree_dict)
+            
+            # Populate the model
+            self.main_window.cached_model.populate_from_cache(root_node)
+            logger.info("File tree model updated successfully.")
+        except Exception as e:
+            logger.error(f"Failed to update file tree model from dictionary: {e}", exc_info=True)
+
     def cleanup(self):
         """Cleanup on application exit"""
         logger.info("Shutting down FAH application...")
@@ -8542,23 +8047,21 @@ default_ignore_list:
   - __pycache__/
   - build/
   - dist/
-gemini_default_model: gemini-2.5-pro-preview-03-25
+gemini_default_model: gemini-2.5-pro-preview-06-05
 claude_default_model: claude-3-7-sonnet-20250219
 gpt_default_model: gpt-4o
 gemini_available_models:
-  - gemini-2.5-pro-preview-03-25
+  - gemini-2.5-pro-preview-06-05
   - gemini-2.5-flash-preview-04-17
 claude_available_models:
   - claude-3-7-sonnet-20250219
 gpt_available_models:
   - gpt-4o
-  - gpt-4-turbo
-  - gpt-3.5-turbo
 anthropic_api_key: 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
 gemini_api_key: AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE
-gemini_temperature: 0.0
-gemini_enable_thinking: false
-gemini_thinking_budget: 0
+gemini_temperature: 0.7
+gemini_enable_thinking: true
+gemini_thinking_budget: 24000
 gemini_enable_search: false
 
 
@@ -8568,7 +8071,7 @@ File Tree:
    📁 ./
    📁 docs/
      📄 Diff-match-patch(DMP) 코드 수정 방법.md (12,792 bytes)
-     📄 Feature‑Atomic Hybrid(FAH) + Sub-Bus Structure.md (19,456 bytes)
+     📄 Feature‑Atomic Hybrid(FAH) + Sub-Bus Structure.md (19,339 bytes)
    📁 src/
      📁 core/
        📁 pydantic_models/
@@ -8596,13 +8099,13 @@ File Tree:
            📄 gitignore_manager.py (2,483 bytes)
          📁 organisms/
            📄 __init__.py (0 bytes)
-           📄 config_service.py (7,351 bytes)
+           📄 config_service.py (6,929 bytes)
          📁 pydantic_models/
            📄 __init__.py (0 bytes)
            📄 config_settings.py (1,355 bytes)
          📄 __init__.py (0 bytes)
          📄 commands.py (1,339 bytes)
-         📄 handlers.py (5,452 bytes)
+         📄 handlers.py (5,554 bytes)
        📁 database/
          📁 atoms/
            📄 __init__.py (0 bytes)
@@ -8610,15 +8113,15 @@ File Tree:
            📄 query_executor.py (3,023 bytes)
          📁 molecules/
            📄 __init__.py (0 bytes)
-           📄 api_key_manager.py (2,460 bytes)
-           📄 config_manager.py (2,598 bytes)
-           📄 gemini_log_manager.py (2,544 bytes)
+           📄 api_key_manager.py (2,456 bytes)
+           📄 config_manager.py (4,994 bytes)
+           📄 gemini_log_manager.py (2,272 bytes)
          📁 organisms/
            📄 __init__.py (0 bytes)
-           📄 database_service.py (3,427 bytes)
+           📄 database_service.py (2,630 bytes)
          📄 __init__.py (0 bytes)
-         📄 commands.py (1,997 bytes)
-         📄 handlers.py (5,555 bytes)
+         📄 commands.py (1,590 bytes)
+         📄 handlers.py (4,331 bytes)
        📁 file_management/
          📁 atoms/
            📄 __init__.py (0 bytes)
@@ -8626,14 +8129,14 @@ File Tree:
            📄 file_watcher.py (2,661 bytes)
          📁 molecules/
            📄 __init__.py (0 bytes)
-           📄 file_tree_builder.py (5,341 bytes)
+           📄 file_tree_builder.py (5,519 bytes)
            📄 gitignore_filter.py (4,146 bytes)
          📁 organisms/
            📄 __init__.py (0 bytes)
-           📄 file_system_service.py (7,533 bytes)
+           📄 file_system_service.py (8,197 bytes)
          📄 __init__.py (0 bytes)
-         📄 commands.py (1,793 bytes)
-         📄 handlers.py (6,640 bytes)
+         📄 commands.py (1,955 bytes)
+         📄 handlers.py (6,766 bytes)
        📁 gemini/
          📁 atoms/
            📄 __init__.py (0 bytes)
@@ -8647,16 +8150,16 @@ File Tree:
        📁 prompt_builder/
          📁 atoms/
            📄 __init__.py (0 bytes)
-           📄 prompt_formatter.py (4,443 bytes)
+           📄 prompt_formatter.py (4,545 bytes)
          📁 molecules/
            📄 __init__.py (0 bytes)
            📄 prompt_validator.py (5,906 bytes)
          📁 organisms/
            📄 __init__.py (0 bytes)
-           📄 prompt_service.py (8,110 bytes)
+           📄 prompt_service.py (8,199 bytes)
          📄 __init__.py (0 bytes)
-         📄 commands.py (1,547 bytes)
-         📄 handlers.py (5,316 bytes)
+         📄 commands.py (1,766 bytes)
+         📄 handlers.py (5,408 bytes)
        📁 state/
          📁 atoms/
            📄 __init__.py (0 bytes)
@@ -8681,17 +8184,16 @@ File Tree:
          📁 atoms/
            📄 __init__.py (0 bytes)
            📄 claude_tokenizer.py (3,260 bytes)
-           📄 gemini_tokenizer.py (5,289 bytes)
-           📄 gpt_tokenizer.py (3,569 bytes)
+           📄 gemini_tokenizer.py (5,393 bytes)
+           📄 gpt_tokenizer.py (3,619 bytes)
          📁 molecules/
            📄 __init__.py (0 bytes)
-           📄 cost_calculator.py (5,499 bytes)
          📁 organisms/
            📄 __init__.py (0 bytes)
-           📄 token_service.py (12,148 bytes)
+           📄 token_service.py (10,228 bytes)
          📄 __init__.py (0 bytes)
-         📄 commands.py (1,352 bytes)
-         📄 handlers.py (3,512 bytes)
+         📄 commands.py (1,239 bytes)
+         📄 handlers.py (3,125 bytes)
        📁 xml_processor/
          📁 atoms/
            📄 __init__.py (0 bytes)
@@ -8727,10 +8229,10 @@ File Tree:
          📄 __init__.py (61 bytes)
          📄 fah_bridge.py (7,148 bytes)
        📁 controllers/
-         📄 main_controller.py (8,426 bytes)
+         📄 main_controller.py (11,946 bytes)
        📁 models/
          📄 __init__.py (67 bytes)
-         📄 file_system_models.py (13,421 bytes)
+         📄 file_system_models.py (14,108 bytes)
        📁 styles/
          📄 __init__.py (22 bytes)
          📄 font_config.py (7,788 bytes)
@@ -8742,7 +8244,7 @@ File Tree:
          📄 file_tree_view.py (2,439 bytes)
          📄 tab_manager.py (434 bytes)
        📄 __init__.py (63 bytes)
-       📄 main_window.py (12,939 bytes)
+       📄 main_window.py (13,378 bytes)
      📁 utils/
        📄 __init__.py (320 bytes)
        📄 db_migration_script.py (5,742 bytes)
@@ -8750,9 +8252,8 @@ File Tree:
        📄 notifications.py (2,983 bytes)
        📄 postgres_db_initializer.py (20,529 bytes)
      📄 __init__.py (64 bytes)
-     📄 app.py (7,800 bytes)
-     📄 config.yml (1,155 bytes)
-   📄 CLAUDE.md (9,590 bytes)
+     📄 app.py (8,924 bytes)
+     📄 config.yml (1,122 bytes)
    📄 main.py (333 bytes)
    📄 pyproject.toml (2,087 bytes)
    📄 qt.conf (47 bytes)

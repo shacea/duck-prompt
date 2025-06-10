@@ -73,6 +73,7 @@ class GetDirectoryTree(Command):
     root_path: str
     include_files: bool = True
     max_depth: Optional[int] = None
+    checked_only: bool = False # Flag to generate tree for checked items only
 
 
 class GetFilteredFiles(Command):

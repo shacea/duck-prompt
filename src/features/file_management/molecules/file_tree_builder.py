@@ -110,8 +110,8 @@ class FileTreeBuilder:
             for node in self.path_to_node.values():
                 node.checked = False
     
-    def get_checked_files(self) -> List[str]:
-        """Get list of checked file paths"""
+    def get_checked_paths(self) -> List[str]:
+        """Get list of all checked paths (files and directories)."""
         return sorted(list(self.checked_paths))
     
     def _apply_checked_states(self):

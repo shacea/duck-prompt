@@ -86,30 +86,28 @@ class PromptService:
         include_files: bool = True,
         include_attachments: bool = True,
         include_system_prompt: bool = True,
-        include_user_prompt: bool = True
+        include_user_prompt: bool = True,
+        files_to_include: Optional[List[str]] = None,
+        directory_tree: Optional[str] = None
     ) -> Tuple[bool, str, List[str]]:
         """Build the final prompt"""
         errors = []
         
-        # Gather components
         system = self.system_prompt if include_system_prompt else None
         user = self.user_prompt if include_user_prompt else None
         
-        # Get file contents if requested
         file_contents = []
         if include_files:
-            file_contents = await self._get_file_contents()
-        
-        # Get attachments if requested
+            target_files = files_to_include if files_to_include is not None else await self._get_checked_files_from_service()
+            file_contents = await self._get_file_contents(target_files)
+
         attachments = []
         if include_attachments:
             attachments = await self._get_attachments()
         
-        # Validate complete prompt
         valid, validation_errors = self.validator.validate_complete_prompt(
             system, user, file_contents, attachments
         )
-        
         if not valid:
             errors.extend(validation_errors)
             EventBus.emit(PromptValidationFailedEvent(errors=errors))
@@ -121,34 +119,29 @@ class PromptService:
                 system_prompt=system,
                 user_prompt=user,
                 file_contents=file_contents,
+                directory_tree=directory_tree,
                 attachments=attachments
             )
-        else:  # metaprompt mode
-            # Build base content
+        else:
             base_content = self.formatter.build_enhanced_prompt(
-                system_prompt=None,  # Don't include system in base
+                system_prompt=None,
                 user_prompt=user,
                 file_contents=file_contents,
+                directory_tree=directory_tree,
                 attachments=attachments
             )
-            
-            # Apply metaprompt template
-            template = system or "{{CONTENT}}"  # Use system as template
+            template = system or "{{CONTENT}}"
             prompt = self.formatter.build_metaprompt(template, base_content)
         
-        # Emit success event
         EventBus.emit(PromptBuiltEvent(mode=self.current_mode, total_length=len(prompt)))
-        
         logger.info(f"Prompt built successfully: {len(prompt)} characters")
         return True, prompt, []
     
     async def get_prompt_preview(self, max_length: int = 1000) -> str:
         """Get a preview of the prompt"""
         success, prompt, errors = await self.build_prompt()
-        
         if not success:
             return f"Error building prompt: {', '.join(errors)}"
-        
         return self.formatter.truncate_prompt(prompt, max_length)
     
     def get_prompt_components(self) -> Dict[str, Any]:
@@ -166,7 +159,6 @@ class PromptService:
         if clear_system:
             self.system_prompt = ""
             logger.info("System prompt cleared")
-        
         if clear_user:
             self.user_prompt = ""
             logger.info("User prompt cleared")
@@ -180,46 +172,45 @@ class PromptService:
             attachments=self._attachments_cache
         )
     
-    async def _get_file_contents(self) -> List[Dict[str, str]]:
-        """Get contents of checked files"""
+    async def _get_checked_files_from_service(self) -> List[str]:
+        """Get only file paths from all checked items in the file service."""
         try:
-            # Get file system service
             file_service = ServiceLocator.get("file_system")
             if not file_service:
-                logger.warning("File system service not available")
+                return []
+            all_checked_paths = file_service.get_checked_paths()
+            # Filter for files only
+            return [p for p in all_checked_paths if not Path(p).is_dir()]
+        except Exception as e:
+            logger.error(f"Error getting checked files from service: {e}")
+            return []
+
+    async def _get_file_contents(self, file_paths: List[str]) -> List[Dict[str, str]]:
+        """Get contents for a specific list of files."""
+        try:
+            file_service = ServiceLocator.get("file_system")
+            if not file_service:
                 return []
             
-            # Get checked files
-            checked_files = file_service.get_checked_files()
-            
-            # Read file contents
             file_contents = []
-            for file_path in checked_files:
+            for file_path in file_paths:
                 content = file_service.get_file_content(file_path)
                 if content:
-                    file_contents.append({
-                        'path': file_path,
-                        'content': content
-                    })
+                    file_contents.append({'path': file_path, 'content': content})
             
             self._file_contents_cache = file_contents
             return file_contents
-            
         except Exception as e:
             logger.error(f"Error getting file contents: {e}")
             return []
-    
+
     async def _get_attachments(self) -> List[Dict[str, Any]]:
         """Get attachment information"""
         try:
-            # Get attachment service when implemented
-            # For now, return cached attachments
             return self._attachments_cache
-            
         except Exception as e:
             logger.error(f"Error getting attachments: {e}")
             return []
 
-
-# Import asyncio for preview method
+from pathlib import Path
 import asyncio

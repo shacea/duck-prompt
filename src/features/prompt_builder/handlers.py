@@ -62,7 +62,9 @@ async def handle_build_prompt(cmd: BuildPrompt):
         include_files=cmd.include_files,
         include_attachments=cmd.include_attachments,
         include_system_prompt=cmd.include_system_prompt,
-        include_user_prompt=cmd.include_user_prompt
+        include_user_prompt=cmd.include_user_prompt,
+        files_to_include=cmd.files_to_include,
+        directory_tree=cmd.directory_tree
     )
     
     return {

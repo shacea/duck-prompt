@@ -20,6 +20,7 @@ from src.ui.main_window import MainWindow
 from src.ui.controllers.main_controller import MainController
 from src.shared.atoms.logger import Logger
 from src.ui.styles.font_config import FontConfig
+from src.ui.models.file_system_models import dict_to_file_tree_node
 
 # Configure logging
 Logger.setup(
@@ -104,9 +105,12 @@ class DuckPromptApp(QApplication):
         )
         self.main_window.generate_btn.clicked.connect(self.controller.build_prompt)
         self.main_window.generate_tree_btn.clicked.connect(self.controller.generate_directory_tree)
+        self.main_window.generate_all_btn.clicked.connect(self.controller.run_all_sequence)
         
         # --- File tree ---
-        # Check all/uncheck all functionality
+        # Connect the model's check state change signal to the controller
+        self.main_window.checkable_proxy.file_check_state_changed.connect(self.controller.check_file)
+
         if hasattr(self.main_window, 'check_all_btn'): # Assuming a button exists for this
             self.main_window.check_all_btn.clicked.connect(lambda: self.controller.check_all_files(True))
         if hasattr(self.main_window, 'uncheck_all_btn'):
@@ -121,6 +125,7 @@ class DuckPromptApp(QApplication):
         self.controller.tokens_calculated.connect(self._update_token_display)
         self.controller.status_message.connect(self.main_window.statusBar().showMessage)
         self.controller.error_occurred.connect(self._show_error_messagebox)
+        self.controller.file_tree_ready.connect(self._update_file_tree_model)
 
     def _initialize_app(self):
         """Initialize application after GUI is ready"""
@@ -150,6 +155,23 @@ class DuckPromptApp(QApplication):
         """Show error in a message box."""
         QMessageBox.critical(self.main_window, "Error", error_message)
     
+    def _update_file_tree_model(self, tree_dict: dict):
+        """Update the file tree view model with new data."""
+        if not tree_dict:
+            self.main_window.cached_model.clear()
+            logger.warning("Received empty tree dictionary, clearing model.")
+            return
+        
+        try:
+            # Rebuild the FileTreeNode structure
+            root_node = dict_to_file_tree_node(tree_dict)
+            
+            # Populate the model
+            self.main_window.cached_model.populate_from_cache(root_node)
+            logger.info("File tree model updated successfully.")
+        except Exception as e:
+            logger.error(f"Failed to update file tree model from dictionary: {e}", exc_info=True)
+
     def cleanup(self):
         """Cleanup on application exit"""
         logger.info("Shutting down FAH application...")

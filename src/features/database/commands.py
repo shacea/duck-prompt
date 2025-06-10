@@ -24,30 +24,19 @@ class ExecuteQuery(Command):
 
 class GetApiKey(Command):
     """Command to get an API key from database"""
-    service_name: str
+    provider: str
 
 
 class GetActiveApiKey(Command):
     """Command to get an active API key for a service"""
-    service_name: str
+    provider: str
 
 
 class SaveApiKey(Command):
     """Command to save or update an API key"""
-    service_name: str
+    provider: str
     api_key: str
     is_active: bool = True
-
-
-class GetConfig(Command):
-    """Command to get a configuration value"""
-    key: str
-
-
-class SaveConfig(Command):
-    """Command to save a configuration value"""
-    key: str
-    value: str
 
 
 class GetAllConfigs(Command):
@@ -74,16 +63,6 @@ class GetGeminiLogs(Command):
     """Command to retrieve Gemini logs"""
     limit: int = 100
     offset: int = 0
-
-
-class GetIgnoredPatterns(Command):
-    """Command to get ignored file patterns"""
-    pass
-
-
-class SaveIgnoredPatterns(Command):
-    """Command to save ignored file patterns"""
-    patterns: List[str]
 
 
 class CheckDatabaseConnection(Command):

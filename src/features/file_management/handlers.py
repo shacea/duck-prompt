@@ -23,7 +23,8 @@ async def handle_set_project_folder(cmd: SetProjectFolder):
     """Set the project folder"""
     service = ServiceLocator.get("file_system")
     success = service.set_project_folder(cmd.folder_path)
-    return {"success": success, "path": cmd.folder_path}
+    tree = service.get_file_tree()
+    return {"success": success, "path": cmd.folder_path, "tree": tree}
 
 
 @FileManagementCommandBus.register(GetProjectFolder)
@@ -161,14 +162,16 @@ async def handle_get_directory_tree(cmd: GetDirectoryTree):
     """Generate directory tree text"""
     service = ServiceLocator.get("file_system")
     
-    # Set project folder if needed
     if str(service.project_folder) != cmd.root_path:
         service.set_project_folder(cmd.root_path)
-    
-    tree_text = service.generate_directory_tree(
-        include_files=cmd.include_files,
-        max_depth=cmd.max_depth
-    )
+
+    if cmd.checked_only:
+        tree_text = service.generate_checked_directory_tree()
+    else:
+        tree_text = service.generate_directory_tree(
+            include_files=cmd.include_files,
+            max_depth=cmd.max_depth
+        )
     
     return {"tree": tree_text}
 

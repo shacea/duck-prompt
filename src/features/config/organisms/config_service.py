@@ -28,23 +28,23 @@ class ConfigurationService:
             db_service = ServiceLocator.get("database")
             
             # Load application config
-            config_data = await self._get_application_config(db_service)
+            config_data = self._get_application_config(db_service)
             
             if not config_data:
                 raise ValueError(f"Configuration profile '{self.profile_name}' not found in database")
             
             # Check for available API keys
-            await self._check_api_keys(db_service)
+            self._check_api_keys(db_service)
             
             # Add API key placeholders
             config_data['gemini_api_key'] = None  # Selected on demand
-            config_data['anthropic_api_key'] = await self._get_anthropic_key(db_service)
+            config_data['anthropic_api_key'] = self._get_anthropic_key(db_service)
             
             # Validate and create settings
             self._settings = self.validator.validate(config_data)
             
-            # Load gitignore patterns
-            patterns = await self._get_gitignore_patterns(db_service)
+            # Load gitignore patterns from the config object itself
+            patterns = self._settings.default_ignore_list or []
             self.gitignore_manager.load_from_database(patterns)
             
             logger.info(f"Configuration loaded successfully for profile '{self.profile_name}'")
@@ -54,7 +54,7 @@ class ConfigurationService:
             logger.error(f"Failed to load configuration: {e}")
             raise
     
-    async def update_configuration(self, settings_dict: Dict[str, Any]) -> bool:
+    def update_configuration(self, settings_dict: Dict[str, Any]) -> bool:
         """Update configuration in database"""
         try:
             if not self._settings:
@@ -67,7 +67,7 @@ class ConfigurationService:
             db_service = ServiceLocator.get("database")
             config_dict = updated_settings.model_dump(exclude={'gemini_api_key', 'anthropic_api_key'})
             
-            success = await self._save_application_config(db_service, config_dict)
+            success = self._save_application_config(db_service, config_dict)
             
             if success:
                 self._settings = updated_settings
@@ -79,11 +79,11 @@ class ConfigurationService:
             logger.error(f"Failed to update configuration: {e}")
             return False
     
-    async def get_active_gemini_key(self) -> Optional[str]:
+    def get_active_gemini_key(self) -> Optional[str]:
         """Get active Gemini API key with selection logic"""
         try:
             db_service = ServiceLocator.get("database")
-            available_keys = await self._get_available_gemini_keys(db_service)
+            available_keys = self._get_available_gemini_keys(db_service)
             
             if not available_keys:
                 logger.warning("No active Gemini API keys available")
@@ -127,41 +127,37 @@ class ConfigurationService:
         }
     
     # Private helper methods for database operations
-    async def _get_application_config(self, db_service) -> Dict[str, Any]:
+    def _get_application_config(self, db_service) -> Dict[str, Any]:
         """Get application config from database"""
-        configs = db_service.config_manager.get_all_configs()
+        configs_list = db_service.config_manager.get_all_configs()
+
+        # Find the dictionary for the current profile_name
+        for config_profile in configs_list:
+            if config_profile.get('profile_name') == self.profile_name:
+                logger.debug(f"Found configuration profile: {self.profile_name}")
+                return config_profile
         
-        # Convert list of configs to dict
-        config_dict = {}
-        for config in configs:
-            config_dict[config['key']] = config['value']
-        
-        return config_dict
+        logger.warning(f"Configuration profile '{self.profile_name}' not found in database.")
+        return {}
     
-    async def _save_application_config(self, db_service, config_dict: Dict[str, Any]) -> bool:
+    def _save_application_config(self, db_service, config_dict: Dict[str, Any]) -> bool:
         """Save application config to database"""
-        for key, value in config_dict.items():
-            db_service.config_manager.save_config(key=key, value=str(value))
-        
+        db_service.config_manager.update_profile_config(self.profile_name, config_dict)
         return True
     
-    async def _get_available_gemini_keys(self, db_service) -> List[Dict[str, Any]]:
+    def _get_available_gemini_keys(self, db_service) -> List[Dict[str, Any]]:
         """Get available Gemini API keys"""
-        query = "SELECT * FROM api_keys WHERE service_name = 'google' AND is_active = true"
+        query = "SELECT * FROM api_keys WHERE provider = 'google' AND is_active = true"
         return db_service.execute_query(query=query, fetch_all=True)
     
-    async def _get_anthropic_key(self, db_service) -> Optional[str]:
+    def _get_anthropic_key(self, db_service) -> Optional[str]:
         """Get active Anthropic API key"""
-        return db_service.api_key_manager.get_active_api_key(service_name='anthropic')
+        return db_service.api_key_manager.get_active_api_key(provider='anthropic')
     
-    async def _check_api_keys(self, db_service) -> None:
+    def _check_api_keys(self, db_service) -> None:
         """Check availability of API keys"""
-        gemini_keys = await self._get_available_gemini_keys(db_service)
+        gemini_keys = self._get_available_gemini_keys(db_service)
         if not gemini_keys:
             logger.warning("No active Gemini API keys found in database")
         else:
             logger.info(f"Found {len(gemini_keys)} active Gemini API keys")
-    
-    async def _get_gitignore_patterns(self, db_service) -> List[str]:
-        """Get gitignore patterns from database"""
-        return db_service.get_ignored_patterns()

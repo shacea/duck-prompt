@@ -20,25 +20,22 @@ default_ignore_list:
   - .gitignore
   - .idea/
   - .vscode/
-  - .windsurfrules
   - __pycache__/
   - build/
   - dist/
-gemini_default_model: gemini-2.5-pro-preview-03-25
+gemini_default_model: gemini-2.5-pro-preview-06-05
 claude_default_model: claude-3-7-sonnet-20250219
 gpt_default_model: gpt-4o
 gemini_available_models:
-  - gemini-2.5-pro-preview-03-25
+  - gemini-2.5-pro-preview-06-05
   - gemini-2.5-flash-preview-04-17
 claude_available_models:
   - claude-3-7-sonnet-20250219
 gpt_available_models:
   - gpt-4o
-  - gpt-4-turbo
-  - gpt-3.5-turbo
 anthropic_api_key: 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
 gemini_api_key: AIzaSyC5uUtef7uQnLiP2ioBM7OqIF9EaxAnGQE
-gemini_temperature: 0.0
-gemini_enable_thinking: false
-gemini_thinking_budget: 0
+gemini_temperature: 0.7
+gemini_enable_thinking: true
+gemini_thinking_budget: 24000
 gemini_enable_search: false

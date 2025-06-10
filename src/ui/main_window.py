@@ -90,11 +90,6 @@ class MainWindow(QMainWindow):
         # --- 메뉴바 ---
         self.menubar = QMenuBar(self)
         self.setMenuBar(self.menubar)
-        state_menu = self.menubar.addMenu("상태")
-        self.export_state_action = QAction("상태 내보내기", self)
-        self.import_state_action = QAction("상태 가져오기", self)
-        state_menu.addAction(self.export_state_action)
-        state_menu.addAction(self.import_state_action)
         help_menu = self.menubar.addMenu("도움말")
         open_readme_action = QAction("README 열기", self)
         open_readme_action.triggered.connect(self._open_readme)
@@ -136,22 +131,20 @@ class MainWindow(QMainWindow):
         self.user_tab = CustomTextEdit()
         self.dir_structure_tab = CustomTextEdit()
         self.prompt_output_tab = CustomTextEdit()
-        self.xml_input_tab = CustomTextEdit()
         self.summary_tab = CustomTextEdit()
         self.build_tabs.addTab(self.system_tab, "시스템")
         self.build_tabs.addTab(self.user_tab, "사용자")
         self.build_tabs.addTab(self.dir_structure_tab, "파일 트리")
         self.build_tabs.addTab(self.prompt_output_tab, "프롬프트 출력")
-        self.build_tabs.addTab(self.xml_input_tab, "XML/DMP 입력")
         self.build_tabs.addTab(self.summary_tab, "Summary")
+        self.build_tabs.setCurrentWidget(self.user_tab)
 
         self.generate_tree_btn = QPushButton("🌳 트리 생성")
         self.generate_btn = QPushButton("✨ 프롬프트 생성")
         self.send_to_gemini_btn = QPushButton("♊ Gemini로 전송")
         self.copy_btn = QPushButton("📋 클립보드에 복사")
-        self.run_xml_parser_btn = QPushButton("▶️ DMP 파서 실행")
         self.generate_all_btn = QPushButton("⚡️ 한번에 실행")
-        self.run_buttons = [self.generate_tree_btn, self.generate_btn, self.send_to_gemini_btn, self.copy_btn, self.run_xml_parser_btn, self.generate_all_btn]
+        self.run_buttons = [self.generate_tree_btn, self.generate_btn, self.send_to_gemini_btn, self.copy_btn, self.generate_all_btn]
         
         self.llm_combo = QComboBox(); self.llm_combo.addItems(["Gemini", "Claude", "GPT"])
         self.model_name_combo = QComboBox(); self.model_name_combo.setEditable(True)
@@ -177,43 +170,61 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
+
+        # --- Top controls ---
+        top_controls_widget = QWidget()
+        top_controls_layout = QVBoxLayout(top_controls_widget)
+        top_controls_layout.setContentsMargins(0, 0, 0, 0)
+        
         top_buttons_layout = QHBoxLayout()
         top_buttons_layout.addWidget(self.reset_program_btn)
-        top_buttons_layout.addWidget(self.load_previous_work_btn)
         top_buttons_layout.addWidget(self.save_current_work_btn)
+        top_buttons_layout.addWidget(self.load_previous_work_btn)
         top_buttons_layout.addWidget(self.select_project_btn)
         top_buttons_layout.addStretch(1)
-        main_layout.addLayout(top_buttons_layout)
-        main_layout.addWidget(self.project_folder_label)
+        top_controls_layout.addLayout(top_buttons_layout)
+
+        top_controls_layout.addWidget(self.project_folder_label)
+
         llm_params_layout = QHBoxLayout()
         llm_params_layout.addWidget(QLabel("Model:"))
         llm_params_layout.addWidget(self.llm_combo)
         llm_params_layout.addWidget(self.model_name_combo)
         llm_params_layout.addWidget(self.gemini_param_widget)
         llm_params_layout.addStretch(1)
-        main_layout.addLayout(llm_params_layout)
+        top_controls_layout.addLayout(llm_params_layout)
+
+        main_layout.addWidget(top_controls_widget)
         
         self.center_splitter = QSplitter(Qt.Orientation.Horizontal)
+        
+        # --- Left Panel with Tree View and Attachments ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        left_splitter = QSplitter(Qt.Orientation.Vertical)
-        left_splitter.addWidget(self.tree_view)
-        left_splitter.addWidget(self.attachment_group)
-        left_layout.addWidget(left_splitter)
+        left_layout.setContentsMargins(0,0,0,0)
+
+        # Vertical splitter for tree and attachments
+        left_v_splitter = QSplitter(Qt.Orientation.Vertical)
+        left_v_splitter.addWidget(self.tree_view)
+        left_v_splitter.addWidget(self.attachment_group)
+        left_v_splitter.setStretchFactor(0, 1) # tree_view will stretch
+        left_v_splitter.setStretchFactor(1, 0) # attachment_group will not stretch vertically
+
+        left_layout.addWidget(left_v_splitter)
         self.center_splitter.addWidget(left_panel)
         
+        # --- Right Panel ---
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        right_top_widget = QWidget()
-        right_top_layout = QVBoxLayout(right_top_widget)
         run_buttons_layout = QHBoxLayout()
         for btn in self.run_buttons:
             run_buttons_layout.addWidget(btn)
-        right_top_layout.addLayout(run_buttons_layout)
-        right_top_layout.addWidget(self.build_tabs, 1)
-        right_layout.addWidget(right_top_widget)
+        right_layout.addLayout(run_buttons_layout)
+        right_layout.addWidget(self.build_tabs, 1) # Add stretch factor
         self.center_splitter.addWidget(right_panel)
         
+        # 스플리터 비율 조정 (좌:우 = 1:3)
+        self.center_splitter.setSizes([300, 900])
         main_layout.addWidget(self.center_splitter, 1)
 
         # --- 상태바 ---
@@ -225,6 +236,8 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(self.api_time_label)
         self.status_bar.addPermanentWidget(self.token_count_label)
         self.status_bar.addPermanentWidget(self.char_count_label)
+
+        self.resize(1280, 900)
 
     def _open_readme(self):
         readme_path = str(Path(__file__).parent.parent.parent / "README.md")

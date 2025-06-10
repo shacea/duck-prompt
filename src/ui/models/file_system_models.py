@@ -4,8 +4,8 @@ from PyQt6.QtCore import QSortFilterProxyModel, Qt, QModelIndex, QFileInfo, QAbs
 from PyQt6.QtGui import QStandardItemModel, QStandardItem, QIcon, QColor, QBrush
 from PyQt6.QtWidgets import QTreeView, QApplication, QStyle
 from typing import Callable, Optional, Set, List, Dict, Any
-from src.features.file_management.organisms.file_system_service import FileSystemService
 from src.features.file_management.molecules.file_tree_builder import FileTreeNode
+from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,6 +13,18 @@ logger = logging.getLogger(__name__)
 # --- Constants ---
 NODE_ROLE = Qt.ItemDataRole.UserRole + 1 # Role to store FileTreeNode reference
 PATH_ROLE = Qt.ItemDataRole.UserRole + 2 # Role to store absolute path
+
+def dict_to_file_tree_node(node_dict: Dict[str, Any]) -> FileTreeNode:
+    """Recursively converts a dictionary back into a FileTreeNode object structure."""
+    path = Path(node_dict['path'])
+    node = FileTreeNode(path, node_dict['is_dir'])
+    node.checked = node_dict.get('checked', False)
+    
+    for child_dict in node_dict.get('children', []):
+        child_node = dict_to_file_tree_node(child_dict)
+        node.add_child(child_node)
+        
+    return node
 
 # --- Cached File System Model (using QStandardItemModel) ---
 class CachedFileSystemModel(QStandardItemModel):
@@ -97,10 +109,10 @@ class CheckableProxyModel(QSortFilterProxyModel):
     Handles recursive checking for folders and multi-selection checking.
     Works with CachedFileSystemModel.
     """
-    # Signal to indicate check state dictionary has changed
-    check_state_changed = pyqtSignal()
+    # Signal to inform the controller about a check state change
+    file_check_state_changed = pyqtSignal(str, bool)
 
-    def __init__(self, project_folder_getter: Callable[[], Optional[str]], fs_service: FileSystemService, tree_view: QTreeView, parent=None):
+    def __init__(self, project_folder_getter: Callable[[], Optional[str]], fs_service: Optional[Any], tree_view: QTreeView, parent=None):
         super().__init__(parent)
         self.project_folder_getter = project_folder_getter
         self.fs_service = fs_service
@@ -176,25 +188,24 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 return False
 
             is_checked = (new_check_state == Qt.CheckState.Checked)
-            current_state_in_dict = self.checked_files_dict.get(file_path, False)
-
-            if is_checked == current_state_in_dict:
-                self._is_setting_data = False
-                return True
-
-            if is_checked:
-                self.checked_files_dict[file_path] = True
-            elif file_path in self.checked_files_dict:
-                del self.checked_files_dict[file_path]
-
+            
+            # Emit signal to notify controller BEFORE changing internal state
+            # This allows the controller to be the source of truth for the change
+            self.file_check_state_changed.emit(file_path, is_checked)
+            
+            # The actual update of the dictionary and UI will happen
+            # once the controller processes the command and updates the service state.
+            # For a more responsive UI, we can preemptively update the UI here,
+            # but for consistency, we'll let the backend drive the state.
+            # Let's do a hybrid: update locally and let backend confirm.
+            
+            self._update_recursive_check_state(source_item, is_checked)
+            
+            # We must emit dataChanged for all affected indices.
+            # A simple way is to reset the whole model view, but that's inefficient.
+            # Let's emit for the top-level item. The recursive update will handle children.
             self.dataChanged.emit(index, index, [role])
 
-            if node.is_dir:
-                self._update_children_state_recursive(source_item, is_checked)
-                if is_checked:
-                    self.expand_index_recursively(index)
-
-            self.check_state_changed.emit()
             return True
 
         except Exception as e:
@@ -203,34 +214,26 @@ class CheckableProxyModel(QSortFilterProxyModel):
         finally:
             self._is_setting_data = False
 
-    def _update_children_state_recursive(self, parent_source_item: QStandardItem, checked: bool) -> None:
-        """
-        Recursively updates the check state dictionary for children of a source item.
-        """
-        source_model = self.sourceModel()
+    def _update_recursive_check_state(self, parent_source_item: QStandardItem, checked: bool):
+        """Recursively updates the internal check state dictionary and emits dataChanged."""
+        parent_path = parent_source_item.data(PATH_ROLE)
+        if not parent_path: return
+
+        if checked:
+            self.checked_files_dict[parent_path] = True
+        elif parent_path in self.checked_files_dict:
+            del self.checked_files_dict[parent_path]
+        
+        parent_source_index = self.sourceModel().indexFromItem(parent_source_item)
+        parent_proxy_index = self.mapFromSource(parent_source_index)
+        if parent_proxy_index.isValid():
+            self.dataChanged.emit(parent_proxy_index, parent_proxy_index, [Qt.ItemDataRole.CheckStateRole])
+        
+        # Recurse for children
         for row in range(parent_source_item.rowCount()):
             child_source_item = parent_source_item.child(row, 0)
-            if not child_source_item: continue
-
-            child_node: Optional[FileTreeNode] = child_source_item.data(NODE_ROLE)
-            child_path = child_source_item.data(PATH_ROLE)
-
-            if not child_node or not child_path: continue
-
-            current_state_in_dict = self.checked_files_dict.get(child_path, False)
-            if checked != current_state_in_dict:
-                if checked:
-                    self.checked_files_dict[child_path] = True
-                elif child_path in self.checked_files_dict:
-                    del self.checked_files_dict[child_path]
-
-                child_source_index = source_model.indexFromItem(child_source_item)
-                child_proxy_index = self.mapFromSource(child_source_index)
-                if child_proxy_index.isValid():
-                    self.dataChanged.emit(child_proxy_index, child_proxy_index, [Qt.ItemDataRole.CheckStateRole])
-
-            if child_node.is_dir:
-                self._update_children_state_recursive(child_source_item, checked)
+            if child_source_item:
+                self._update_recursive_check_state(child_source_item, checked)
 
     def expand_index_recursively(self, proxy_index: QModelIndex):
         """Recursively expands the given index and its children in the tree view."""
@@ -258,7 +261,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
 
     def get_all_checked_paths(self) -> List[str]:
         """Returns a list of all paths currently marked as checked in the dictionary."""
-        return list(self.checked_files_dict.keys())
+        return [path for path, checked in self.checked_files_dict.items() if checked]
 
     def get_checked_files(self) -> List[str]:
         """
@@ -278,9 +281,7 @@ class CheckableProxyModel(QSortFilterProxyModel):
                 node: Optional[FileTreeNode] = item.data(NODE_ROLE)
                 if node and not node.is_dir:
                     checked_files.append(path)
-            else:
-                logger.warning(f"Item not found in model for checked path: {path}. Cannot determine if it is a file.")
-
+        
         return checked_files
 
     def update_check_states_from_dict(self):
@@ -289,3 +290,11 @@ class CheckableProxyModel(QSortFilterProxyModel):
         self.beginResetModel()
         self.endResetModel()
         logger.debug("Finished updating visual check states.")
+
+    def set_check_state_for_path(self, path: str, checked: bool):
+        """Externally set the check state for a path and its children."""
+        source_item = self.sourceModel().find_item_by_path(path)
+        if source_item:
+            self._is_setting_data = True
+            self._update_recursive_check_state(source_item, checked)
+            self._is_setting_data = False

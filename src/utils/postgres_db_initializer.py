@@ -427,7 +427,7 @@ def main():
 
             # 6. Insert/Update model_rate_limits table (based on user request)
             print("Inserting/Updating specific model rate limits...")
-            insert_or_update_rate_limit(conn, 'gemini-2.5-pro-preview-03-25', 'google', 5, 25, 'Gemini Pro Preview Rate Limit')
+            insert_or_update_rate_limit(conn, 'gemini-2.5-pro-preview-06-05', 'google', 5, 25, 'Gemini Pro Preview Rate Limit')
             insert_or_update_rate_limit(conn, 'gemini-2.5-flash-preview-04-17', 'google', 10, 500, 'Gemini Flash Preview Rate Limit')
             print("Model rate limits updated.")
 

@@ -5,9 +5,8 @@ from src.gateway import EventBus, Event, ServiceLocator
 from .commands import (
     ConnectDatabase, DisconnectDatabase, ExecuteQuery,
     GetApiKey, GetActiveApiKey, SaveApiKey,
-    GetConfig, SaveConfig, GetAllConfigs, GetModelConfigs,
+    GetAllConfigs, GetModelConfigs,
     SaveGeminiLog, GetGeminiLogs,
-    GetIgnoredPatterns, SaveIgnoredPatterns,
     CheckDatabaseConnection
 )
 from .organisms.database_service import DatabaseService
@@ -60,7 +59,7 @@ async def handle_check_connection(cmd: CheckDatabaseConnection):
 async def handle_execute_query(cmd: ExecuteQuery):
     """Execute a raw SQL query"""
     db_service = ServiceLocator.get("database")
-    result = db_service.execute_query(
+    result = await db_service.execute_query(
         cmd.query, 
         cmd.params, 
         cmd.fetch_one, 
@@ -74,40 +73,25 @@ async def handle_execute_query(cmd: ExecuteQuery):
 async def handle_get_api_key(cmd: GetApiKey):
     """Get an API key for a service"""
     db_service = ServiceLocator.get("database")
-    return db_service.api_key_manager.get_api_key(cmd.service_name)
+    return await db_service.api_key_manager.get_api_key(cmd.provider)
 
 
 @DatabaseCommandBus.register(GetActiveApiKey)
 async def handle_get_active_api_key(cmd: GetActiveApiKey):
     """Get the active API key for a service"""
     db_service = ServiceLocator.get("database")
-    return db_service.api_key_manager.get_active_api_key(cmd.service_name)
+    return await db_service.api_key_manager.get_active_api_key(cmd.provider)
 
 
 @DatabaseCommandBus.register(SaveApiKey)
 async def handle_save_api_key(cmd: SaveApiKey):
     """Save or update an API key"""
     db_service = ServiceLocator.get("database")
-    rows_affected = db_service.api_key_manager.save_api_key(
-        cmd.service_name, 
+    rows_affected = await db_service.api_key_manager.save_api_key(
+        cmd.provider, 
         cmd.api_key, 
         cmd.is_active
     )
-    return {"rows_affected": rows_affected}
-
-
-@DatabaseCommandBus.register(GetConfig)
-async def handle_get_config(cmd: GetConfig):
-    """Get a configuration value"""
-    db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_config(cmd.key)
-
-
-@DatabaseCommandBus.register(SaveConfig)
-async def handle_save_config(cmd: SaveConfig):
-    """Save a configuration value"""
-    db_service = ServiceLocator.get("database")
-    rows_affected = db_service.config_manager.save_config(cmd.key, cmd.value)
     return {"rows_affected": rows_affected}
 
 
@@ -115,21 +99,21 @@ async def handle_save_config(cmd: SaveConfig):
 async def handle_get_all_configs(cmd: GetAllConfigs):
     """Get all configuration values"""
     db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_all_configs()
+    return await db_service.config_manager.get_all_configs()
 
 
 @DatabaseCommandBus.register(GetModelConfigs)
 async def handle_get_model_configs(cmd: GetModelConfigs):
     """Get model configurations"""
     db_service = ServiceLocator.get("database")
-    return db_service.config_manager.get_model_configs()
+    return await db_service.config_manager.get_model_configs()
 
 
 @DatabaseCommandBus.register(SaveGeminiLog)
 async def handle_save_gemini_log(cmd: SaveGeminiLog):
     """Save a Gemini API log entry"""
     db_service = ServiceLocator.get("database")
-    log_id = db_service.gemini_log_manager.save_log(
+    log_id = await db_service.gemini_log_manager.save_log(
         cmd.model_name,
         cmd.prompt_tokens,
         cmd.response_tokens,
@@ -144,19 +128,4 @@ async def handle_save_gemini_log(cmd: SaveGeminiLog):
 async def handle_get_gemini_logs(cmd: GetGeminiLogs):
     """Get Gemini API logs"""
     db_service = ServiceLocator.get("database")
-    return db_service.gemini_log_manager.get_logs(cmd.limit, cmd.offset)
-
-
-@DatabaseCommandBus.register(GetIgnoredPatterns)
-async def handle_get_ignored_patterns(cmd: GetIgnoredPatterns):
-    """Get ignored file patterns"""
-    db_service = ServiceLocator.get("database")
-    return db_service.get_ignored_patterns()
-
-
-@DatabaseCommandBus.register(SaveIgnoredPatterns)
-async def handle_save_ignored_patterns(cmd: SaveIgnoredPatterns):
-    """Save ignored file patterns"""
-    db_service = ServiceLocator.get("database")
-    db_service.save_ignored_patterns(cmd.patterns)
-    return {"status": "saved", "count": len(cmd.patterns)}
+    return await db_service.gemini_log_manager.get_logs(cmd.limit, cmd.offset)

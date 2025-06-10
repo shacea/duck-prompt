@@ -30,6 +30,8 @@ class BuildPrompt(Command):
     include_system_prompt: bool = True
     include_user_prompt: bool = True
     mode: str = "enhanced"  # "enhanced" or "metaprompt"
+    files_to_include: Optional[List[str]] = None # Specify files to include
+    directory_tree: Optional[str] = None # Override for directory tree
 
 
 class GetPromptComponents(Command):
